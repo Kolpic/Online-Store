@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Draw shapes</title>
+    <style>
+        .point {
+            position: absolute;
+            width: 5px;
+            height: 5px;
+            background-color: black;
+        }
+        .line {
+            position: absolute;
+            background-color: black;
+        }
+    </style>
+</head>
+<body>
+    <button onclick="drawCircle()">Draw circle</button>
+    <button onclick="drawSquare()">Draw square</button>
+    <button onclick="drawSquareTwo()">Draw square second option</button>
+    <script>
+        function drawCircle() {
+
+        let circle = document.createElement('div');
+
+        circle.style.width = '100px';
+        circle.style.height = '100px';
+        circle.style.backgroundColor = 'blue';
+        circle.style.borderRadius = '50%';
+
+        document.body.appendChild(circle);
+        }
+
+        function drawSquare() {
+        let square = document.createElement('div');
+
+        square.style.width = '100px'; 
+        square.style.height = '100px'; 
+        square.style.backgroundColor = 'green'; 
+        square.style.borderRadius = '0';
+
+        document.body.appendChild(square);
+        }
+    </script>
+</body>
+</html>

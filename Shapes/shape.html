@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Draw Line Between Points</title>
+    <style>
+        .container {
+            position: relative;
+            height: 400px; /* Example size */
+            width: 600px; /* Example size */
+            border: 1px solid #000; /* To visualize the container */
+        }
+        .point {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: red;
+            border-radius: 50%;
+        }
+        /* Style for the line */
+        .line {
+            position: absolute;
+            height: 2px; /* Line thickness */
+            background-color: black;
+        }
+    </style>
+</head>
+<body>
+<button onclick="drawLineBetweenPoints()">Draw</button>
+<div class="container">
+    <div id="point1" class="point" style="top: 50px; left: 100px;"></div> <!-- Example point 1 position -->
+    <div id="point2" class="point" style="top: 200px; left: 400px;"></div> <!-- Example point 2 position -->
+    <!-- Line will be added dynamically -->
+</div>
+
+<script>
+    function drawLineBetweenPoints() {
+    const point1 = document.getElementById('point1').getBoundingClientRect();
+    const point2 = document.getElementById('point2').getBoundingClientRect();
+
+    const container = document.querySelector('.container');
+
+    // Create line element
+    const line = document.createElement('div');
+    line.className = 'line';
+
+    // Calculate distance between points
+    const distance = Math.sqrt(Math.pow(point2.left - point1.left, 2) + Math.pow(point2.top - point1.top, 2));
+
+    // Set width of the line
+    line.style.width = `${distance}px`;
+
+    // Calculate angle between points
+    const angle = Math.atan2(point2.top - point1.top, point2.left - point1.left) * 180 / Math.PI;
+
+    // Set rotation and position of the line
+    line.style.transformOrigin = '0 0'; // Rotate around the start point
+    line.style.transform = `rotate(${angle}deg)`;
+    line.style.position = 'absolute';
+    line.style.left = `${point1.left + window.scrollX + (point1.width / 2)}px`;
+    line.style.top = `${point1.top + window.scrollY + (point1.height / 2)}px`;
+
+    // Append line to the container
+    container.appendChild(line);
+}
+</script>
+
+</body>
+</html>
