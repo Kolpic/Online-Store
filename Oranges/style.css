@@ -1,0 +1,15 @@
+#grid-container {
+    display: grid;
+    grid-template-columns: repeat(100, 10px); /* Adjust based on cols */
+    grid-gap: 1px;
+}
+
+.orange {
+    width: 10px;
+    height: 10px;
+    background-color: green; /* Healthy orange */
+}
+
+.bad-orange {
+    background-color: red; /* Bad orange */
+}

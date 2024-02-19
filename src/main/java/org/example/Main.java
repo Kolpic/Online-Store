@@ -50,7 +50,7 @@ public class Main {
                     if (col != 0 && matrix[row][col - 1] == 0) {
                         matrix[row][col - 1] = i + 1;
                     }
-                    if (col != matrix[row].length && matrix[row][col + 1] == 0) {
+                    if (col != matrix[row].length - 1 && matrix[row][col + 1] == 0) {
                         matrix[row][col + 1] = i + 1;
                     }
                 }
