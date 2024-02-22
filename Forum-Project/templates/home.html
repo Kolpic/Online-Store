@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Home Page</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container">
+        <h1>Welcome to Our Application!</h1>
+        <p>This is the home page of our user registration and authentication system.</p>
+        <div class="nav">
+            {% if 'user_email' in session %}
+                <a href="/logout" class="btn btn-danger">Logout</a>
+            {% else %}
+                <a href="/registration" class="btn btn-info">Register</a>
+                <a href="/login" class="btn btn-primary">Login</a>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>
