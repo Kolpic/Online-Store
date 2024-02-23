@@ -1,7 +1,6 @@
 function solve(n, dataForMatrix) {
     let matrix = Array(n*n).fill(0).map(()=>Array(n*n).fill(0));
     let pointerMatrix = 0;
-    let arrayWithUniqueElements = [];
     let set = new Set();
     
     for (let i = 0; i < n * n; i++) {
@@ -32,17 +31,15 @@ function solve(n, dataForMatrix) {
             });
             let unique;
             if (tempSet.size > 1) {
-                metSumbols = check(i, j++, [], matrix, n)
-                //  unique = Array.from(tempSet)[1];
+                // metSumbols = check(i, j++, [], matrix, n)
+                 unique = Array.from(tempSet)[1];
             } else {
                 [unique] = tempSet;  
             }
-            // const [unique] = tempSet;
             matrix[i][j] = unique;
         }
     }
-
-    print(matrix);
+    let a = 5;
 }
 function check(i, j, metSumbols, matrix, n) {
     let startingI = i;
