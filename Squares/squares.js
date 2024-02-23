@@ -2,32 +2,43 @@ function solve(n, dataForMatrix) {
     let matrix = Array(n*n).fill(0).map(()=>Array(n*n).fill(0));
     let pointerMatrix = 0;
     let arrayWithUniqueElements = [];
+    let set = new Set();
     
     for (let i = 0; i < n * n; i++) {
         for (let j = 0; j < n * n; j++) {
             let matrixElement = String(dataForMatrix.split(" ")[pointerMatrix]);
             matrix[i][j] = matrixElement;
-            if (arrayWithUniqueElements.filter(x => x==matrixElement)) {
-                arrayWithUniqueElements.push(matrixElement);
-            }
+            set.add(matrixElement);
             pointerMatrix++;
         }
     }
 
+    set.delete('0');
 
-    for (let i = 0; i < n * n; i++) {
-        for (let j = 0; j < n * n; j++) {
+    for (let i = 0; i < matrix.length; i++) {
+        for (let j = 0; j <matrix[i].length; j++) {
             let metSumbols = [];
             let cuurentElement = matrix[i][j];
             if (cuurentElement == 0) {
                 metSumbols = check(i, j, metSumbols, matrix, n);
+            } else {
+                continue;
             }
-            let pointer = 0;
-            let element = arrayWithUniqueElements.find(x => {
-                if (x != metSumbols[pointer])
-                pointer++;
+            let tempSet = new Set(set);
+            metSumbols.forEach(element => {
+                if (tempSet.has(element)) {
+                    tempSet.delete(String(element))
+                }
             });
-            matrix[i][j] = element;
+            let unique;
+            if (tempSet.size > 1) {
+                metSumbols = check(i, j++, [], matrix, n)
+                //  unique = Array.from(tempSet)[1];
+            } else {
+                [unique] = tempSet;  
+            }
+            // const [unique] = tempSet;
+            matrix[i][j] = unique;
         }
     }
 
@@ -38,7 +49,7 @@ function check(i, j, metSumbols, matrix, n) {
     let startingJ = j;
 
     i = startingI;
-    while(i != n * n + 1) {
+    while(i != n * n - 1) {
         i++;
         let currentSymbol = String(matrix[i][j]);
         if (currentSymbol != 0 ) {
@@ -47,7 +58,7 @@ function check(i, j, metSumbols, matrix, n) {
     }
 
     i = startingI;
-    while(i != -1) {
+    while(i != 0) {
         i--;
         let currentSymbol = matrix[i][j];
         if (currentSymbol != 0 ) {
@@ -56,7 +67,7 @@ function check(i, j, metSumbols, matrix, n) {
     }
 
     i = startingI;
-    while(j != -1) {
+    while(j != 0) {
         j--;
         let currentSymbol = matrix[i][j];
         if (currentSymbol != 0 ) {
@@ -65,7 +76,7 @@ function check(i, j, metSumbols, matrix, n) {
     }
 
     j = startingJ;
-    while(j != n * n + 1) {
+    while(j != n * n - 1) {
         j++;
         let currentSymbol = matrix[i][j];
         if (currentSymbol != 0 ) {
