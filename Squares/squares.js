@@ -19,7 +19,7 @@ function solve(n, dataForMatrix) {
             let metSumbols = [];
             let cuurentElement = matrix[i][j];
             if (cuurentElement == 0) {
-                metSumbols = check(i, j, metSumbols, matrix, n);
+                metSumbols = checkRowAndCol(i, j, metSumbols, matrix, n);
             } else {
                 continue;
             }
@@ -41,7 +41,11 @@ function solve(n, dataForMatrix) {
     }
     let a = 5;
 }
-function check(i, j, metSumbols, matrix, n) {
+function checkSubSquare(i, j, matrix, n) {
+
+}
+
+function checkRowAndCol(i, j, metSumbols, matrix, n) {
     let startingI = i;
     let startingJ = j;
 
