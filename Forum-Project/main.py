@@ -133,10 +133,48 @@ def home():
         return render_template('home.html')
     else:
         return redirect(url_for('login'))
+    
 @app.route('/logout', methods=['GET'])
 def logout():
     session.pop('user_email', None) 
     return redirect(url_for('home'))
+
+@app.route('/settings')
+def settings():
+    if 'user_email' not in session:
+        return redirect(url_for('login'))
+    return render_template('settings.html')
+
+@app.route('/update_settings', methods=['POST'])
+def update_settings():
+    if 'user_email' in session:
+        
+        first_name = request.form['first-name']
+        last_name = request.form['last-name']
+        email = request.form['email']
+        password = request.form['password']
+
+        cur = conn.cursor()
+
+        if not first_name == '' and not last_name == '' and not email == '' and not password == '':
+            cur.execute("UPDATE users SET first_name = %s, last_name = %s,email = %s, password = %s WHERE email = %s", (first_name, last_name, email, password, session['user_email']))
+        elif first_name:
+            cur.execute("UPDATE users SET first_name = %s WHERE email = %s", (first_name, session['user_email']))    
+        elif last_name:
+            cur.execute("UPDATE users SET last_name = %s WHERE email = %s", (last_name, session['user_email']))
+        elif email:
+            cur.execute("UPDATE users SET email = %s WHERE email = %s", (email, session['user_email']))
+        elif password:
+            cur.execute("UPDATE users SET password = %s WHERE email = %s", (password, session['user_email']))
+        
+        conn.commit()
+        cur.close()
+        
+        # Update session email if email was changed
+        session['user_email'] = email
+        
+        return redirect(url_for('home'))
+    return 'Unauthorized', 401
 
 if __name__ == '__main__':
     app.run(debug=True)

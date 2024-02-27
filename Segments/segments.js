@@ -29,4 +29,4 @@ function solve(n, a, b, c) {
     return unpaintedLength;
 }
 
-solve(99999, 3, 2, 1);
+solve(10, 2, 3, 1);
