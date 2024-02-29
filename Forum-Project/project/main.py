@@ -10,7 +10,6 @@ from project import exception
 
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
-
 app.config['MAIL_SERVER'] = config.MAIL_SERVER
 app.config['MAIL_PORT'] = config.MAIL_PORT
 app.config['MAIL_USERNAME'] = config.MAIL_USERNAME
