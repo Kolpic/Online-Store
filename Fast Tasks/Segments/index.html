@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Visual Representation of Line Painting</title>
+    <style>
+        #visualization {
+        width: 100%;
+        height: 50px;
+        position: relative;
+        color: black;
+        /* background-color: black; Make the line black */
+    }
+    .pointA {
+        width: 10px;
+        height: 10px;
+        position: absolute;
+        bottom: 15px; /* Adjust as necessary */
+        background-color: green; /* A points are green */
+        border-radius: 50%;
+    }
+    .pointB {
+        width: 10px;
+        height: 10px;
+        position: absolute;
+        bottom: 0; /* Adjust as necessary */
+        background-color: blue; /* Y points are blue */
+        border-radius: 50%;
+    }
+    .red-line {
+        height: 2px;
+        position: absolute;
+        bottom: 25px; /* Adjust as necessary */
+        background-color: red; /* Connections are red */
+    }
+    </style>
+</head>
+<body>
+    <h2>Line Visualization</h2>
+    <form id="inputForm">
+        Length (n): <input type="number" id="lengthN" value="10"><br>
+        Interval A: <input type="number" id="intervalA" value="2"><br>
+        Interval Y: <input type="number" id="intervalB" value="3"><br>
+        Distance between dots: <input type="number" id="distanceC" value="1"><br>
+        <button type="button" onclick="visualize()">Visualize</button>
+    </form>
+    <div id="visualization"></div>
+    <div id="result">Result will be displayed here</div>
+    <script src="visualization.js"></script>
+</body>
+</html>

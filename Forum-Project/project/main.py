@@ -1,9 +1,9 @@
 from flask import Flask, request, render_template, redirect, url_for, session
 from flask_mail import Mail, Message
-import psycopg2, os, config, exception, re, secrets, bcrypt
+import psycopg2, os, re, secrets, bcrypt
 # import os
-# import config
-# import exception
+from project import config
+from project import exception
 # import re
 # import secrets
 # import bcrypt
@@ -20,7 +20,7 @@ app.config['MAIL_USE_SSL'] = config.MAIL_USE_SSL
 
 mail = Mail(app)
 
-database = config.database
+database = config.test_database
 user = config.user
 password = config.password
 host = config.host
@@ -112,13 +112,17 @@ def login():
 
         are_passwords_same = bool(verify_password(password, hashed_password))
 
-        if is_the_email_verified and are_passwords_same:
-            session['user_email'] = email   
-            return redirect(url_for('home'))
+        if are_passwords_same:
+            if is_the_email_verified:
+                session['user_email'] = email   
+                return redirect(url_for('home'))
+            else:
+               error_message = 'Your account is not verified or has been deleted' 
         else:
             error_message = 'Invalid email or password'
-            session['login_error'] = str(error_message)
-            return redirect(url_for('login')) 
+
+        session['login_error'] = str(error_message)
+        return redirect(url_for('login')) 
     return render_template('login.html')
 
 def verify_password(plain_password, hashed_password):
@@ -165,7 +169,8 @@ def update_settings():
         elif email:
             cur.execute("UPDATE users SET email = %s WHERE email = %s", (email, session['user_email']))
         elif password:
-            cur.execute("UPDATE users SET password = %s WHERE email = %s", (password, session['user_email']))
+            hashed_password = hash_password(password)
+            cur.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_password, session['user_email']))
         
         conn.commit()
         cur.close()
@@ -174,6 +179,20 @@ def update_settings():
         session['user_email'] = email
         
         return redirect(url_for('home'))
+    return 'Unauthorized', 401
+
+@app.route('/delete_account', methods=['POST'])
+def delete_account():
+    if 'user_email' in session:
+        user_email = session['user_email']
+        
+        cur = conn.cursor()
+        cur.execute("UPDATE users SET verification_status = false WHERE email = %s", (user_email,))
+        conn.commit()
+        cur.close()
+        
+        session.clear()
+        return redirect(url_for('login'))
     return 'Unauthorized', 401
 
 if __name__ == '__main__':
