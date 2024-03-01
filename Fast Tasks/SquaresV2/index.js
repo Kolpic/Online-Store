@@ -30,5 +30,5 @@ function findSegmentData(A) {
     return [maxLength, lengths.size];
 }
 
-console.log(findSegmentData(1)); 
-console.log(findSegmentData(5)); 
+// console.log(findSegmentData(1)); 
+console.log(findSegmentData(10)); 
