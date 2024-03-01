@@ -8,6 +8,8 @@ from project import exception
 # import secrets
 # import bcrypt
 
+# https://stackoverflow.com/questions/23327293/flask-raises-templatenotfound-error-even-though-template-file-exists
+
 app = Flask(__name__)
 app.secret_key = secrets.token_hex(16)
 app.config['MAIL_SERVER'] = config.MAIL_SERVER
