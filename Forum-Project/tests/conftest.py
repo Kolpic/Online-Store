@@ -15,7 +15,7 @@ def client():
     with app.test_client() as client:
         with app.app_context():
             yield client
-
+            
 @pytest.fixture(scope="module")
 def setup_database():
     print('Configuration DB!!!!!!!!!!!!!!!')

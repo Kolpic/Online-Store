@@ -5,10 +5,18 @@ from flask import render_template
 from project.main import app
 from project.main import registration, send_verification_email, mail, hash_password
 from project.exception import CustomError
+from project import config
 from flask import session, url_for
 from unittest.mock import patch
+import psycopg2
+
+database = config.test_database
+user = config.user
+password = config.password
+host = config.host
 
 def test_registartion_success(client, setup_database):
+    # Ако не мокна изпращането на мейл се изпраща реален имейл от тест кейса
     with patch('project.main.send_verification_email') as mock_send_email, \
     patch('project.main.hash_password', return_value='hashed_password') as mock_hash_password:
         response=client.post('/registration', data={
@@ -17,62 +25,80 @@ def test_registartion_success(client, setup_database):
         'email': 'testuseerqq@example.com',
         'password': 'password123'
     })
-        
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM users WHERE email = %s", ('testuseerqq@example.com',))
+
+        row = cur.fetchone()
+
+        assert row is not None, "No record found for the user"
+        assert cur.fetchone() is None, "More than one record found for the user" 
         assert response.status_code == 302
         assert url_for('verify') in response.location
-        mock_send_email.assert_called_once
-        mock_hash_password.assert_called_once
+
+        cur.close()
+        conn.close()
 
 def test_invalid_email_registration(client):
-    with patch('project.main.hash_password', return_value='hashed_password') as mock_hash_password:
-        response = client.post('/registration', data={
+    response = client.post('/registration', data={
             'first_name': 'Test',
             'last_name': 'User',
             'email': 'notAValidEmail',
             'password': 'password123'
     })
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE email = %s", ('notAValidEmail',))
+
+    row = cur.fetchone()
+    assert row is None, "No record found for the user"
     assert response.status_code == 302
     assert url_for('registration') in response.location
-    with client.session_transaction() as session:
-        assert "Email is not valid" in session.get('flash_messages', ["Email is not valid"])
 
 def test_invalid_first_name_registration(client):
     with patch('project.main.hash_password', return_value='hashed_password') as mock_hash_password:
         response=client.post('/registration', data={
             'first_name': 'A',
             'last_name': 'User',
-            'email': 'testuseerqq@example.com',
+            'email': 'gfhdughfduhgjdf@example.com',
             'password': 'password123'
     })
+        
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE email = %s", ('gfhdughfduhgjdf@example.com',))
+
+    row = cur.fetchone()
+    assert row is None, "No record found for the user"
     assert response.status_code == 302
     assert url_for('registration') in response.location
-    with client.session_transaction() as session:
-        assert "First name is must be between 3 and 50 symbols" in session.get('flash_messages', ["First name is must be between 3 and 50 symbols"])
 
 def test_invalid_last_name_registration(client):
     with patch('project.main.hash_password', return_value='hashed_password') as mock_hash_password:
         response = client.post('/registration', data={
             'first_name': 'Amber',
             'last_name': 'U',
-            'email': 'testuseerqq@example.com',
+            'email': 'gfhdughfduhgjdf@example.com',
             'password': 'password123'
     })
+        
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    cur = conn.cursor()
+    cur.execute("SELECT * FROM users WHERE email = %s", ('gfhdughfduhgjdf@example.com',))
+
+    row = cur.fetchone()
+    assert row is None, "No record found for the user"
     assert response.status_code == 302
     assert url_for('registration') in response.location
-    with client.session_transaction() as session:
-        assert "Last name must be between 3 and 50 symbols" in session.get('flash_messages', ["Last name must be between 3 and 50 symbols"])
+  
+def test_registration_get(client):
+    response = client.get('/registration')
 
-# def test_registration_get(client):
-    # responsee = client.get('/registration')
-    # response = render_template('registration.html')
-    # assert response.status_code == 200  
-    # assert b"Register" in response.data  
-    # assert "registration.html" in (response.get_data(as_text=True))
-    # assert response.status_code == 302
-    # assert render_template('registration.html')
-    # assert url_for('registration') in response.location
+    assert response.status_code == 200  
+    assert b"Register" in response.data  
+    assert render_template('registration.html')
         
-def test_verification_email_sends_enail_successfull(client):
+def test_verification_email_sends_enail_successful(client):
     user_email = 'user@example.com'
     verification_code = 'dsafdsfsafasgagjyt[;h]df'
 
@@ -89,7 +115,7 @@ def test_verification_email_sends_enail_successfull(client):
             assert message.recipients == [user_email]
             assert 'Please insert the verification code in the form: ' + verification_code
 
-def test_hash_password_successfull(client):
+def test_hash_password_successful(client):
     password = '123456789'
 
     hashed_password = hash_password(password)
