@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Matrix Visualization</title>
+    <style>
+        .matrix-container {
+            display: flex;
+            flex-wrap: wrap;
+            margin-top: 20px;
+        }
+        .matrix-cell {
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid #000;
+            margin: 2px;
+        }
+    </style>
+</head>
+<body>
+    <div>
+        <label for="n-input">Enter n (size of sub-grid):</label>
+        <input type="number" id="n-input" min="1">
+    </div>
+    <div>
+        <label for="grid-input">Enter grid elements (use space to separate elements):</label>
+        <input type="text" id="grid-input">
+    </div>
+    <button id="visualize-btn">Visualize</button>
+
+    <div class="matrix-container"></div>
+
+    <script>
+        let N;
+        let set = new Set();
+
+        function isSafe(matrix, row, col, num) {
+            for (let x = 0; x < N; x++) {
+                if (matrix[row][x] == num || matrix[x][col] == num) {
+                    return false;
+                }
+            }
+
+            let startRow = row - row % Math.sqrt(N), startCol = col - col % Math.sqrt(N);
+            for (let i = 0; i < Math.sqrt(N); i++) {
+                for (let j = 0; j < Math.sqrt(N); j++) {
+                    if (matrix[i + startRow][j + startCol] == num) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        function solve(matrix, row, col) {
+            if (row == N - 1 && col == N) return true;
+            if (col == N) {
+                row++;
+                col = 0;
+            }
+            if (matrix[row][col] != '0') return solve(matrix, row, col + 1);
+            for (let num of set) {
+                if (isSafe(matrix, row, col, num)) {
+                    matrix[row][col] = num;
+                    if (solve(matrix, row, col + 1)) return true;
+                    matrix[row][col] = '0'; // backtrack
+                }
+            }
+            return false;
+        }
+
+        function prepareMatrix(n, grid) {
+            N = n * n;
+            let matrix = Array(N).fill(0).map(() => Array(N).fill('0'));
+            let elements = grid.split(" ");
+            let pointer = 0;
+
+            for (let i = 0; i < N; i++) {
+                for (let j = 0; j < N; j++) {
+                    let element = elements[pointer++];
+                    matrix[i][j] = element;
+                    if (element !== '0') set.add(element);
+                }
+            }
+            return matrix;
+        }
+
+        function displayMatrix(matrix) {
+            const container = document.querySelector('.matrix-container');
+            container.innerHTML = ''; 
+            matrix.forEach(row => {
+                row.forEach(cell => {
+                    const cellElement = document.createElement('div');
+                    cellElement.classList.add('matrix-cell');
+                    cellElement.textContent = cell;
+                    container.appendChild(cellElement);
+                });
+            });
+        }
+
+        document.getElementById('visualize-btn').addEventListener('click', function() {
+            const n = parseInt(document.getElementById('n-input').value, 10);
+            const grid = document.getElementById('grid-input').value;
+
+            if (!n || !grid) {
+                alert('Please enter valid values for n and grid.');
+                return;
+            }
+
+            let matrix = prepareMatrix(n, grid);
+            if (solve(matrix, 0, 0)) {
+                displayMatrix(matrix);
+            } else {
+                alert('No solution exists');
+            }
+        });
+    </script>
+</body>
+</html>
