@@ -1,9 +1,9 @@
 from flask import Flask, request, render_template, redirect, url_for, session
 from flask_mail import Mail, Message
-import psycopg2, os, re, secrets, bcrypt
+import psycopg2, os, re, secrets, bcrypt, psycopg2.extras
 # import os
-from project import config
-from project import exception
+from project import config, exception
+# from project import exception
 # import re
 # import secrets
 # import bcrypt
@@ -21,7 +21,7 @@ app.config['MAIL_USE_SSL'] = config.MAIL_USE_SSL
 
 mail = Mail(app)
 
-database = config.database
+database = config.test_database
 user = config.user
 password = config.password
 host = config.host
@@ -98,16 +98,12 @@ def verify():
         email = request.form['email']
         verification_code = request.form['verification_code']
 
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
         cur.execute("SELECT email FROM users WHERE email = %s", (email,))
         
-        dictionary = {}
-
         try:
-            # cur.fetchone()[0]
-            # email_from_database 
-            email_from_database = cur.fetchone()[0]   
+            email_from_database = cur.fetchone()['email']   
             if email_from_database == email:
                 cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
                 conn.commit()
@@ -132,13 +128,15 @@ def login():
         email = request.form['email']
         password_ = request.form['password']
 
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
         cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
-        is_the_email_verified = cur.fetchone()[0]
+         
+        is_the_email_verified = cur.fetchone()['verification_status']
 
         cur.execute("SELECT password FROM users WHERE email = %s", (email,))
-        hashed_password = cur.fetchone()[0]
+         
+        hashed_password = cur.fetchone()['password']
 
         are_passwords_same = bool(verify_password(password_, hashed_password))
 
