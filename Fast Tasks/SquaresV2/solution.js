@@ -27,4 +27,4 @@ function findSegmentDataOptimized(A) {
     return [maxLength, lengths.size];
 }
 
-console.log(findSegmentDataOptimized(670));
+console.log(findSegmentDataOptimized(20000));
