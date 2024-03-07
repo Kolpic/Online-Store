@@ -17,10 +17,10 @@ function prepareMAtrix(n, grid, row, col)
         }
     }
     set.delete('0');
-    solveSudoku(matrix, row, col)
+    solve(matrix, row, col)
 }
 
-function solveSudoku(matrix, row, col) {
+function solve(matrix, row, col) {
 	if (row == N - 1 && col == N) {
 		return false;
     }
@@ -31,14 +31,14 @@ function solveSudoku(matrix, row, col) {
 	}
 
 	if (matrix[row][col] != 0) {
-		return solveSudoku(matrix, row, col + 1);
+		return solve(matrix, row, col + 1);
     }
 
 	for(let num of set) {
 		if (isSafe(matrix, row, col, num)) {
 			matrix[row][col] = num;
 
-			if (solveSudoku(matrix, row, col + 1)) {
+			if (solve(matrix, row, col + 1)) {
 				return true;
             }
 		}
