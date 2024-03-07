@@ -21,12 +21,21 @@ app.config['MAIL_USE_SSL'] = config.MAIL_USE_SSL
 
 mail = Mail(app)
 
-database = config.test_database
+database = config.database
 user = config.user
 password = config.password
 host = config.host
 
-@app.route('/registration', methods =['GET', 'POST'])
+app.add_url_rule("/registration", endpoint="registration", methods=['POST', 'GET'])
+app.add_url_rule("/verify", endpoint="verify", methods=['POST', 'GET'])
+app.add_url_rule("/login", endpoint="login", methods=['POST', 'GET'])
+app.add_url_rule("/home", endpoint="home", methods=['GET'])
+app.add_url_rule("/logout", endpoint="logout", methods=['GET'])
+app.add_url_rule("/settings", endpoint="settings")
+app.add_url_rule("/update_settings", endpoint="update_settings", methods=['POST'])
+app.add_url_rule("/delete_account", endpoint="delete_account", methods=['POST','GET'])
+
+@app.endpoint("registration")
 def registration():
 
     if request.method == 'GET':
@@ -77,7 +86,7 @@ def hash_password(password):
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
     return hashed_password.decode('utf-8')
 
-@app.route('/verify', methods=['POST', 'GET'])
+@app.endpoint("verify")
 def verify():
 
     if request.method == 'GET':
@@ -109,7 +118,7 @@ def verify():
             session['verification_error'] = str(error_message)
             return redirect(url_for('verify'))    
 
-@app.route('/login', methods=['GET', 'POST'])
+@app.endpoint("login")
 def login():
     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
 
@@ -156,26 +165,26 @@ def verify_password(plain_password, hashed_password):
 def is_authenticated():
     return 'user_email' in session
 
-@app.route('/home', methods=['GET'])
+@app.endpoint("home")
 def home():
     if not is_authenticated():
         return redirect(url_for('login'))
     
     return render_template('home.html')
 
-@app.route('/logout', methods=['GET'])    
+@app.endpoint("logout")    
 def logout():
     session.pop('user_email', None) 
     return redirect(url_for('home'))
 
-@app.route('/settings')
+@app.endpoint("settings")
 def settings():
     if 'user_email' not in session:
         return redirect(url_for('login'))
     
     return render_template('settings.html')
 
-@app.route('/update_settings', methods=['POST'])
+@app.endpoint("update_settings")
 def update_settings():
     if 'user_email' not in session:
          return 'Unauthorized', 401
@@ -222,7 +231,7 @@ def update_settings():
         
     return redirect(url_for('home'))
 
-@app.route('/delete_account', methods=['POST', 'GET'])
+@app.endpoint("delete_account")
 def delete_account():
 
     if 'user_email' not in session:
