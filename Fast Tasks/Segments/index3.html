@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Segment Visualization</title>
+    <style>
+        #visualization {
+            position: relative;
+            width: 100%;
+            height: 50px;
+            background-color: black;
+            margin-top: 50px;
+        }
+        .pointA, .pointB {
+            position: absolute;
+            bottom: 0;
+            width: 10px;
+            height: 10px;
+        }
+        .pointA {
+            background-color: green;
+        }
+        .pointB {
+            background-color: blue;
+        }
+        .red-line {
+            position: absolute;
+            bottom: 0;
+            height: 2px;
+            background-color: red;
+        }
+        .label {
+            position: absolute;
+            color: rgb(43, 180, 8);
+        }
+    </style>
+</head>
+<body>
+    <input type="number" id="lengthN" placeholder="Length (n)">
+    <input type="number" id="intervalA" placeholder="Interval A">
+    <input type="number" id="intervalB" placeholder="Interval Y">
+    <input type="number" id="distanceC" placeholder="Distance between A and B">
+    <button onclick="visualize()">Visualize</button>
+    <div id="visualization"></div>
+    <div id="result"></div>
+
+<script>
+    function visualize() {
+    const n = parseInt(document.getElementById('lengthN').value);
+    const a = parseInt(document.getElementById('intervalA').value);
+    const b = parseInt(document.getElementById('intervalB').value);
+    const c = parseInt(document.getElementById('distanceC').value);
+
+    const visualization = document.getElementById('visualization');
+    visualization.innerHTML = '';
+
+    for (let i = 0; i <= n; i += a) {
+      addPoint(i, n, 'A');
+    }
+
+    for (let j = 0; j <= n; j += b) {
+      addPoint(n - j, n, 'B');
+    }
+
+    let lineCounter = 0;
+    for (let pointA = 0; pointA <= n; pointA += a) {
+      for (let pointY = 0; pointY <= n; pointY += b) {
+        let distance = Math.abs(pointA - (n - pointY));
+        if (distance === c) {
+          addRedLine(Math.min(pointA, n - pointY), c, n);
+          lineCounter++;
+        }
+      }
+    }
+
+    let result = n - lineCounter * c;
+    document.getElementById('result').textContent = `Unpainted Length: ${result} meters`; 
+  }
+
+    function addPoint(position, totalLength, type, a, b) {
+    const visualization = document.getElementById('visualization');
+    const point = document.createElement('div');
+    point.className = type === 'A' ? 'pointA' : 'pointB';
+    point.style.left = `${(position / totalLength) * 100}%`;
+    visualization.appendChild(point);
+    const label = document.createElement('div');
+    label.className = 'label';
+    label.style.left = `${(position / totalLength) * 100}%`;
+    label.textContent = `${type}`;
+    label.style.color = 'white'; 
+    if (type === 'A') {
+        point.style.bottom = '20px';
+        label.style.bottom = '30px';
+    } else {
+      point.style.bottom = '0';
+      label.style.bottom = '10px';
+    }
+    visualization.appendChild(label);
+}
+    function addRedLine(position, length, totalLength) {
+      const line = document.createElement('div');
+      line.className = 'red-line';
+      line.style.left = `${(position / totalLength) * 100}%`;
+      line.style.width = `${(length / totalLength) * 100}%`;
+      visualization.appendChild(line);
+    }
+</script>
+</body>
+</html>
