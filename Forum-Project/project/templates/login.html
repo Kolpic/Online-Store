@@ -6,9 +6,15 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 </head>
 <body>
+    <!-- Displaying message -->
     {% if 'login_error' in session %}
         <div class="alert alert-danger">
             {{ session.pop('login_error') }}
+        </div>
+    {% endif %}
+    {% if 'login_message' in session %}
+        <div class="alert alert-success">
+            {{ session.pop('login_message') }}
         </div>
     {% endif %}
     <div class="container">
@@ -24,6 +30,16 @@
             </div>
             <button type="submit" class="btn btn-primary">Log In</button>
         </form>
+        <div style="margin-top:20px">
+            <h4>If you forgot your password fill the form:</h4>
+            <form method="POST" action="/recover_password">
+                <div class="form-group">
+                    <label for="recovery_email">Email</label>
+                    <input type="email" class="form-control" id="recovery_email" name="recovery_email" required>
+                </div>
+                <button type="submit" class="btn btn-secondary">Recover Password</button>
+            </form>
+        </div>
     </div>
 </body>
 </html>

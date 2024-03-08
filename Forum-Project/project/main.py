@@ -37,7 +37,7 @@ captcha = FlaskSessionCaptcha(app)
 
 mail = Mail(app)
 
-database = config.test_database
+database = config.database
 user = config.user
 password = config.password
 host = config.host
@@ -50,6 +50,7 @@ app.add_url_rule("/logout", endpoint="logout", methods=['GET'])
 app.add_url_rule("/settings", endpoint="settings")
 app.add_url_rule("/update_settings", endpoint="update_settings", methods=['POST'])
 app.add_url_rule("/delete_account", endpoint="delete_account", methods=['POST','GET'])
+app.add_url_rule("/recover_password", endpoint="recover_password", methods=['POST'])
 
 @app.endpoint("registration")
 def registration():
@@ -268,6 +269,36 @@ def delete_account():
     session.clear()
 
     return redirect(url_for('login'))
+
+@app.endpoint("recover_password")
+def recover_password():
+    if request.method == 'POST':
+        email = request.form['recovery_email']
+        new_password = os.urandom(10).hex()
+
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor()
+
+        hashed_password = hash_password(new_password)
+
+        cur.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_password, email))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        send_recovey_password_email(email, new_password)
+        
+        session['login_message'] = 'A recovery password has been sent to your email.'
+        return redirect(url_for('login'))
+
+def send_recovey_password_email(user_email, recovery_password):
+    with app.app_context():
+        msg = Message('Recovery password',
+                  sender = 'galincho112@gmail.com',
+                  recipients = [user_email])
+    msg.body = 'Your recovery password: ' + recovery_password
+    mail.send(msg)
 
 if __name__ == '__main__':
     app.run(debug=True)
