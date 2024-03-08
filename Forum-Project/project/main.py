@@ -51,6 +51,7 @@ app.add_url_rule("/settings", endpoint="settings")
 app.add_url_rule("/update_settings", endpoint="update_settings", methods=['POST'])
 app.add_url_rule("/delete_account", endpoint="delete_account", methods=['POST','GET'])
 app.add_url_rule("/recover_password", endpoint="recover_password", methods=['POST'])
+app.add_url_rule("/resend_verf_code", endpoint="resend_verf_code", methods=['POST'])
 
 @app.endpoint("registration")
 def registration():
@@ -299,6 +300,27 @@ def send_recovey_password_email(user_email, recovery_password):
                   recipients = [user_email])
     msg.body = 'Your recovery password: ' + recovery_password
     mail.send(msg)
+
+@app.endpoint("resend_verf_code")
+def resend_verf_code():
+    if request.method == 'POST':
+        email = request.form['email']
+
+        new_verification_code = os.urandom(24).hex()
+
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor()
+
+        cur.execute("UPDATE users SET verification_code = %s WHERE email = %s", (new_verification_code, email))
+
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        send_verification_email(email, new_verification_code)
+
+        session['verification_message'] = 'A new verification code has been sent to your email.'
+        return redirect(url_for('verify'))
 
 if __name__ == '__main__':
     app.run(debug=True)
