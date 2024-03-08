@@ -92,7 +92,7 @@
             const container = document.querySelector('.matrix-container');
             container.innerHTML = ''; 
             matrix.forEach(row => {
-                row.forEach(cell => {
+                row.forEach(cell => {   
                     const cellElement = document.createElement('div');
                     cellElement.classList.add('matrix-cell');
                     cellElement.textContent = cell;
