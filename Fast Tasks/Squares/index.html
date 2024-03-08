@@ -4,20 +4,19 @@
     <meta charset="UTF-8">
     <title>Matrix Visualization</title>
     <style>
-        .matrix-container {
-            display: flex;
-            flex-wrap: wrap;
-            margin-top: 20px;
-        }
-        .matrix-cell {
-            width: 40px;
-            height: 40px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid #000;
-            margin: 2px;
-        }
+    .matrix-container {
+        display: flex;
+        flex-direction: column; /* Stack rows vertically */
+    }
+    .matrix-cell {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #000;
+    margin: 2px;
+    }
     </style>
 </head>
 <body>
@@ -89,34 +88,42 @@
         }
 
         function displayMatrix(matrix) {
-            const container = document.querySelector('.matrix-container');
-            container.innerHTML = ''; 
-            matrix.forEach(row => {
-                row.forEach(cell => {   
-                    const cellElement = document.createElement('div');
-                    cellElement.classList.add('matrix-cell');
-                    cellElement.textContent = cell;
-                    container.appendChild(cellElement);
-                });
+        const container = document.querySelector('.matrix-container');
+        container.innerHTML = ''; // Clear previous matrix display
+
+        matrix.forEach((row, rowIndex) => {
+            // Create a new div for each row
+            let rowDiv = document.createElement('div');
+            rowDiv.style.display = 'flex';
+
+            row.forEach(cell => {
+                // Create a new div for each cell
+                const cellElement = document.createElement('div');
+                cellElement.classList.add('matrix-cell');
+                cellElement.textContent = cell;
+                rowDiv.appendChild(cellElement); // Append cell to the row div
             });
+
+            container.appendChild(rowDiv); // Append the row div to the container
+        });
         }
 
-        document.getElementById('visualize-btn').addEventListener('click', function() {
-            const n = parseInt(document.getElementById('n-input').value, 10);
-            const grid = document.getElementById('grid-input').value;
+    document.getElementById('visualize-btn').addEventListener('click', function() {
+        const n = parseInt(document.getElementById('n-input').value, 10);
+        const grid = document.getElementById('grid-input').value;
 
-            if (!n || !grid) {
-                alert('Please enter valid values for n and grid.');
-                return;
-            }
+        if (!n || !grid) {
+            alert('Please enter valid values for n and grid.');
+            return;
+        }
 
-            let matrix = prepareMatrix(n, grid);
-            if (solve(matrix, 0, 0)) {
-                displayMatrix(matrix);
-            } else {
-                alert('No solution exists');
-            }
-        });
+        let matrix = prepareMatrix(n, grid);
+        if (solve(matrix, 0, 0)) {
+            displayMatrix(matrix);
+        } else {
+            alert('No solution exists');
+        }
+    });
     </script>
 </body>
 </html>
