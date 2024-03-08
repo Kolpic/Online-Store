@@ -1,8 +1,11 @@
 from flask import Flask, request, render_template, redirect, url_for, session
 from flask_mail import Mail, Message
-import psycopg2, os, re, secrets, bcrypt, psycopg2.extras
+import psycopg2, os, re, secrets, bcrypt, psycopg2.extras, uuid
 # import os
 from project import config, exception
+from flask_session_captcha import FlaskSessionCaptcha
+# from flask_sessionstore import Session
+from flask_session import Session 
 # from project import exception
 # import re
 # import secrets
@@ -11,6 +14,7 @@ from project import config, exception
 # https://stackoverflow.com/questions/23327293/flask-raises-templatenotfound-error-even-though-template-file-exists
 
 app = Flask(__name__)
+# MAIL Configuration
 app.secret_key = secrets.token_hex(16)
 app.config['MAIL_SERVER'] = config.MAIL_SERVER
 app.config['MAIL_PORT'] = config.MAIL_PORT
@@ -18,6 +22,18 @@ app.config['MAIL_USERNAME'] = config.MAIL_USERNAME
 app.config['MAIL_PASSWORD'] = config.MAIL_PASSWORD
 app.config['MAIL_USE_TLS'] = config.MAIL_USE_TLS
 app.config['MAIL_USE_SSL'] = config.MAIL_USE_SSL
+# Captcha Configuration
+app.config["SECRET_KEY"] = uuid.uuid4() 
+app.config["CAPTCHA_WIDTH"] = 160
+app.config["CAPTCHA_HEIGHT"] = 60 
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_FILE_DIR'] = '/home/galin/Desktop/projects/GitHub/Forum-Project/project/captcha'
+
+Session(app)
+
+app.config["CAPTCHA_ENABLE"] = True
+app.config["CAPTCHA_NUMERIC_DIGITS"] = 5
+captcha = FlaskSessionCaptcha(app)
 
 mail = Mail(app)
 
@@ -42,6 +58,11 @@ def registration():
         return render_template('registration.html')
     
     if request.method == 'POST':
+        captcha_response = request.form['captcha']
+        if not captcha.validate():
+            session['registration_error'] = "Invalid CAPTCHA. Please try again."
+            return redirect(url_for('registration'))
+        
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
 
         first_name = request.form['first_name']
