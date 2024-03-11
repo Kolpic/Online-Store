@@ -232,3 +232,101 @@ def test_logout_get_successful(client, setup_database):
 
         assert session.get('user_email') != 'aloooooo@example.com'
         assert url_for('home') in responce.location
+def test_settings_get_successful(client, setup_database):
+    with patch('project.main.verify_password', return_value=True) as mock_verify_password :
+        prepare_settings()
+
+        client.post('/login', data = {
+            'email': 'aloooo@example.com',
+            'password': '123456789'
+        })
+
+        responce = client.get('/settings')
+
+        assert responce.status_code == 200
+        assert session.get('user_email') == 'aloooo@example.com'
+        assert b'Settings' in responce.data
+
+def test_delete_account_successful(client):
+    responce = client.post('/delete_account')
+
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    cur = conn.cursor()
+
+    is_deleted = cur.execute("SELECT verification_status FROM users WHERE email = %s", ('alooooooo@example.com',))
+
+    conn.commit()
+    
+    assert is_deleted == None
+    assert session.get('user_email') != 'alooooooo@example.com'
+    url_for('login') in responce.location
+
+    cur.close()
+    conn.close()
+
+def test_delete_account_not_successful(client):
+    client.get('/logout')
+    responce = client.post('/delete_account')
+
+    assert responce.status_code == 302
+    assert '/registration' in responce.headers['Location']
+
+def test_settings_get_not_successful(client):
+    client.get('/logout')
+    responce = client.get('/settings')   
+
+    assert responce.status_code == 302
+    assert '/login' in responce.headers['Location']
+
+def prepare_settings():
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", ('Mozambik', 'Mizake', 'aloooo@example.com', '123456789', '12588523'))
+        cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", ('12588523',))
+
+        conn.commit()
+
+        cur.close()
+        conn.close()
+
+def test_update_settings_successful(client):
+    with patch('project.main.verify_password') as mock_verify_password:
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code, verification_status) VALUES (%s, %s, %s, %s, %s, %s)", ('Jonni', 'Sins', 'keleme@abv.bg', '123456789', '12588523', 'true'))
+        conn.commit()
+
+        client.post('/login', data={
+           'email': 'keleme@abv.bg',
+            'password': '123456789'
+        })
+
+        assert session.get('user_email') == 'keleme@abv.bg'
+
+        cur.execute("SELECT first_name FROM users WHERE email = %s", ('keleme@abv.bg',))
+        first_name = cur.fetchone()[0]
+        cur.execute("SELECT last_name FROM users WHERE email = %s", ('keleme@abv.bg',))
+        last_name = cur.fetchone()[0]
+        cur.execute("SELECT password FROM users WHERE email = %s", ('keleme@abv.bg',))
+        password_ = cur.fetchone()[0]
+
+        responce = client.post('/update_settings', data = {
+            'first-name': 'UPDATE',
+            'last-name': 'SETTINGS',
+            'email': 'UPDATEEMAIL@GMAIL.COM',
+            'password': '123456'
+        })   
+
+        cur.execute("SELECT first_name FROM users WHERE email = %s", ('UPDATEEMAIL@GMAIL.COM',))
+        changed_first_name = cur.fetchone()[0]
+        cur.execute("SELECT last_name FROM users WHERE email = %s", ('UPDATEEMAIL@GMAIL.COM',))
+        changed_last_name = cur.fetchone()[0]
+        cur.execute("SELECT password FROM users WHERE email = %s", ('UPDATEEMAIL@GMAIL.COM',))
+        changed_password = cur.fetchone()[0]
+
+        assert session.get('user_email') == 'UPDATEEMAIL@GMAIL.COM'  
+        assert first_name != changed_first_name
+        assert last_name != changed_last_name
+        assert password_ != changed_password
+        assert '/home' in responce.headers['Location']
+
