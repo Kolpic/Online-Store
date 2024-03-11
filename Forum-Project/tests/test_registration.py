@@ -157,7 +157,7 @@ def test_verify_post_successful(client, setup_database):
             'email': 'alooooooo@example.com',
             'verification_code': verification_code
         })
-        
+
         cur.execute("SELECT verification_status FROM users WHERE email = %s", ('alooooooo@example.com',))
         conn.commit()
 
@@ -168,3 +168,45 @@ def test_verify_post_successful(client, setup_database):
         assert url_for('login') in responce.headers['Location']
         cur.close()
 
+def test_login_get_successful(client, setup_database):
+    responce = client.get('/login')
+
+    assert responce.status_code == 200
+    assert b"Login" in responce.data
+    assert render_template('login.html')
+
+def test_login_post_successful(client, setup_database):
+    with patch('project.main.send_verification_email') as mock_send_email, \
+    patch('project.main.captcha.validate', return_value=True) as mock_validate, \
+    patch('project.main.verify_password', return_value='hashed_password') as mock_verify_password :
+        verification_code = '561565644'
+        client.post('/registration', data={
+        'first_name': 'Test',
+        'last_name': 'User',
+        'email': 'alooo@example.com',
+        'password': 'password123',
+        'captcha': 'valid_captcha'
+    })
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor()
+
+        cur.execute("UPDATE users SET verification_code = '561565644' WHERE email = %s", ('alooooooo@example.com',))
+        conn.commit()
+
+        client.post('/verify', data = {
+            'email': 'alooo@example.com',
+            'verification_code': '561565644'
+        })
+
+        cur.execute("UPDATE users SET verification_status = true WHERE email = %s", ('alooo@example.com',))
+        conn.commit()
+
+        responce = client.post('/login', data = {
+           'email': 'alooo@example.com',
+           'password': 'password123'
+        })
+        
+        assert responce.status_code == 302
+        assert session.get('user_email') == 'alooo@example.com'
+        assert url_for('home') in responce.location
+        cur.close()
