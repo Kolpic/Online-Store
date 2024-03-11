@@ -7,7 +7,7 @@ from project.main import registration, send_verification_email, mail, hash_passw
 from project.exception import CustomError
 from project import config
 from flask import session, url_for
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 import psycopg2
 
 database = config.test_database
@@ -128,4 +128,43 @@ def test_hash_password_successful(client):
 
     assert password != hashed_password
     assert bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+
+def test_verify_get(client):
+    response = client.get('/verify')
+
+    assert response.status_code == 200  
+    assert b"Verify" in response.data  
+    assert render_template('verify.html')
+
+def test_verify_post_successful(client, setup_database):
+    with patch('project.main.send_verification_email') as mock_send_email, \
+    patch('project.main.captcha.validate', return_value=True) as mock_validate:
+        verification_code = '56156565454565644'
+        client.post('/registration', data={
+        'first_name': 'Test',
+        'last_name': 'User',
+        'email': 'alooooooo@example.com',
+        'password': 'password123',
+        'captcha': 'valid_captcha'
+    })
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+
+        cur.execute("UPDATE users SET verification_code = '56156565454565644' WHERE email = %s", ('alooooooo@example.com',))
+        conn.commit()
+        
+        responce = client.post('/verify', data = {
+            'email': 'alooooooo@example.com',
+            'verification_code': verification_code
+        })
+        
+        cur.execute("SELECT verification_status FROM users WHERE email = %s", ('alooooooo@example.com',))
+        conn.commit()
+
+        verification_status = cur.fetchone()['verification_status']
+
+        assert verification_status
+        assert responce.status_code == 302
+        assert url_for('login') in responce.headers['Location']
+        cur.close()
 
