@@ -15,15 +15,23 @@ user = config.user
 password = config.password
 host = config.host
 
+def test_registration_get(client):
+    response = client.get('/registration')
+
+    assert response.status_code == 200  
+    assert b"Register" in response.data  
+    assert render_template('registration.html')
+
 def test_registartion_success(client, setup_database):
     # Ако не мокна изпращането на мейл се изпраща реален имейл от тест кейса
     with patch('project.main.send_verification_email') as mock_send_email, \
-    patch('project.main.hash_password', return_value='hashed_password') as mock_hash_password:
+    patch('project.main.captcha.validate', return_value=True) as mock_validate:
         response=client.post('/registration', data={
         'first_name': 'Test',
         'last_name': 'User',
         'email': 'testuseerqq@example.com',
-        'password': 'password123'
+        'password': 'password123',
+        'captcha': 'valid_captcha'
     })
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor()
@@ -40,12 +48,14 @@ def test_registartion_success(client, setup_database):
         conn.close()
 
 def test_invalid_email_registration(client):
-    response = client.post('/registration', data={
+    with patch('project.main.captcha.validate', return_value=True) as mock_validate:
+        response = client.post('/registration', data={
             'first_name': 'Test',
             'last_name': 'User',
             'email': 'notAValidEmail',
-            'password': 'password123'
-    })
+            'password': 'password123',
+            'captcha': 'valid_captcha'
+        })
     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
     cur = conn.cursor()
     cur.execute("SELECT * FROM users WHERE email = %s", ('notAValidEmail',))
@@ -56,12 +66,13 @@ def test_invalid_email_registration(client):
     assert url_for('registration') in response.location
 
 def test_invalid_first_name_registration(client):
-    with patch('project.main.hash_password', return_value='hashed_password') as mock_hash_password:
+    with patch('project.main.captcha.validate', return_value=True) as mock_validate:
         response=client.post('/registration', data={
             'first_name': 'A',
             'last_name': 'User',
             'email': 'gfhdughfduhgjdf@example.com',
-            'password': 'password123'
+            'password': 'password123',
+            'captcha': 'valid_captcha'
     })
         
     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
@@ -74,12 +85,14 @@ def test_invalid_first_name_registration(client):
     assert url_for('registration') in response.location
 
 def test_invalid_last_name_registration(client):
-    with patch('project.main.hash_password', return_value='hashed_password') as mock_hash_password:
+    with patch('project.main.hash_password', return_value='hashed_password') as mock_hash_password, \
+    patch('project.main.captcha.validate', return_value=True) as mock_validate:
         response = client.post('/registration', data={
             'first_name': 'Amber',
             'last_name': 'U',
             'email': 'gfhdughfduhgjdf@example.com',
-            'password': 'password123'
+            'password': 'password123',
+            'captcha': 'valid_captcha'
     })
         
     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
@@ -90,13 +103,6 @@ def test_invalid_last_name_registration(client):
     assert row is None, "No record found for the user"
     assert response.status_code == 302
     assert url_for('registration') in response.location
-  
-def test_registration_get(client):
-    response = client.get('/registration')
-
-    assert response.status_code == 200  
-    assert b"Register" in response.data  
-    assert render_template('registration.html')
         
 def test_verification_email_sends_enail_successful(client):
     user_email = 'user@example.com'
