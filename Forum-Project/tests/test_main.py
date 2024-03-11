@@ -210,3 +210,25 @@ def test_login_post_successful(client, setup_database):
         assert session.get('user_email') == 'alooo@example.com'
         assert url_for('home') in responce.location
         cur.close()
+
+def test_logout_get_successful(client, setup_database):
+    with patch('project.main.verify_password', return_value='hashed_password') as mock_verify_password :
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", ('Mozambik', 'Mizake', 'aloooooo@example.com', '123456789', '12588523'))
+        cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", ('12588523',))
+
+        conn.commit()
+
+        cur.close()
+        conn.close()
+
+        client.post('/login', data = {
+            'email': 'aloooooo@example.com',
+            'password': '123456789'
+        })
+
+        responce = client.get('/logout')
+
+        assert session.get('user_email') != 'aloooooo@example.com'
+        assert url_for('home') in responce.location
