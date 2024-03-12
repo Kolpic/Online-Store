@@ -241,7 +241,7 @@ def test_settings_get_successful(client, setup_database):
             'password': '123456789'
         })
 
-        responce = client.get('/settings')
+        responce = client.get('/profile')
 
         assert responce.status_code == 200
         assert session.get('user_email') == 'aloooo@example.com'
@@ -273,7 +273,7 @@ def test_delete_account_not_successful(client):
 
 def test_settings_get_not_successful(client):
     client.get('/logout')
-    responce = client.get('/settings')   
+    responce = client.get('/profile')   
 
     assert responce.status_code == 302
     assert '/login' in responce.headers['Location']
@@ -310,7 +310,7 @@ def test_update_settings_successful(client):
         cur.execute("SELECT password FROM users WHERE email = %s", ('keleme@abv.bg',))
         password_ = cur.fetchone()[0]
 
-        responce = client.post('/update_settings', data = {
+        responce = client.post('/update_profile', data = {
             'first-name': 'UPDATE',
             'last-name': 'SETTINGS',
             'email': 'UPDATEEMAIL@GMAIL.COM',

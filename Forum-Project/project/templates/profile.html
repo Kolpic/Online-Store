@@ -8,18 +8,18 @@
 <body>
     <div class="container">
         <h1>Settings</h1>
-        <form action="/update_settings" method="post">
+        <form action="/update_profile" method="post">
             <div class="form-group">
                 <label for="first-name">Change first name</label>
-                <input type="text" class="form-control" id="first-name" name="first-name">
+                <input type="text" class="form-control" id="first-name" name="first-name" value="{{ user_details[0] }}">
             </div>
             <div class="form-group">
                 <label for="last-name">Change last name</label>
-                <input type="text" class="form-control" id="last-name" name="last-name">
+                <input type="text" class="form-control" id="last-name" name="last-name" value="{{ user_details[1] }}">
             </div>
             <div class="form-group">
                 <label for="email">Change email address</label>
-                <input type="email" class="form-control" id="email" name="email">
+                <input type="email" class="form-control" id="email" name="email" value="{{ user_details[2] }}">
             </div>
             <div class="form-group">
                 <label for="password">Change password</label>

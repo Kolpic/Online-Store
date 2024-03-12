@@ -37,19 +37,18 @@ captcha = FlaskSessionCaptcha(app)
 
 mail = Mail(app)
 
-database = config.test_database
+database = config.database
 user = config.user
 password = config.password
 host = config.host
 
 app.add_url_rule("/registration", endpoint="registration", methods=['POST', 'GET'])
-
 app.add_url_rule("/verify", endpoint="verify", methods=['POST', 'GET'])
 app.add_url_rule("/login", endpoint="login", methods=['POST', 'GET'])
 app.add_url_rule("/home", endpoint="home", methods=['GET'])
 app.add_url_rule("/logout", endpoint="logout", methods=['GET'])
-app.add_url_rule("/settings", endpoint="settings")
-app.add_url_rule("/update_settings", endpoint="update_settings", methods=['POST'])
+app.add_url_rule("/profile", endpoint="profile")
+app.add_url_rule("/update_profile", endpoint="update_profile", methods=['POST'])
 app.add_url_rule("/delete_account", endpoint="delete_account", methods=['POST','GET'])
 app.add_url_rule("/recover_password", endpoint="recover_password")
 app.add_url_rule("/resend_verf_code", endpoint="resend_verf_code")
@@ -67,17 +66,17 @@ def registration():
     if not captcha.validate():
         session['registration_error'] = "Invalid CAPTCHA. Please try again."
         return redirect(url_for('registration'))
-        
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    try:    
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
 
-    first_name = request.form['first_name']
-    last_name = request.form['last_name']
-    email = request.form['email']
-    password_ = request.form['password']
+        first_name = request.form['first_name']
+        last_name = request.form['last_name']
+        email = request.form['email']
+        password_ = request.form['password']
 
-    hashed_password = hash_password(password_)
-    verification_code = os.urandom(24).hex()
-    try:
+        hashed_password = hash_password(password_)
+        verification_code = os.urandom(24).hex()
+
         if len(first_name) < 3 or len(first_name) > 50:
             raise exception.CustomError('First name is must be between 3 and 50 symbols')
         if len(last_name) < 3 or len(last_name) > 50:
@@ -119,27 +118,36 @@ def verify():
 
     if request.method == 'GET':
         return render_template('verify.html')
-
-    # if request.method == 'POST':
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-
-    email = request.form['email']
-    verification_code = request.form['verification_code']
-
-    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
-
-    cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-        
+    
     try:
-        email_from_database = cur.fetchone()['email']   
-        if email_from_database == email:
-            cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
-            conn.commit()
-            cur.close()
-            return redirect(url_for('login'))
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+
+        email = request.form['email']
+        verification_code = request.form['verification_code']
+
+        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+
+        cur.execute("SELECT email FROM users WHERE email = %s", (email,))
+        email_from_database = cur.fetchone()['email']
+
+        cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
+        is_verified = cur.fetchone()['verification_status']
+
+        if email_from_database != email:
+            raise TypeError('You entered different email')
+        if is_verified:
+            raise TypeError('The account is already verified')
+        
+        # if email_from_database == email and not is_verified:
+        cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
+        conn.commit()
+        cur.close()
+        return redirect(url_for('login'))
     except TypeError as e:
-        error_message = 'You entered different email'
-        session['verification_error'] = str(error_message)
+        # error_message = 'You entered different email'
+        if e['args'] == "'NoneType' object is not subscriptable":
+            e = 'You entered different email'
+        session['verification_error'] = str(e)
         return redirect(url_for('verify'))    
 
 @app.endpoint("login")
@@ -204,26 +212,34 @@ def logout():
     session.pop('user_email', None) 
     return redirect(url_for('home'))
 
-@app.endpoint("settings")
-def settings():
+@app.endpoint("profile")
+def profile():
     if 'user_email' not in session:
         return redirect(url_for('login'))
     
-    return render_template('settings.html')
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    cur = conn.cursor()
+    cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (session['user_email'],))
+    user_details = cur.fetchone()
+    conn.commit()
 
-@app.endpoint("update_settings")
-def update_settings():
+    if user_details:
+        return render_template('profile.html', user_details=user_details)
+    
+    return render_template('profile.html')
+
+@app.endpoint("update_profile")
+def update_profile():
     if 'user_email' not in session:
          return render_template('method_not_allowed.html')
     
     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    cur = conn.cursor()
 
     first_name = request.form['first-name']
     last_name = request.form['last-name']
     email = request.form['email']
     password_ = request.form['password']
-
-    cur = conn.cursor()
         
     query_string = "UPDATE users SET "
     fields_list = []
