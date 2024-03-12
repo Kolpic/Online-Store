@@ -3,6 +3,7 @@ let N;
 
 function prepareMAtrix(n, grid, row, col)
 {
+	// валидация
     N = n * n
 	
     let matrix = Array(n*n).fill(0).map(()=>Array(n*n).fill(0));

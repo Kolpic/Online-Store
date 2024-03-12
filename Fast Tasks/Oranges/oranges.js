@@ -1,4 +1,5 @@
 function solve(input, firstOrange, secondOrange) {
+    // валидация
     let rows = Number(input[0]);
     let cols = Number(input[1]);
     let days = Number(input[2]);

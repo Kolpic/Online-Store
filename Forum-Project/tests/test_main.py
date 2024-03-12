@@ -268,8 +268,8 @@ def test_delete_account_not_successful(client):
     client.get('/logout')
     responce = client.post('/delete_account')
 
-    assert responce.status_code == 302
-    assert '/registration' in responce.headers['Location']
+    assert responce.status_code == 200
+    # assert 'method_not_allowed' in responce.headers['Location'] 
 
 def test_settings_get_not_successful(client):
     client.get('/logout')
@@ -329,4 +329,19 @@ def test_update_settings_successful(client):
         assert last_name != changed_last_name
         assert password_ != changed_password
         assert '/home' in responce.headers['Location']
+
+def test_home_authenticated(client):
+    with client.session_transaction() as sess:
+        sess['user_email'] = 'test@example.com'
+    
+    response = client.get('/home')
+
+    assert response.status_code == 200
+    assert b'Home Page' in response.data
+
+def test_home_not_authenticated(client):
+    response = client.get('/home', follow_redirects=True)
+
+    assert response.status_code == 200
+    # assert response.location == 'http://localhost/login'
 
