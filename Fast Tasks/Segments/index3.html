@@ -50,6 +50,15 @@
     const b = parseInt(document.getElementById('intervalB').value);
     const c = parseInt(document.getElementById('distanceC').value);
 
+    if (n >= 100000 || a >= 100000 || b >= 100000 || c >= 100000) {
+      alert("The values must be under 100 000")
+      return
+    }
+    if (n <= 0 || a <= 0 || b <= 0 || c <= 0) {
+      alert("The values must be possitive")
+      return
+    }
+
     const visualization = document.getElementById('visualization');
     visualization.innerHTML = '';
 
