@@ -11,4 +11,4 @@ password = "1234"
 host = "localhost"
 
 test_database = "user_registration_testing"
-
+test_qa_database = "user_registration_qa_testing"
