@@ -50,6 +50,10 @@ function findSegmentDataOptimized(A) {
 
 document.getElementById("visualizeButton").addEventListener("click", function() {
     const A = parseInt(document.getElementById("numberInput").value);
+    if (A <= 0 || A > 20000) {
+        alert("A must be between 1 and 20 000")
+        return;
+    }
     const [maxLength, totalSegments] = findSegmentDataOptimized(A);
 
     document.getElementById("resultText").textContent = `Max Length: ${maxLength}, Total Segments: ${totalSegments}`;
