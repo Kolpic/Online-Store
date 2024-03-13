@@ -2,6 +2,36 @@ document.addEventListener('DOMContentLoaded', () => {
     const input = [8, 10, 4]; // test cases: [100, 100, 60]; [100, 100,60]
     const firstOrange = [4, 8]; // test cases:  [1, 1];       [1, 1] 
     const secondOrange = [2, 7]; // test cases:  [100,100]     [50, 50]
+
+    let row = input[0];
+    let cols = input[1];
+    let day = input[2];
+    let firstOrangeRow = firstOrange[0];
+    let firstOrangeCol = firstOrange[1];
+    let secondOrangeRow = secondOrange[0];
+    let secondOrangeCol = secondOrange[1];
+
+    if (row <= 0 || row > 10000) {
+        alert('First number (rows) showld be between 1 and 10 000');
+        return
+    }
+    if (cols <= 0 || cols > 10000) {
+        alert('Second number (columns) showld be between 1 and 10 000');
+        return
+    }
+    if (day <= 0 && day > 1000) {
+        alert('Third number (days) showld be between 1 and 1000');
+        return
+    }
+    if (firstOrangeRow > row || firstOrangeRow < 0 || firstOrangeCol > cols || firstOrangeCol < 0) {
+        alert('First orange is out of bounds');
+        return
+    }
+    if (secondOrangeRow > row || secondOrangeRow < 0 || secondOrangeCol > cols || secondOrangeCol < 0) {
+        alert('Second orange is out of bounds');
+        return
+    }
+
     initialize(input, firstOrange, secondOrange); // Initialize the grid
 
     let currentDay = 0;
@@ -10,7 +40,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (currentDay < days) {
             currentDay++;
             updateGrid(currentDay);
-            document.getElementById('day-counter').innerHTML = `Day: ${currentDay}`;
+            document.getElementById('day-counter').innerHTML = `Day: ${currentDay - 1}`;
         } else {
             alert('Simulation complete');
             console.log('Simulation complete');
