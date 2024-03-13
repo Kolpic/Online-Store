@@ -109,11 +109,21 @@
         }
 
     document.getElementById('visualize-btn').addEventListener('click', function() {
-        const n = parseInt(document.getElementById('n-input').value, 10);
+        const n = Number(parseInt(document.getElementById('n-input').value, 10));
         const grid = document.getElementById('grid-input').value;
 
         if (!n || !grid) {
             alert('Please enter valid values for n and grid.');
+            return;
+        }
+
+        if (n != 2 && n != 3) {
+            alert('Please enter valid values for grid size, it must be 2 or 3.');
+            return;
+        }
+
+        if (grid.length != 31 && grid.length != 62) {
+            alert('Please enter valid grid for grid.');
             return;
         }
 
