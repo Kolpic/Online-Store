@@ -11,3 +11,4 @@ password = "1234"
 host = "localhost"
 
 test_database = "user_registration_testing"
+

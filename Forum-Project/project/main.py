@@ -55,18 +55,19 @@ app.add_url_rule("/resend_verf_code", endpoint="resend_verf_code", methods=['POS
 
 @app.endpoint("registration")
 def registration():
-    if request.method != 'GET' and request.method != 'POST':
-        return render_template('method_not_allowed.html')
-
-    if request.method == 'GET':
-        return render_template('registration.html')
-    
-    # if request.method == 'POST':
-    captcha_response = request.form['captcha']
-    if not captcha.validate():
-        session['registration_error'] = "Invalid CAPTCHA. Please try again."
-        return redirect(url_for('registration'))
     try:    
+        if request.method != 'GET' and request.method != 'POST':
+            return render_template('method_not_allowed.html')
+
+        if request.method == 'GET':
+            return render_template('registration.html')
+        
+        # if request.method == 'POST':
+        captcha_response = request.form['captcha']
+        if not captcha.validate():
+            session['registration_error'] = "Invalid CAPTCHA. Please try again."
+            return redirect(url_for('registration'))
+
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
 
         first_name = request.form['first_name']
@@ -375,6 +376,7 @@ def resend_verf_code():
         session['verification_message'] = 'A new verification code has been sent to your email.'
         return redirect(url_for('verify'))
     except:
+        # throw???
         return render_template('method_not_allowed.html')
 
 if __name__ == '__main__':
