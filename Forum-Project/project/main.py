@@ -50,7 +50,7 @@ app.add_url_rule("/logout", endpoint="logout", methods=['GET'])
 app.add_url_rule("/profile", endpoint="profile")
 app.add_url_rule("/update_profile", endpoint="update_profile", methods=['POST'])
 app.add_url_rule("/delete_account", endpoint="delete_account", methods=['POST','GET'])
-app.add_url_rule("/recover_password", endpoint="recover_password")
+app.add_url_rule("/recover_password", endpoint="recover_password", methods=['POST'])
 app.add_url_rule("/resend_verf_code", endpoint="resend_verf_code")
 
 @app.endpoint("registration")
@@ -87,6 +87,9 @@ def registration():
         if not (re.fullmatch(regex, email)):
             raise exception.CustomError('Email is not valid')
     except exception.CustomError as e:
+        session['registration_error'] = str(e)
+        return redirect(url_for('registration'))
+    except:
         session['registration_error'] = str(e)
         return redirect(url_for('registration'))
 
@@ -136,17 +139,18 @@ def verify():
         if email_from_database != email:
             raise TypeError('You entered different email')
         if is_verified:
-            raise TypeError('The account is already verified')
+            raise exception.CustomError('The account is already verified')
         
         # if email_from_database == email and not is_verified:
         cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
         conn.commit()
         cur.close()
         return redirect(url_for('login'))
+    except exception.CustomError as e:
+        session['verification_error'] = str(e)
+        return redirect(url_for('verify'))   
     except TypeError as e:
-        # error_message = 'You entered different email'
-        if e['args'] == "'NoneType' object is not subscriptable":
-            e = 'You entered different email'
+        e = 'You entered different email'
         session['verification_error'] = str(e)
         return redirect(url_for('verify'))    
 
@@ -159,39 +163,44 @@ def login():
         return render_template('login.html')
 
     # if request.method == 'POST':
+    try:
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
 
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        email = request.form['email']
+        password_ = request.form['password']
 
-    email = request.form['email']
-    password_ = request.form['password']
+        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
-    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
-
-    cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
+        cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
          
-    is_the_email_verified = cur.fetchone()['verification_status']
+        is_the_email_verified = cur.fetchone()['verification_status']
 
-    cur.execute("SELECT password FROM users WHERE email = %s", (email,))
+        cur.execute("SELECT password FROM users WHERE email = %s", (email,))
          
-    hashed_password = cur.fetchone()['password']
+        hashed_password = cur.fetchone()['password']
 
-    are_passwords_same = bool(verify_password(password_, hashed_password))
+        are_passwords_same = bool(verify_password(password_, hashed_password))
 
-    flag = False
-    if not are_passwords_same:
-        error_message = 'Invalid email or password'
-        flag = True
+        flag = False
+        if not are_passwords_same:
+            raise TypeError()
 
-    if not is_the_email_verified:
-        error_message = 'Your account is not verified or has been deleted'
-        flag = True
+        if not is_the_email_verified:
+            error_message = 'Your account is not verified or has been deleted'
+            flag = True
 
-    if flag:
-        session['login_error'] = str(error_message)
-        return redirect(url_for('login')) 
+        if flag:
+            session['login_error'] = str(error_message)
+            return redirect(url_for('login')) 
         
-    session['user_email'] = email   
-    return redirect(url_for('home'))
+        session['user_email'] = email   
+        return redirect(url_for('home'))
+    except TypeError as e:
+        e = 'Invalid email or password'
+        session['login_error'] = str(e)
+        return redirect(url_for('login')) 
+    except:
+       return render_template('method_not_allowed.html') 
 
 
 def verify_password(plain_password, hashed_password):
@@ -233,64 +242,70 @@ def update_profile():
     if 'user_email' not in session:
          return render_template('method_not_allowed.html')
     
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-    cur = conn.cursor()
+    try:
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor()
 
-    first_name = request.form['first-name']
-    last_name = request.form['last-name']
-    email = request.form['email']
-    password_ = request.form['password']
+        first_name = request.form['first-name']
+        last_name = request.form['last-name']
+        email = request.form['email']
+        password_ = request.form['password']
         
-    query_string = "UPDATE users SET "
-    fields_list = []
+        query_string = "UPDATE users SET "
+        fields_list = []
 
-    if first_name:
-        query_string += "first_name = %s, "
-        fields_list.append(first_name)
-    if last_name:
-        query_string += "last_name = %s, "
-        fields_list.append(last_name)
-    if email:
-        query_string += "email = %s, "
-        fields_list.append(email)
-    if password_:
-        query_string += "password = %s, "
-        hashed_password = hash_password(password_)
-        fields_list.append(hashed_password)
+        if first_name:
+            query_string += "first_name = %s, "
+            fields_list.append(first_name)
+        if last_name:
+            query_string += "last_name = %s, "
+            fields_list.append(last_name)
+        if email:
+            query_string += "email = %s, "
+            fields_list.append(email)
+        if password_:
+            query_string += "password = %s, "
+            hashed_password = hash_password(password_)
+            fields_list.append(hashed_password)
 
-    query_string = query_string[:-2]
-    query_string += " WHERE email = %s"
-    email_in_session = session['user_email']
-    fields_list.append(email_in_session)
+        query_string = query_string[:-2]
+        query_string += " WHERE email = %s"
+        email_in_session = session['user_email']
+        fields_list.append(email_in_session)
 
-    cur.execute(query_string, (fields_list))
+        cur.execute(query_string, (fields_list))
+
+        conn.commit()
+        cur.close()
         
-    conn.commit()
-    cur.close()
+        # Update session email if email was changed
+        if email:
+            session['user_email'] = email
         
-    # Update session email if email was changed
-    if email:
-        session['user_email'] = email
-        
-    return redirect(url_for('home'))
+        return redirect(url_for('home'))
+    except:
+       return render_template('method_not_allowed.html') 
 
 @app.endpoint("delete_account")
 def delete_account():
     if 'user_email' not in session:
         return render_template('method_not_allowed.html')
     
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    try:
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
 
-    user_email = session['user_email']
-    cur = conn.cursor()
+        user_email = session['user_email']
+        cur = conn.cursor()
 
-    cur.execute("UPDATE users SET verification_status = false WHERE email = %s", (user_email,))
-    conn.commit()
+        cur.execute("UPDATE users SET verification_status = false WHERE email = %s", (user_email,))
+        conn.commit()
 
-    cur.close()
-    session.clear()
+        cur.close()
+        session.clear()
 
-    return redirect(url_for('login'))
+        return redirect(url_for('login'))
+    except:
+        return render_template('method_not_allowed.html')
 
 @app.endpoint("recover_password")
 def recover_password():
@@ -298,24 +313,34 @@ def recover_password():
         return render_template('method_not_allowed.html')
 
     # if request.method == 'POST':
-    email = request.form['recovery_email']
-    new_password = os.urandom(10).hex()
+    try:
+        email = request.form['recovery_email']
+        new_password = os.urandom(10).hex()
 
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-    cur = conn.cursor()
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
-    hashed_password = hash_password(new_password)
+        cur.execute("SELECT email FROM users WHERE email = %s", (email,))
+        is_email_valid = cur.fetchone()['email']
 
-    cur.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_password, email))
+        hashed_password = hash_password(new_password)
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        cur.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_password, email))
 
-    send_recovey_password_email(email, new_password)
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        send_recovey_password_email(email, new_password)
         
-    session['login_message'] = 'A recovery password has been sent to your email.'
-    return redirect(url_for('login'))
+        session['login_message'] = 'A recovery password has been sent to your email.'
+        return redirect(url_for('login'))
+    except TypeError:
+        e = 'You entered invalid email'
+        session['verification_error'] = str(e)
+        return redirect(url_for('verify'))  
+    except:
+        return render_template('method_not_allowed.html')
 
 def send_recovey_password_email(user_email, recovery_password):
     with app.app_context():
