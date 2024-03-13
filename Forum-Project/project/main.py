@@ -51,7 +51,7 @@ app.add_url_rule("/profile", endpoint="profile")
 app.add_url_rule("/update_profile", endpoint="update_profile", methods=['POST'])
 app.add_url_rule("/delete_account", endpoint="delete_account", methods=['POST','GET'])
 app.add_url_rule("/recover_password", endpoint="recover_password", methods=['POST'])
-app.add_url_rule("/resend_verf_code", endpoint="resend_verf_code")
+app.add_url_rule("/resend_verf_code", endpoint="resend_verf_code", methods=['POST'])
 
 @app.endpoint("registration")
 def registration():
@@ -356,23 +356,26 @@ def resend_verf_code():
         return render_template('method_not_allowed.html')
     
     # if request.method == 'POST':
-    email = request.form['email']
+    try:
+        email = request.form['resend_verf_code']
 
-    new_verification_code = os.urandom(24).hex()
+        new_verification_code = os.urandom(24).hex()
 
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-    cur = conn.cursor()
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor()
 
-    cur.execute("UPDATE users SET verification_code = %s WHERE email = %s", (new_verification_code, email))
+        cur.execute("UPDATE users SET verification_code = %s WHERE email = %s", (new_verification_code, email))
 
-    conn.commit()
-    cur.close()
-    conn.close()
+        conn.commit()
+        cur.close()
+        conn.close()
 
-    send_verification_email(email, new_verification_code)
+        send_verification_email(email, new_verification_code)
 
-    session['verification_message'] = 'A new verification code has been sent to your email.'
-    return redirect(url_for('verify'))
+        session['verification_message'] = 'A new verification code has been sent to your email.'
+        return redirect(url_for('verify'))
+    except:
+        return render_template('method_not_allowed.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
