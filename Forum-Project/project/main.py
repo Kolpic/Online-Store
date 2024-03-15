@@ -1,18 +1,19 @@
-from flask import Flask, request, render_template, redirect, url_for, session
+from flask import Flask, request, render_template, redirect, url_for, session, abort
 from flask_mail import Mail, Message
 import psycopg2, os, re, secrets, bcrypt, psycopg2.extras, uuid
 # import os
 from project import config, exception
 from flask_session_captcha import FlaskSessionCaptcha
 # from flask_sessionstore import Session
-from flask_session import Session 
+from flask_session import Session
+import json
+# from project.error_handlers import not_found
 # from project import exception
 # import re
 # import secrets
 # import bcrypt
 
 # https://stackoverflow.com/questions/23327293/flask-raises-templatenotfound-error-even-though-template-file-exists
-
 app = Flask(__name__)
 # MAIL Configuration
 app.secret_key = secrets.token_hex(16)
@@ -37,14 +38,15 @@ captcha = FlaskSessionCaptcha(app)
 
 mail = Mail(app)
 
-database = config.database
+database = config.test_database
 user = config.user
 password = config.password
 host = config.host
 
 app.add_url_rule("/registration", endpoint="registration", methods=['POST', 'GET'])
+app.add_url_rule("/", endpoint="registration", methods=['POST', 'GET'])
 app.add_url_rule("/verify", endpoint="verify", methods=['POST', 'GET'])
-app.add_url_rule("/login", endpoint="login", methods=['POST', 'GET'])
+app.add_url_rule("/login", endpoint="login", methods=['POST', 'GET'])  
 app.add_url_rule("/home", endpoint="home", methods=['GET'])
 app.add_url_rule("/logout", endpoint="logout", methods=['GET'])
 app.add_url_rule("/profile", endpoint="profile")
@@ -54,45 +56,36 @@ app.add_url_rule("/recover_password", endpoint="recover_password", methods=['POS
 app.add_url_rule("/resend_verf_code", endpoint="resend_verf_code", methods=['POST'])
 
 @app.endpoint("registration")
-def registration():
-    try:    
-        if request.method != 'GET' and request.method != 'POST':
-            return render_template('method_not_allowed.html')
+def registration():    
+    if request.method != 'GET' and request.method != 'POST':
+        raise exception.MethodNotAllowed()
 
-        if request.method == 'GET':
-            return render_template('registration.html')
+    if request.method == 'GET':
+        return render_template('registration.html')
+    
+    captcha_response = request.form['captcha']
+    if not captcha.validate():
+        raise exception.WrongUserInputRegistration("Invalid CAPTCHA. Please try again")       
+
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+
+    first_name = request.form['first_name']
+    last_name = request.form['last_name']
+    email = request.form['email']
+    password_ = request.form['password']
+
+    hashed_password = hash_password(password_)
+    verification_code = os.urandom(24).hex()
+
+    if len(first_name) < 3 or len(first_name) > 50:
+        raise exception.WrongUserInputRegistration('First name is must be between 3 and 50 symbols')
+    if len(last_name) < 3 or len(last_name) > 50:
+        raise exception.WrongUserInputRegistration('Last name must be between 3 and 50 symbols')
         
-        # if request.method == 'POST':
-        captcha_response = request.form['captcha']
-        if not captcha.validate():
-            session['registration_error'] = "Invalid CAPTCHA. Please try again."
-            return redirect(url_for('registration'))
+    regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
 
-        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-
-        first_name = request.form['first_name']
-        last_name = request.form['last_name']
-        email = request.form['email']
-        password_ = request.form['password']
-
-        hashed_password = hash_password(password_)
-        verification_code = os.urandom(24).hex()
-
-        if len(first_name) < 3 or len(first_name) > 50:
-            raise exception.CustomError('First name is must be between 3 and 50 symbols')
-        if len(last_name) < 3 or len(last_name) > 50:
-            raise exception.CustomError('Last name must be between 3 and 50 symbols')
-            
-        regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-
-        if not (re.fullmatch(regex, email)):
-            raise exception.CustomError('Email is not valid')
-    except exception.CustomError as e:
-        session['registration_error'] = str(e)
-        return redirect(url_for('registration'))
-    except:
-        session['registration_error'] = str(e)
-        return redirect(url_for('registration'))
+    if not (re.fullmatch(regex, email)):
+        raise exception.WrongUserInputRegistration('Email is not valid')
 
     cur = conn.cursor()
     cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", (first_name, last_name, email, hashed_password, verification_code))
@@ -106,8 +99,8 @@ def registration():
 def send_verification_email(user_email, verification_code):
     with app.app_context():
         msg = Message('Email Verification',
-                  sender = 'galincho112@gmail.com',
-                  recipients = [user_email])
+                sender = 'galincho112@gmail.com',
+                recipients = [user_email])
     msg.body = 'Please insert the verification code in the form: ' + verification_code
     mail.send(msg)
 
@@ -118,92 +111,68 @@ def hash_password(password):
 @app.endpoint("verify")
 def verify():
     if request.method != 'GET' and request.method != 'POST':
-        return render_template('method_not_allowed.html')
+        raise exception.MethodNotAllowed()
 
     if request.method == 'GET':
         return render_template('verify.html')
     
-    try:
-        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
 
-        email = request.form['email']
-        verification_code = request.form['verification_code']
+    email = request.form['email']
+    verification_code = request.form['verification_code']
 
-        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
-        cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-        email_from_database = cur.fetchone()['email']
+    cur.execute("SELECT email FROM users WHERE email = %s", (email,))
+    email_from_database = cur.fetchone()['email']
 
-        cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
-        is_verified = cur.fetchone()['verification_status']
+    cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
+    is_verified = cur.fetchone()['verification_status']
 
-        if email_from_database != email:
-            raise TypeError('You entered different email')
-        if is_verified:
-            raise exception.CustomError('The account is already verified')
-        
-        # if email_from_database == email and not is_verified:
-        cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
-        conn.commit()
-        cur.close()
-        return redirect(url_for('login'))
-    except exception.CustomError as e:
-        session['verification_error'] = str(e)
-        return redirect(url_for('verify'))   
-    except TypeError as e:
-        e = 'You entered different email'
-        session['verification_error'] = str(e)
-        return redirect(url_for('verify'))    
+    if email_from_database != email:
+        raise exception.WrongUserInputVerification('You entered different email')
+    if is_verified:
+        raise exception.WrongUserInputVerification('The account is already verified')
+    
+    cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
+    conn.commit()
+    cur.close()
+    return redirect(url_for('login'))  
 
 @app.endpoint("login")
 def login():
     if request.method != 'GET' and request.method != 'POST':
-        return render_template('method_not_allowed.html')
+        raise exception.MethodNotAllowed()
 
     if request.method == 'GET':
         return render_template('login.html')
 
-    # if request.method == 'POST':
-    try:
-        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
 
-        email = request.form['email']
-        password_ = request.form['password']
+    email = request.form['email']
+    password_ = request.form['password']
 
-        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
-        cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
-         
-        is_the_email_verified = cur.fetchone()['verification_status']
-
-        cur.execute("SELECT password FROM users WHERE email = %s", (email,))
-         
-        hashed_password = cur.fetchone()['password']
-
-        are_passwords_same = bool(verify_password(password_, hashed_password))
-
-        flag = False
-        if not are_passwords_same:
-            raise TypeError()
-
-        if not is_the_email_verified:
-            error_message = 'Your account is not verified or has been deleted'
-            flag = True
-
-        if flag:
-            session['login_error'] = str(error_message)
-            return redirect(url_for('login')) 
+    cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
         
-        session['user_email'] = email   
-        return redirect(url_for('home'))
-    except TypeError as e:
-        e = 'Invalid email or password'
-        session['login_error'] = str(e)
-        return redirect(url_for('login')) 
-    except:
-       return render_template('method_not_allowed.html') 
+    is_the_email_verified = cur.fetchone()['verification_status']
 
+    cur.execute("SELECT password FROM users WHERE email = %s", (email,))
+        
+    hashed_password = cur.fetchone()['password']
 
+    are_passwords_same = bool(verify_password(password_, hashed_password))
+
+    if not are_passwords_same:
+        raise exception.WrongUserInputLogin('Invalid email or password')
+
+    if not is_the_email_verified:
+        raise exception.WrongUserInputLogin('Your account is not verified or has been deleted')
+
+    session['user_email'] = email   
+    return redirect(url_for('home'))
+    
 def verify_password(plain_password, hashed_password):
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
@@ -241,146 +210,126 @@ def profile():
 @app.endpoint("update_profile")
 def update_profile():
     if 'user_email' not in session:
-         return render_template('method_not_allowed.html')
+        raise exception.MethodNotAllowed()
     
-    try:
-        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-        cur = conn.cursor()
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    cur = conn.cursor()
 
-        first_name = request.form['first-name']
-        last_name = request.form['last-name']
-        email = request.form['email']
-        password_ = request.form['password']
-        
-        query_string = "UPDATE users SET "
-        fields_list = []
+    first_name = request.form['first-name']
+    last_name = request.form['last-name']
+    email = request.form['email']
+    password_ = request.form['password']
+    
+    query_string = "UPDATE users SET "
+    fields_list = []
 
-        if first_name:
-            query_string += "first_name = %s, "
-            fields_list.append(first_name)
-        if last_name:
-            query_string += "last_name = %s, "
-            fields_list.append(last_name)
-        if email:
-            query_string += "email = %s, "
-            fields_list.append(email)
-        if password_:
-            query_string += "password = %s, "
-            hashed_password = hash_password(password_)
-            fields_list.append(hashed_password)
+    if first_name:
+        query_string += "first_name = %s, "
+        fields_list.append(first_name)
+    if last_name:
+        query_string += "last_name = %s, "
+        fields_list.append(last_name)
+    if email:
+        query_string += "email = %s, "
+        fields_list.append(email)
+    if password_:
+        query_string += "password = %s, "
+        hashed_password = hash_password(password_)
+        fields_list.append(hashed_password)
 
-        query_string = query_string[:-2]
-        query_string += " WHERE email = %s"
-        email_in_session = session['user_email']
-        fields_list.append(email_in_session)
+    query_string = query_string[:-2]
+    query_string += " WHERE email = %s"
+    email_in_session = session['user_email']
+    fields_list.append(email_in_session)
 
-        cur.execute(query_string, (fields_list))
+    cur.execute(query_string, (fields_list))
 
-        conn.commit()
-        cur.close()
-        
-        # Update session email if email was changed
-        if email:
-            session['user_email'] = email
-        
-        return redirect(url_for('home'))
-    except:
-       return render_template('method_not_allowed.html') 
+    conn.commit()
+    cur.close()
+    
+    # Update session email if email was changed
+    if email:
+        session['user_email'] = email
+    
+    return redirect(url_for('home'))
 
 @app.endpoint("delete_account")
 def delete_account():
     if 'user_email' not in session:
-        return render_template('method_not_allowed.html')
+        raise exception.MethodNotAllowed()
     
-    try:
-        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
 
-        user_email = session['user_email']
-        cur = conn.cursor()
+    user_email = session['user_email']
+    cur = conn.cursor()
 
-        cur.execute("UPDATE users SET verification_status = false WHERE email = %s", (user_email,))
-        conn.commit()
+    cur.execute("UPDATE users SET verification_status = false WHERE email = %s", (user_email,))
+    conn.commit()
 
-        cur.close()
-        session.clear()
+    cur.close()
+    session.clear()
 
-        return redirect(url_for('login'))
-    except:
-        return render_template('method_not_allowed.html')
+    return redirect(url_for('login'))
 
 @app.endpoint("recover_password")
 def recover_password():
     if request.method != 'POST':
-        return render_template('method_not_allowed.html')
+        raise exception.MethodNotAllowed()
 
-    # if request.method == 'POST':
-    try:
-        email = request.form['recovery_email']
-        new_password = os.urandom(10).hex()
+    email = request.form['recovery_email']
+    new_password = os.urandom(10).hex()
 
-        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
-        cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-        is_email_valid = cur.fetchone()['email']
+    cur.execute("SELECT email FROM users WHERE email = %s", (email,))
+    is_email_valid = cur.fetchone()['email']
 
-        hashed_password = hash_password(new_password)
+    hashed_password = hash_password(new_password)
 
-        cur.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_password, email))
+    cur.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_password, email))
 
-        conn.commit()
-        cur.close()
-        conn.close()
+    conn.commit()
+    cur.close()
+    conn.close()
 
-        send_recovey_password_email(email, new_password)
-        
-        session['login_message'] = 'A recovery password has been sent to your email.'
-        return redirect(url_for('login'))
-    except TypeError:
-        e = 'You entered invalid email'
-        session['verification_error'] = str(e)
-        return redirect(url_for('verify'))  
-    except:
-        return render_template('method_not_allowed.html')
+    send_recovey_password_email(email, new_password)
+    
+    session['login_message'] = 'A recovery password has been sent to your email.'
+    return redirect(url_for('login'))
 
 def send_recovey_password_email(user_email, recovery_password):
     with app.app_context():
         msg = Message('Recovery password',
-                  sender = 'galincho112@gmail.com',
-                  recipients = [user_email])
+                sender = 'galincho112@gmail.com',
+                recipients = [user_email])
     msg.body = 'Your recovery password: ' + recovery_password
     mail.send(msg)
 
 @app.endpoint("resend_verf_code")
 def resend_verf_code():
     if request.method != 'POST':
-        return render_template('method_not_allowed.html')
+        raise exception.MethodNotAllowed()
     
-    # if request.method == 'POST':
-    try:
-        email = request.form['resend_verf_code']
+    email = request.form['resend_verf_code']
 
-        new_verification_code = os.urandom(24).hex()
+    new_verification_code = os.urandom(24).hex()
 
-        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-        cur = conn.cursor()
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    cur = conn.cursor()
 
-        cur.execute("UPDATE users SET verification_code = %s WHERE email = %s", (new_verification_code, email))
+    cur.execute("UPDATE users SET verification_code = %s WHERE email = %s", (new_verification_code, email))
 
-        conn.commit()
-        cur.close()
-        conn.close()
+    conn.commit()
+    cur.close()
+    conn.close()
 
-        send_verification_email(email, new_verification_code)
+    send_verification_email(email, new_verification_code)
 
-        session['verification_message'] = 'A new verification code has been sent to your email.'
-        return redirect(url_for('verify'))
-    except:
-        # throw???
-        return render_template('method_not_allowed.html')
-
+    session['verification_message'] = 'A new verification code has been sent to your email.'
+    return redirect(url_for('verify'))
+    
 if __name__ == '__main__':
-    app.run(debug=True)
-    app.run(host='0.0.0.0', port=8000)
+    # app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
     # flask run --host=0.0.0.0 --port=8000
-
