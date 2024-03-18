@@ -3,7 +3,7 @@ import bcrypt
 
 from flask import render_template
 from project.main import app
-from project.main import registration, send_verification_email, mail, hash_password
+from project.main import registration, send_verification_email, mail, hash_password, send_recovey_password_email
 from project.exception import CustomError
 from project import config
 from flask import session, url_for
@@ -62,8 +62,9 @@ def test_invalid_email_registration(client):
 
     row = cur.fetchone()
     assert row is None, "No record found for the user"
-    assert response.status_code == 302
-    assert url_for('registration') in response.location
+    assert response.status_code == 200
+    response_data = response.data.decode('utf-8') # decode response data from bytes to str
+    assert 'Email is not valid' in response_data
 
 def test_invalid_first_name_registration(client):
     with patch('project.main.captcha.validate', return_value=True) as mock_validate:
@@ -81,8 +82,9 @@ def test_invalid_first_name_registration(client):
 
     row = cur.fetchone()
     assert row is None, "No record found for the user"
-    assert response.status_code == 302
-    assert url_for('registration') in response.location
+    assert response.status_code == 200
+    response_data = response.data.decode('utf-8') # decode response data from bytes to str
+    assert 'First name is must be between 3 and 50 symbols' in response_data
 
 def test_invalid_last_name_registration(client):
     with patch('project.main.hash_password', return_value='hashed_password') as mock_hash_password, \
@@ -101,8 +103,9 @@ def test_invalid_last_name_registration(client):
 
     row = cur.fetchone()
     assert row is None, "No record found for the user"
-    assert response.status_code == 302
-    assert url_for('registration') in response.location
+    assert response.status_code == 200
+    response_data = response.data.decode('utf-8') # decode response data from bytes to str
+    assert 'Last name must be between 3 and 50 symbols' in response_data
         
 def test_verification_email_sends_enail_successful(client):
     user_email = 'user@example.com'
@@ -345,3 +348,63 @@ def test_home_not_authenticated(client):
     assert response.status_code == 200
     # assert response.location == 'http://localhost/login'
 
+def test_recover_password_successful(client):
+    with patch('project.main.send_recovey_password_email') as mock_send_recovery_password:
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code, verification_status) VALUES (%s, %s, %s, %s, %s, %s)", ('Jonni', 'Sins', 'illbe@abv.bg', '123456789', '12588523', 'true'))
+        conn.commit()
+
+        cur.execute("SELECT password FROM users WHERE email = %s", ('illbe@abv.bg',))
+        initial_password = cur.fetchone()[0]
+        conn.commit()
+
+        responce = client.post('/recover_password', data = {
+            'recovery_email': 'illbe@abv.bg'
+        })
+        
+        cur.execute("SELECT password FROM users WHERE email = %s", ('illbe@abv.bg',))
+        changed_password = cur.fetchone()[0]
+
+        assert responce.status_code == 302
+        assert initial_password!= changed_password
+        assert '/login' in responce.headers['Location']
+
+def test_recover_password_sends_new_password_successful(client):
+    user_email = 'user@example.com'
+    new_passowrd = 'dsafdsfsafasgagjyt[;h]df'
+
+    with app.app_context():
+        with patch.object(mail, 'send') as mock_send:
+            send_recovey_password_email(user_email, new_passowrd)
+
+            mock_send.assert_called_once()
+
+            args, kwargs = mock_send.call_args
+            message = args[0]
+
+            assert message.subject == 'Recovery password'
+            assert message.recipients == [user_email]
+            assert 'Your recovery password: ' + new_passowrd
+
+def test_resend_verf_code_successful(client):
+    with patch('project.main.send_verification_email') as mock_send_email:
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor()
+        cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code, verification_status) VALUES (%s, %s, %s, %s, %s, %s)", ('Pedel', 'Sinsssss', 'ifabe@abv.bg', '123456789', '12588523', 'true'))
+        conn.commit()
+
+        cur.execute("SELECT verification_code FROM users WHERE email = %s", ('ifabe@abv.bg',))
+        initial_verification_code = cur.fetchone()[0]
+        conn.commit()
+
+        responce = client.post('/resend_verf_code', data = {
+            'resend_verf_code': 'ifabe@abv.bg'
+        })
+
+        cur.execute("SELECT verification_code FROM users WHERE email = %s", ('ifabe@abv.bg',))
+        changed_verification_code = cur.fetchone()[0]
+
+        assert responce.status_code == 302
+        assert initial_verification_code != changed_verification_code
+        assert '/verify' in responce.headers['Location']
