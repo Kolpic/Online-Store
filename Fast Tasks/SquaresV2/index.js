@@ -31,4 +31,4 @@ function findSegmentData(A) {
 }
 
 // console.log(findSegmentData(1)); 
-console.log(findSegmentData(10)); 
+console.log(findSegmentData(10)); 1 !== x2 && y1 !== y2

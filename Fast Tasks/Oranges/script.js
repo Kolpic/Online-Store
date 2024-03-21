@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let firstOrangeCol = firstOrange[1];
     let secondOrangeRow = secondOrange[0];
     let secondOrangeCol = secondOrange[1];
-
+    // proverka za double 
     if (row <= 0 || row > 10000) {
         alert('First number (rows) showld be between 1 and 10 000');
         return
