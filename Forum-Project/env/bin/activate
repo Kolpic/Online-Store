@@ -37,7 +37,7 @@ deactivate () {
 # unset irrelevant variables
 deactivate nondestructive
 
-VIRTUAL_ENV="/home/galin/Desktop/projects/hello-python/Forum-Project/env"
+VIRTUAL_ENV="/home/galin/Desktop/projects/GitHub/Forum-Project/env"
 export VIRTUAL_ENV
 
 _OLD_VIRTUAL_PATH="$PATH"

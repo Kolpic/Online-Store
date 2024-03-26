@@ -1,4 +1,4 @@
-#!/home/galin/Desktop/projects/hello-python/Forum-Project/env/bin/python3
+#!/home/galin/Desktop/projects/GitHub/Forum-Project/env/bin/python3
 # -*- coding: utf-8 -*-
 import re
 import sys
