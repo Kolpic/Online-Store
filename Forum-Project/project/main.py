@@ -1,12 +1,13 @@
 from flask import Flask, request, render_template, redirect, url_for, session, abort
 from flask_mail import Mail, Message
-import psycopg2, os, re, secrets, bcrypt, psycopg2.extras, uuid
+import psycopg2, os, re, secrets, psycopg2.extras, uuid
+import bcrypt
 # import os
 from project import config, exception
 from flask_session_captcha import FlaskSessionCaptcha
 # from flask_sessionstore import Session
 from flask_session import Session
-import json
+import json 
 # from project.error_handlers import not_found
 # from project import exception
 # import re
@@ -56,15 +57,20 @@ app.add_url_rule("/recover_password", endpoint="recover_password", methods=['POS
 app.add_url_rule("/resend_verf_code", endpoint="resend_verf_code", methods=['POST'])
 
 @app.endpoint("registration")
-def registration():    
+def registration():
     if request.method != 'GET' and request.method != 'POST':
         raise exception.MethodNotAllowed()
 
     if request.method == 'GET':
-        return render_template('registration.html')
-    
+        form_data = session.get('form_data_stack', []).pop() if 'form_data_stack' in session and len(session['form_data_stack']) > 0 else None
+        if form_data:
+            session.modified = True
+        return render_template('registration.html', form_data=form_data)
+
+    form_data = request.form.to_dict()
     captcha_response = request.form['captcha']
     if not captcha.validate():
+        add_form_data_in_session(form_data)
         raise exception.WrongUserInputRegistration("Invalid CAPTCHA. Please try again")       
 
     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
@@ -78,13 +84,16 @@ def registration():
     verification_code = os.urandom(24).hex()
 
     if len(first_name) < 3 or len(first_name) > 50:
+        add_form_data_in_session(form_data)
         raise exception.WrongUserInputRegistration('First name is must be between 3 and 50 symbols')
     if len(last_name) < 3 or len(last_name) > 50:
+        add_form_data_in_session(form_data)
         raise exception.WrongUserInputRegistration('Last name must be between 3 and 50 symbols')
         
     regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
 
     if not (re.fullmatch(regex, email)):
+        add_form_data_in_session(form_data)
         raise exception.WrongUserInputRegistration('Email is not valid')
 
     cur = conn.cursor()
@@ -95,6 +104,11 @@ def registration():
     send_verification_email(email, verification_code)
 
     return redirect(url_for('verify'))
+
+def add_form_data_in_session(form_data):
+    if 'form_data_stack' not in session:
+        session['form_data_stack'] = []
+    session['form_data_stack'].append(form_data)
 
 def send_verification_email(user_email, verification_code):
     with app.app_context():
@@ -317,6 +331,18 @@ def resend_verf_code():
 
     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
     cur = conn.cursor()
+
+    cur.execute("SELECT email FROM users WHERE email = %s", (email,))
+    # is_present = cur.fetchone().statusmessage is "SELECT 0"
+
+    if cur.rowcount == 0:
+        raise exception.WrongUserInputVerification('There is no registration with this email')
+    
+    cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
+    is_verified = cur.fetchone()[0]
+
+    if is_verified:
+        raise exception.WrongUserInputVerification('The email is already verified')
 
     cur.execute("UPDATE users SET verification_code = %s WHERE email = %s", (new_verification_code, email))
 
