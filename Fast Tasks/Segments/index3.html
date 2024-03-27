@@ -6,9 +6,15 @@
         #visualization {
             position: relative;
             width: 100%;
-            height: 50px;
+            height: 2px;
             background-color: black;
             margin-top: 50px;
+        }
+        #result {
+            position: absolute;
+            top: 120px;
+            left: 10;
+            width: 100%;
         }
         .pointA, .pointB {
             position: absolute;
@@ -17,7 +23,7 @@
             height: 10px;
         }
         .pointA {
-            background-color: green;
+            background-color: rgb(14, 226, 67);
         }
         .pointB {
             background-color: blue;
@@ -30,7 +36,14 @@
         }
         .label {
             position: absolute;
-            color: rgb(43, 180, 8);
+            color: rgb(0, 0, 0);
+        }
+        .dot {
+            position: absolute;
+            height: 4px;
+            width: 4px;
+            background-color:  rgb(2, 243, 252);
+            bottom: 0px; 
         }
     </style>
 </head>
@@ -51,12 +64,12 @@
     const c = parseInt(document.getElementById('distanceC').value);
 
     if (n >= 100000 || a >= 100000 || b >= 100000 || c >= 100000) {
-      alert("The values must be under 100 000")
-      return
+      alert("The values must be under 100 000");
+      return;
     }
     if (n <= 0 || a <= 0 || b <= 0 || c <= 0) {
-      alert("The values must be possitive")
-      return
+      alert("The values must be positive");
+      return;
     }
 
     const visualization = document.getElementById('visualization');
@@ -81,11 +94,32 @@
       }
     }
 
-    let result = n - lineCounter * c;
-    document.getElementById('result').textContent = `Unpainted Length: ${result} meters`; 
-  }
+    for (let i = 0; i <= n; i++) {
+      addLabel(i, n);
+    }
 
-    function addPoint(position, totalLength, type, a, b) {
+    let result = n - lineCounter * c;
+    document.getElementById('result').textContent = `Unpainted Length: ${result} meters`;
+}
+
+function addLabel(position, totalLength) {
+    const visualization = document.getElementById('visualization');
+    const label = document.createElement('div');
+    const dot = document.createElement('div');
+    
+    dot.className = 'dot';
+    dot.style.left = `${(position / totalLength) * 100}%`;
+    // Adjust the bottom property if needed to place the dot on the line
+    visualization.appendChild(dot);
+    
+    label.className = 'label';
+    label.style.left = `${(position / totalLength) * 100}%`;
+    label.textContent = `${position}`;
+    label.style.bottom = '-20px'; // Adjust this value as needed to position the labels below the line
+    visualization.appendChild(label);
+}
+
+function addPoint(position, totalLength, type, a, b) {
     const visualization = document.getElementById('visualization');
     const point = document.createElement('div');
     point.className = type === 'A' ? 'pointA' : 'pointB';
@@ -95,7 +129,7 @@
     label.className = 'label';
     label.style.left = `${(position / totalLength) * 100}%`;
     label.textContent = `${type}`;
-    label.style.color = 'white'; 
+    label.style.color = 'black'; 
     if (type === 'A') {
         point.style.bottom = '20px';
         label.style.bottom = '30px';
