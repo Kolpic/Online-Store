@@ -2,12 +2,12 @@ from flask import Flask, request, render_template, redirect, url_for, session, a
 from flask_mail import Mail, Message
 import psycopg2, os, re, secrets, psycopg2.extras, uuid
 import bcrypt
+import datetime
 # import os
 from project import config, exception
 from flask_session_captcha import FlaskSessionCaptcha
 # from flask_sessionstore import Session
 from flask_session import Session
-import json 
 # from project.error_handlers import not_found
 # from project import exception
 # import re
@@ -55,6 +55,8 @@ app.add_url_rule("/update_profile", endpoint="update_profile", methods=['POST'])
 app.add_url_rule("/delete_account", endpoint="delete_account", methods=['POST','GET'])
 app.add_url_rule("/recover_password", endpoint="recover_password", methods=['POST'])
 app.add_url_rule("/resend_verf_code", endpoint="resend_verf_code", methods=['POST'])
+app.add_url_rule("/send_login_link", endpoint="send_login_link", methods=['POST'])
+app.add_url_rule("/log", endpoint="login_with_token", methods=['GET'])  
 
 @app.endpoint("registration")
 def registration():
@@ -354,7 +356,101 @@ def resend_verf_code():
 
     session['verification_message'] = 'A new verification code has been sent to your email.'
     return redirect(url_for('verify'))
+
+# type in the top endpoint 
+@app.endpoint("send_login_link") 
+def send_login_link():
+    if request.method != 'POST':
+        raise exception.MethodNotAllowed()
     
+    email = request.form['resend_verf_code']
+    
+    login_token = os.urandom(24).hex()
+
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    cur = conn.cursor()
+
+    cur.execute("SELECT email FROM users WHERE email = %s", (email,))
+    if cur.rowcount == 0:
+        raise exception.WrongUserInputVerification('There is no registration with this email')
+    
+    expiration_time = datetime.datetime.now() + datetime.timedelta(hours=1)
+
+    cur.execute("INSERT INTO tokens(login_token, expiration) VALUES (%s, %s)", (login_token, expiration_time))
+    conn.commit()
+    cur.execute("SELECT id FROM tokens WHERE login_token = %s", (login_token,))
+    token_id = cur.fetchone()[0]
+    cur.execute("UPDATE users SET token_id = %s WHERE email = %s", (token_id, email))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    login_link = f"http://127.0.0.1:5000/log?token={login_token}"
+    send_verification_link(email, login_link)
+    session['login_message'] = 'A login link has been sent to your email.'
+    return redirect(url_for('login'))
+
+def send_verification_link(user_email, verification_link):
+    with app.app_context():
+        msg = Message('Email Verification',
+                sender = 'galincho112@gmail.com',
+                recipients = [user_email])
+    msg.body = 'Click the link to go directly to your profile: ' + verification_link
+    mail.send(msg)
+
+@app.endpoint("login_with_token")
+def login_with_token():
+
+    if request.method != 'GET':
+        raise exception.MethodNotAllowed()
+    
+    token = request.args.get('token')
+
+    if not token:
+        session['registration_error'] = 'Invalid login token'
+        return redirect(url_for('registration'))
+    
+    db_name = config.database
+    db_user = config.user
+    db_password = config.password
+    db_host = config.host
+
+    conn = psycopg2.connect(dbname=db_name, user=db_user, password=db_password, host=db_host)
+    cur = conn.cursor()
+
+    cur.execute("SELECT id, expiration FROM tokens WHERE login_token = %s", (token,))
+
+    token_data = cur.fetchone()
+
+    if not token_data or token_data[1] < datetime.datetime.now():
+        session['registration_error'] = 'Invalid login token'
+        return redirect(url_for('login'))
+    
+    cur.execute("SELECT * FROM users WHERE token_id = %s", (token_data[0],))
+    user = cur.fetchone()
+
+    if not user:
+        session['registration_error'] = 'Invalid user'
+        return redirect(url_for('login'))
+    
+    # cur.execute("DELETE token_id FROM users WHERE id = %s", (user[0],))
+
+    email = user[3]
+
+    cur.execute("UPDATE users SET token_id = NULL WHERE email = %s", (email,))
+    conn.commit()
+    cur.execute("DELETE FROM tokens WHERE id = %s", (token_data[0],))
+    conn.commit()
+    cur.execute("UPDATE users SET verification_status = true WHERE email = %s", (email,))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    session['user_email'] = email   
+    return redirect(url_for('home'))
+
 if __name__ == '__main__':
     # app.run(debug=True)
     app.run(debug=True)
