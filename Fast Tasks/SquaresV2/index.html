@@ -20,9 +20,10 @@
 
 <script>
 function findSegmentDataOptimized(A) {
-    if (A < 1) return [0, 0];
+    if (A < 1) return { maxLength: 0, totalSegments: 0, longestSegment: null };
 
     let maxLength = 0;
+    let longestSegment = null;
     let lengths = new Set();
 
     let squares = new Set();
@@ -39,32 +40,40 @@ function findSegmentDataOptimized(A) {
                     lengths.add(length);
                     if (length > maxLength) {
                         maxLength = length;
+                        longestSegment = { dx, dy };
                     }
                 }
             }
         }
     }
 
-    return [maxLength, lengths.size];
+    return { maxLength, totalSegments: lengths.size, longestSegment };
 }
 
 document.getElementById("visualizeButton").addEventListener("click", function() {
     const A = parseInt(document.getElementById("numberInput").value);
     if (A <= 0 || A > 20000) {
-        alert("A must be between 1 and 20 000")
+        alert("A must be between 1 and 20 000");
         return;
     }
-    const [maxLength, totalSegments] = findSegmentDataOptimized(A);
+    const { maxLength, totalSegments, longestSegment } = findSegmentDataOptimized(A);
 
     document.getElementById("resultText").textContent = `Max Length: ${maxLength}, Total Segments: ${totalSegments}`;
 
     const canvas = document.getElementById("visualizationCanvas");
     const ctx = canvas.getContext("2d");
+    canvas.width = A <= 500 ? A + 20 : 520; 
+    canvas.height = A <= 500 ? A + 20 : 520; 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    canvas.width = A <= 500 ? A : 500;
-    canvas.height = A <= 500 ? A : 500;
     const scale = A <= 500 ? 1 : 500 / A;
-    ctx.strokeRect(0, 0, canvas.width, canvas.height);
+    const offset = 30; 
+
+    
+    ctx.strokeRect(offset, offset, A * scale, A * scale);
+
+    for (let i = 0; i <= A; i += A / 10) {
+        ctx.fillText(i.toFixed(0), offset - 25, offset + i * scale);
+    }
 
     let squares = new Set();
     for (let i = 1; i <= A * Math.sqrt(2); i++) {
@@ -75,12 +84,21 @@ document.getElementById("visualizeButton").addEventListener("click", function() 
     for (let dx = 1; dx <= A; dx++) {
         for (let dy = 1; dy <= A; dy++) {
             if (dx !== dy && squares.has(dx * dx + dy * dy)) {
-                ctx.moveTo(0, 0);
-                ctx.lineTo(dx * scale, dy * scale);
+                ctx.moveTo(offset, offset);
+                ctx.lineTo(offset + dx * scale, offset + dy * scale);
             }
         }
     }
     ctx.stroke();
+
+    if (longestSegment) {
+        ctx.beginPath();
+        ctx.moveTo(offset, offset);
+        ctx.lineTo(offset + longestSegment.dx * scale, offset + longestSegment.dy * scale);
+        ctx.strokeStyle = 'red';
+        ctx.stroke();
+        ctx.strokeStyle = 'black';
+    }
 });
 </script>
 </body>
