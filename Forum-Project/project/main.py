@@ -2,7 +2,7 @@ from flask import Flask, request, render_template, redirect, url_for, session, a
 from flask_mail import Mail, Message
 import psycopg2, os, re, secrets, psycopg2.extras, uuid
 import bcrypt
-import datetime
+import datetime, random
 # import os
 from project import config, exception
 from flask_session_captcha import FlaskSessionCaptcha
@@ -25,17 +25,17 @@ app.config['MAIL_PASSWORD'] = config.MAIL_PASSWORD
 app.config['MAIL_USE_TLS'] = config.MAIL_USE_TLS
 app.config['MAIL_USE_SSL'] = config.MAIL_USE_SSL
 # Captcha Configuration
-app.config["SECRET_KEY"] = uuid.uuid4() 
-app.config["CAPTCHA_WIDTH"] = 160
-app.config["CAPTCHA_HEIGHT"] = 60 
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_FILE_DIR'] = '/home/galin/Desktop/projects/GitHub/Forum-Project/project/captcha'
+# app.config["SECRET_KEY"] = uuid.uuid4() 
+# app.config["CAPTCHA_WIDTH"] = 160
+# app.config["CAPTCHA_HEIGHT"] = 60 
+# app.config['SESSION_TYPE'] = 'filesystem'
+# app.config['SESSION_FILE_DIR'] = '/home/galin/Desktop/projects/GitHub/Forum-Project/project/captcha'
 
-Session(app)
+# Session(app)
 
-app.config["CAPTCHA_ENABLE"] = True
-app.config["CAPTCHA_NUMERIC_DIGITS"] = 5
-captcha = FlaskSessionCaptcha(app)
+# app.config["CAPTCHA_ENABLE"] = True
+# app.config["CAPTCHA_NUMERIC_DIGITS"] = 5
+# captcha = FlaskSessionCaptcha(app)
 
 mail = Mail(app)
 
@@ -57,6 +57,12 @@ app.add_url_rule("/recover_password", endpoint="recover_password", methods=['POS
 app.add_url_rule("/resend_verf_code", endpoint="resend_verf_code", methods=['POST'])
 app.add_url_rule("/send_login_link", endpoint="send_login_link", methods=['POST'])
 app.add_url_rule("/log", endpoint="login_with_token", methods=['GET'])  
+# app.add_url_rule("*", endpoint="login_with_token", methods=['GET'])  
+
+# def main:
+#     cb = getCommandByEndpoint()
+#     try
+#     cb()
 
 @app.endpoint("registration")
 def registration():
@@ -67,24 +73,34 @@ def registration():
         form_data = session.get('form_data_stack', []).pop() if 'form_data_stack' in session and len(session['form_data_stack']) > 0 else None
         if form_data:
             session.modified = True
-        return render_template('registration.html', form_data=form_data)
+        first_captcha_number = random.randint(0,100)
+        second_captcha_number = random.randint(0,100)
+        session["captcha"] = {"first": first_captcha_number, "second": second_captcha_number}
+        return render_template('registration.html', form_data=form_data, captcha = {"first": first_captcha_number, "second": second_captcha_number})
 
     form_data = request.form.to_dict()
-    captcha_response = request.form['captcha']
-    if not captcha.validate():
-        add_form_data_in_session(form_data)
-        raise exception.WrongUserInputRegistration("Invalid CAPTCHA. Please try again")       
 
     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+
+    first_captcha_number = session["captcha"]['first']
+    second_captcha_number = session["captcha"]['second']
+    result = first_captcha_number + second_captcha_number
+
+    cur = conn.cursor()
+    # cur.execute("INSERT INTO captcha (first_number, second_number, result) VALUES (%s %s %s)", (first_captcha_number, second_captcha_number, result))
 
     first_name = request.form['first_name']
     last_name = request.form['last_name']
     email = request.form['email']
     password_ = request.form['password']
+    captcha_ = int(request.form['captcha'])
 
     hashed_password = hash_password(password_)
     verification_code = os.urandom(24).hex()
 
+    if captcha_ != result:  
+        add_form_data_in_session(form_data)
+        raise exception.WrongUserInputRegistration("Invalid CAPTCHA. Please try again")  
     if len(first_name) < 3 or len(first_name) > 50:
         add_form_data_in_session(form_data)
         raise exception.WrongUserInputRegistration('First name is must be between 3 and 50 symbols')
@@ -97,8 +113,14 @@ def registration():
     if not (re.fullmatch(regex, email)):
         add_form_data_in_session(form_data)
         raise exception.WrongUserInputRegistration('Email is not valid')
+    
+    cur.execute("SELECT email FROM users WHERE email = %s", (email,))
+    is_email_present_in_database = cur.fetchone()
 
-    cur = conn.cursor()
+    if is_email_present_in_database:
+        add_form_data_in_session(form_data)
+        raise exception.WrongUserInputRegistration('There is already registration with this email')
+
     cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", (first_name, last_name, email, hashed_password, verification_code))
     conn.commit()
     cur.close()
@@ -126,6 +148,7 @@ def hash_password(password):
 
 @app.endpoint("verify")
 def verify():
+    # try:
     if request.method != 'GET' and request.method != 'POST':
         raise exception.MethodNotAllowed()
 
@@ -337,6 +360,8 @@ def resend_verf_code():
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
     # is_present = cur.fetchone().statusmessage is "SELECT 0"
 
+    # assertUser( cur.rowcount == 0, "There is no registration with this email")
+
     if cur.rowcount == 0:
         raise exception.WrongUserInputVerification('There is no registration with this email')
     
@@ -357,7 +382,6 @@ def resend_verf_code():
     session['verification_message'] = 'A new verification code has been sent to your email.'
     return redirect(url_for('verify'))
 
-# type in the top endpoint 
 @app.endpoint("send_login_link") 
 def send_login_link():
     if request.method != 'POST':
@@ -454,4 +478,5 @@ def login_with_token():
 if __name__ == '__main__':
     # app.run(debug=True)
     app.run(debug=True)
+    # assert(x == "goodbye", "x should be 'hello'")
     # flask run --host=0.0.0.0 --port=5000
