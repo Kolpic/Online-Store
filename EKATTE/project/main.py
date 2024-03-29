@@ -25,6 +25,9 @@ HTML_TEMPLATE = """
     </form>
     {% if request.method == 'POST' %}  
         {% if results is not none and results %}
+            {% if town_name_ is not none %}
+                <h3>You searched for: {{ town_name_ }} </h3>
+            {% endif %}
             <h3>Town Information:</h3>
             <table border="1">
                 <tr>
@@ -50,9 +53,23 @@ HTML_TEMPLATE = """
     {% endif %}
 
     {% if request.method == 'POST' %}
+
         {% if regions_count is not none %}
         <h3>Total Number of Regions: {{ regions_count }} </h3>
         {% endif %}
+
+        {% if municipalities_count is not none %}
+        <h3>Total Number of Municipalities: {{ municipalities_count }} </h3>
+        {% endif %}
+
+        {% if settlements_count is not none %}
+        <h3>Total Number of Settlements: {{ settlements_count }} </h3>
+        {% endif %}
+
+        {% if town_halls_count is not none %}
+        <h3>Total Number of Town halls: {{ town_halls_count }} </h3>
+        {% endif %}
+
     {% endif %}
 </body>
 </html>
@@ -64,7 +81,8 @@ def search_town():
     regions_count = None
 
     if request.method == 'POST':
-        town_name = request.form['town']
+        town_name_ = request.form['town']
+        town_name = town_name_.title()
         print(town_name)
         conn = psycopg2.connect(**conn_params)
         cur = conn.cursor()
@@ -81,6 +99,12 @@ def search_town():
 
         cur.execute("SELECT COUNT(name) FROM regions")
         regions_count = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(name) FROM municipalities")
+        municipalities_count = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(name) FROM settlements")
+        settlements_count = cur.fetchone()[0]
+        cur.execute("SELECT COUNT(name) FROM town_halls")
+        town_halls_count = cur.fetchone()[0]
 
         print(len(results))
         print(regions_count)
@@ -99,7 +123,8 @@ def search_town():
             else:
                 towns_info = "Town not found."
 
-    return render_template_string(HTML_TEMPLATE, results=results, regions_count=regions_count)
+    return render_template_string(HTML_TEMPLATE, results=results, regions_count=regions_count, 
+                                  municipalities_count = municipalities_count, settlements_count = settlements_count, town_halls_count = town_halls_count, town_name_ = town_name_)
 
 if __name__ == '__main__':
     app.run(debug=True)
