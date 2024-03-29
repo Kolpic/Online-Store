@@ -30,4 +30,4 @@ def login_error(e):
 
 @app.errorhandler(MethodNotAllowed)
 def method_not_allowed_exception(e):
-    return render_template('method_not_allowed.html')
+    return render_template('method_not_allowed.html', message=e.message)

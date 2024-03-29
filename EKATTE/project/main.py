@@ -23,7 +23,7 @@ HTML_TEMPLATE = """
         <input type="text" id="town" name="town">
         <input type="submit" value="Search">
     </form>
-    {% if request.method == 'POST' %}
+    {% if request.method == 'POST' %}  
         {% if results is not none and results %}
             <h3>Town Information:</h3>
             <table border="1">

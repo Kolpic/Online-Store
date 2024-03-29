@@ -11,6 +11,11 @@
             {{ session.pop('verification_error') }}
         </div>
     {% endif %}
+    {% if 'verification_message' in session %}
+        <div class="alert alert-success">
+            {{ session.pop('verification_message') }}
+        </div>
+    {% endif %}
     <div class="container">
         <h2>Email Verification</h2>
         <form method="POST" action="/verify">
@@ -24,16 +29,16 @@
             </div>
             <button type="submit" class="btn btn-primary">Verify Email</button>
         </form>
-    </div>
-    <div style="margin-top:20px">
-        <h3>If you want to send you again verification link fill this:</h3>
-        <form method="POST" action="/send_login_link">
-            <div class="form-group">
-                <label for="resend_verf_code">Email</label>
-                <input type="email" class="form-control" id="resend_verf_code" name="resend_verf_code" required>
-            </div>
-            <button type="submit" class="btn btn-secondary">Resend Verification Code</button>
-        </form>
+        <div style="margin-top:20px">
+            <h3>If you want to send you again verification link fill this:</h3>
+            <form method="POST" action="/send_login_link">
+                <div class="form-group">
+                    <label for="resend_verf_code">Email</label>
+                    <input type="email" class="form-control" id="resend_verf_code" name="resend_verf_code" required>
+                </div>
+                <button type="submit" class="btn btn-secondary">Resend Verification Code</button>
+            </form>
+        </div>
     </div>
 </body>
 </html>

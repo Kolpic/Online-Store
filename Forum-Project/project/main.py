@@ -3,6 +3,7 @@ from flask_mail import Mail, Message
 import psycopg2, os, re, secrets, psycopg2.extras, uuid
 import bcrypt
 import datetime, random
+from datetime import timedelta, datetime
 # import os
 from project import config, exception
 from flask_session_captcha import FlaskSessionCaptcha
@@ -66,6 +67,8 @@ app.add_url_rule("/log", endpoint="login_with_token", methods=['GET'])
 
 @app.endpoint("registration")
 def registration():
+    user_ip = request.remote_addr
+
     if request.method != 'GET' and request.method != 'POST':
         raise exception.MethodNotAllowed()
 
@@ -75,32 +78,68 @@ def registration():
             session.modified = True
         first_captcha_number = random.randint(0,100)
         second_captcha_number = random.randint(0,100)
-        session["captcha"] = {"first": first_captcha_number, "second": second_captcha_number}
+
+        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        cur = conn.cursor()
+
+        cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING id", (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
+        conn.commit()
+        captcha_id = cur.fetchone()[0]
+        
+        session["captcha_id"] = captcha_id
         return render_template('registration.html', form_data=form_data, captcha = {"first": first_captcha_number, "second": second_captcha_number})
 
     form_data = request.form.to_dict()
 
     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
 
-    first_captcha_number = session["captcha"]['first']
-    second_captcha_number = session["captcha"]['second']
-    result = first_captcha_number + second_captcha_number
-
     cur = conn.cursor()
-    # cur.execute("INSERT INTO captcha (first_number, second_number, result) VALUES (%s %s %s)", (first_captcha_number, second_captcha_number, result))
 
     first_name = request.form['first_name']
     last_name = request.form['last_name']
     email = request.form['email']
     password_ = request.form['password']
+    confirm_password_ = request.form['confirm_password']
     captcha_ = int(request.form['captcha'])
+
+    if password_ != confirm_password_:
+        add_form_data_in_session(form_data)
+        raise exception.WrongUserInputRegistration("Password and Confirm Password fields are different")
+
+    cur.execute("SELECT id, last_attempt_time, attempts FROM captcha_attempts WHERE ip_address = %s", (user_ip,))
+    attempt_record = cur.fetchone()
+
+    attempts = 0
+
+    if attempt_record:
+        attempt_id, last_attempt_time, attempts = attempt_record
+        time_since_last_attempt = datetime.now() - last_attempt_time
+        if attempts >= 3 and time_since_last_attempt < timedelta(minutes=30):
+            raise exception.WrongUserInputRegistration("You typed wrong captcha 3 times, you have timeout 30 minutes")
+        elif time_since_last_attempt >= timedelta(minutes=30):
+            attempts = 0
+            
+    captcha_id = session.get("captcha_id")
+    cur.execute("SELECT result FROM captcha WHERE id = %s", (captcha_id,))
+    result = cur.fetchone()[0]
 
     hashed_password = hash_password(password_)
     verification_code = os.urandom(24).hex()
 
     if captcha_ != result:  
         add_form_data_in_session(form_data)
-        raise exception.WrongUserInputRegistration("Invalid CAPTCHA. Please try again")  
+        new_attempts = attempts + 1
+        if attempt_record:
+            cur.execute("UPDATE captcha_attempts SET attempts = %s, last_attempt_time = CURRENT_TIMESTAMP WHERE id = %s", (new_attempts, attempt_id))
+            conn.commit()
+        else:
+            cur.execute("INSERT INTO captcha_attempts (ip_address, attempts, last_attempt_time) VALUES (%s, 1, CURRENT_TIMESTAMP)", (user_ip,))
+            conn.commit()
+        raise exception.WrongUserInputRegistration("Invalid CAPTCHA. Please try again")
+    else:
+        if attempt_record:
+            cur.execute("DELETE FROM captcha_attempts WHERE id = %s", (attempt_id,))
+
     if len(first_name) < 3 or len(first_name) > 50:
         add_form_data_in_session(form_data)
         raise exception.WrongUserInputRegistration('First name is must be between 3 and 50 symbols')
@@ -116,10 +155,16 @@ def registration():
     
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
     is_email_present_in_database = cur.fetchone()
+    cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
+    is_email_verified = cur.fetchone()
 
-    if is_email_present_in_database:
-        add_form_data_in_session(form_data)
-        raise exception.WrongUserInputRegistration('There is already registration with this email')
+    if is_email_present_in_database != None:
+        if is_email_present_in_database[0] and is_email_verified[0]:
+            add_form_data_in_session(form_data)
+            raise exception.WrongUserInputRegistration('There is already registration with this email')
+        if is_email_present_in_database[0] and not is_email_verified[0]:
+            add_form_data_in_session(form_data)
+            raise exception.WrongUserInputRegistration('Account was already registered and deleted with this email, type another email')
 
     cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", (first_name, last_name, email, hashed_password, verification_code))
     conn.commit()
@@ -127,12 +172,14 @@ def registration():
 
     send_verification_email(email, verification_code)
 
+    session['verification_message'] = 'Successful registration'
     return redirect(url_for('verify'))
 
 def add_form_data_in_session(form_data):
     if 'form_data_stack' not in session:
         session['form_data_stack'] = []
     session['form_data_stack'].append(form_data)
+    
 
 def send_verification_email(user_email, verification_code):
     with app.app_context():
@@ -168,14 +215,21 @@ def verify():
     cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
     is_verified = cur.fetchone()['verification_status']
 
+    cur.execute("SELECT verification_code FROM users WHERE email = %s", (email,))
+    verification_code_database = cur.fetchone()['verification_code']
+
     if email_from_database != email:
         raise exception.WrongUserInputVerification('You entered different email')
     if is_verified:
         raise exception.WrongUserInputVerification('The account is already verified')
+    if verification_code_database != verification_code:
+        raise exception.WrongUserInputVerification('The verification code you typed is different from the one we send you')
     
     cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
     conn.commit()
     cur.close()
+
+    session['login_message'] = 'Successful verification'
     return redirect(url_for('login'))  
 
 @app.endpoint("login")
@@ -261,20 +315,42 @@ def update_profile():
     
     query_string = "UPDATE users SET "
     fields_list = []
+    updated_fields = []
 
     if first_name:
+        if len(first_name) < 3 or len(first_name) > 50:
+            session['settings_error'] = 'First name must be between 3 and 50 symbols'
+            return redirect(url_for('profile'))
         query_string += "first_name = %s, "
         fields_list.append(first_name)
+        updated_fields.append("first name")
     if last_name:
+        if len(last_name) < 3 or len(last_name) > 50:
+            session['settings_error'] = 'Last name must be between 3 and 50 symbols'
+            return redirect(url_for('profile'))
         query_string += "last_name = %s, "
         fields_list.append(last_name)
+        updated_fields.append("last name")
     if email:
+        regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
+        if not (re.fullmatch(regex, email)):
+            session['settings_error'] = 'Invalid email'
+            return redirect(url_for('profile'))
         query_string += "email = %s, "
         fields_list.append(email)
+        updated_fields.append("email")
     if password_:
+        if len(password_) < 8 or len(password_) > 20:
+            session['settings_error'] = 'Password must be between 8 and 20 symbols'
+            return redirect(url_for('profile'))
         query_string += "password = %s, "
         hashed_password = hash_password(password_)
         fields_list.append(hashed_password)
+        updated_fields.append("password")
+
+    if first_name == "" and last_name == "" and email == "" and password_ == "":
+        session['settings_error'] = 'You have to insert data in at least one field'
+        return redirect(url_for('profile'))
 
     query_string = query_string[:-2]
     query_string += " WHERE email = %s"
@@ -290,6 +366,8 @@ def update_profile():
     if email:
         session['user_email'] = email
     
+    updated_fields_message = ', '.join(updated_fields)
+    session['home_message'] = f"You successfully updated your {updated_fields_message}."
     return redirect(url_for('home'))
 
 @app.endpoint("delete_account")

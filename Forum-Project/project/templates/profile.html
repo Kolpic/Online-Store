@@ -6,6 +6,11 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 </head>
 <body>
+    {% if 'settings_error' in session %}
+        <div class="alert alert-danger">
+            {{ session.pop('settings_error') }}
+        </div>
+    {% endif %}
     <div class="container">
         <h1>Settings</h1>
         <form action="/update_profile" method="post">

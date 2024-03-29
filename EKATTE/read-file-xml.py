@@ -12,7 +12,8 @@ df_obst = pandas.read_excel(excel_file_obst, skiprows=3,usecols=['Код на о
 df_kmet = pandas.read_excel(excel_file_kemt, skiprows=3, usecols=['Идентификационен код', 'Име','NUTS1','NUTS2','NUTS3'])
 df_sett = pandas.read_excel(excel_file_sett, skiprows=3, usecols=['Вид', 'Име на населено място', 'Код на областта', 'Код на общината', 'Кметство', 'NUTS1','NUTS2','NUTS3'])
 
-conn_params = {
+# config
+conn_params = { 
     "dbname":"ekatte",
     "user": "myuser",
     "password": "1234",
