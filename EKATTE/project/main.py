@@ -1,14 +1,10 @@
 from flask import Flask, request, render_template_string
 import psycopg2
+import config
 
 app = Flask(__name__)
 
-conn_params = {
-    "dbname": "ekatte",
-    "user": "myuser",
-    "password": "1234",
-    "host": "localhost"
-}
+conn_params = config.conn_params
 
 HTML_TEMPLATE = """
 <!DOCTYPE html>
@@ -23,11 +19,9 @@ HTML_TEMPLATE = """
         <input type="text" id="town" name="town">
         <input type="submit" value="Search">
     </form>
-    {% if request.method == 'POST' %}  
+    {% if request.method == 'POST' %}
+     <h3>You searched for: {{ town_name_ }} </h3>  
         {% if results is not none and results %}
-            {% if town_name_ is not none %}
-                <h3>You searched for: {{ town_name_ }} </h3>
-            {% endif %}
             <h3>Town Information:</h3>
             <table border="1">
                 <tr>
@@ -79,6 +73,10 @@ HTML_TEMPLATE = """
 def search_town():
     results = None
     regions_count = None
+    municipalities_count = None
+    settlements_count = None
+    town_halls_count = None
+    town_name_ = None
 
     if request.method == 'POST':
         town_name_ = request.form['town']
@@ -96,6 +94,9 @@ def search_town():
         results = cur.fetchall()
         cur.close()
         cur = conn.cursor()
+
+        if results == []:
+            return render_template_string(HTML_TEMPLATE, results=results, town_name_ = town_name_)
 
         cur.execute("SELECT COUNT(name) FROM regions")
         regions_count = cur.fetchone()[0]

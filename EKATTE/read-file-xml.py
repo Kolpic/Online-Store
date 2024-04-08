@@ -1,6 +1,7 @@
 import pandas
 import psycopg2
 from psycopg2.extras import execute_batch
+import time
 
 excel_file_obl = 'excel/ek_obl.xlsx'
 excel_file_obst = 'excel/ek_obst.xlsx'
@@ -38,10 +39,17 @@ print(databa_tuples_obst)
 print(data_tuples_kmet)
 print(data_tuples_sett)
 
+start_time = time.time()
+
 execute_batch(cur, insert_query_obl, data_tuples_obl)
 execute_batch(cur, insert_query_obst, databa_tuples_obst)
 execute_batch(cur, insert_query_kmet, data_tuples_kmet)
 execute_batch(cur, insert_query_sett, data_tuples_sett)
+
+end_time = time.time()
+
+filled_database_time = end_time - start_time
+print("Time for database to be filled is: " + str(filled_database_time))
 
 conn.commit()
 cur.close()
