@@ -41,10 +41,37 @@ print(data_tuples_sett)
 
 start_time = time.time()
 
-execute_batch(cur, insert_query_obl, data_tuples_obl)
-execute_batch(cur, insert_query_obst, databa_tuples_obst)
-execute_batch(cur, insert_query_kmet, data_tuples_kmet)
-execute_batch(cur, insert_query_sett, data_tuples_sett)
+"""
+Consider a DataFrame df with columns ['A', 'B', 'C']. 
+When you call df.itertuples(index=True), 
+the resulting tuples will look something like (index, A_value, B_value, C_value). 
+If your INSERT statement is designed to insert values into three columns 
+corresponding to A, B, and C, the presence of the index would cause an error or mismatch.
+However, with df.itertuples(index=False), the tuples are 
+(A_value, B_value, C_value), aligning perfectly with the expected structure for insertion.
+"""
+
+for row in df_obl.itertuples(index=False):
+    cur = conn.cursor()
+    cur.execute(insert_query_obl, row)
+    cur.close()
+for row in df_obst.itertuples(index=False):
+    cur = conn.cursor()
+    cur.execute(insert_query_obst, row)
+    cur.close()
+for row in df_kmet.itertuples(index=False):
+    cur = conn.cursor()
+    cur.execute(insert_query_kmet,row)
+    cur.close()
+for row in df_sett.itertuples(index=False):
+    cur = conn.cursor()
+    cur.execute(insert_query_sett, row)
+    cur.close()
+
+# execute_batch(cur, insert_query_obl, data_tuples_obl)
+# execute_batch(cur, insert_query_obst, databa_tuples_obst)
+# execute_batch(cur, insert_query_kmet, data_tuples_kmet)
+# execute_batch(cur, insert_query_sett, data_tuples_sett)
 
 end_time = time.time()
 
