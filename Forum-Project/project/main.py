@@ -9,6 +9,7 @@ from project import config, exception
 from flask_session_captcha import FlaskSessionCaptcha
 # from flask_sessionstore import Session
 from flask_session import Session
+from project import utils
 # from project.error_handlers import not_found
 # from project import exception
 # import re
@@ -25,18 +26,6 @@ app.config['MAIL_USERNAME'] = config.MAIL_USERNAME
 app.config['MAIL_PASSWORD'] = config.MAIL_PASSWORD
 app.config['MAIL_USE_TLS'] = config.MAIL_USE_TLS
 app.config['MAIL_USE_SSL'] = config.MAIL_USE_SSL
-# Captcha Configuration
-# app.config["SECRET_KEY"] = uuid.uuid4() 
-# app.config["CAPTCHA_WIDTH"] = 160
-# app.config["CAPTCHA_HEIGHT"] = 60 
-# app.config['SESSION_TYPE'] = 'filesystem'
-# app.config['SESSION_FILE_DIR'] = '/home/galin/Desktop/projects/GitHub/Forum-Project/project/captcha'
-
-# Session(app)
-
-# app.config["CAPTCHA_ENABLE"] = True
-# app.config["CAPTCHA_NUMERIC_DIGITS"] = 5
-# captcha = FlaskSessionCaptcha(app)
 
 mail = Mail(app)
 
@@ -44,28 +33,15 @@ database = config.database
 user = config.user
 password = config.password
 host = config.host
-
-app.add_url_rule("/registration", endpoint="registration", methods=['POST', 'GET'])
-app.add_url_rule("/", endpoint="registration", methods=['POST', 'GET'])
-app.add_url_rule("/verify", endpoint="verify", methods=['POST', 'GET'])
-app.add_url_rule("/login", endpoint="login", methods=['POST', 'GET'])  
-app.add_url_rule("/home", endpoint="home", methods=['GET'])
-app.add_url_rule("/logout", endpoint="logout", methods=['GET'])
-app.add_url_rule("/profile", endpoint="profile")
-app.add_url_rule("/update_profile", endpoint="update_profile", methods=['POST'])
-app.add_url_rule("/delete_account", endpoint="delete_account", methods=['POST','GET'])
-app.add_url_rule("/recover_password", endpoint="recover_password", methods=['POST'])
-app.add_url_rule("/resend_verf_code", endpoint="resend_verf_code", methods=['POST'])
-app.add_url_rule("/send_login_link", endpoint="send_login_link", methods=['POST'])
-app.add_url_rule("/log", endpoint="login_with_token", methods=['GET'])  
-# app.add_url_rule("*", endpoint="login_with_token", methods=['GET'])  
+ 
+app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
+app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 
 # def main:
 #     cb = getCommandByEndpoint()
 #     try
 #     cb()
 
-@app.endpoint("registration")
 def registration():
     user_ip = request.remote_addr
 
@@ -103,7 +79,7 @@ def registration():
     captcha_ = int(request.form['captcha'])
 
     if password_ != confirm_password_:
-        add_form_data_in_session(form_data)
+        utils.add_form_data_in_session(form_data)
         raise exception.WrongUserInputRegistration("Password and Confirm Password fields are different")
 
     cur.execute("SELECT id, last_attempt_time, attempts FROM captcha_attempts WHERE ip_address = %s", (user_ip,))
@@ -123,11 +99,11 @@ def registration():
     cur.execute("SELECT result FROM captcha WHERE id = %s", (captcha_id,))
     result = cur.fetchone()[0]
 
-    hashed_password = hash_password(password_)
+    hashed_password = utils.hash_password(password_)
     verification_code = os.urandom(24).hex()
 
     if captcha_ != result:  
-        add_form_data_in_session(form_data)
+        utils.add_form_data_in_session(form_data)
         new_attempts = attempts + 1
         if attempt_record:
             cur.execute("UPDATE captcha_attempts SET attempts = %s, last_attempt_time = CURRENT_TIMESTAMP WHERE id = %s", (new_attempts, attempt_id))
@@ -141,16 +117,16 @@ def registration():
             cur.execute("DELETE FROM captcha_attempts WHERE id = %s", (attempt_id,))
 
     if len(first_name) < 3 or len(first_name) > 50:
-        add_form_data_in_session(form_data)
+        utils.add_form_data_in_session(form_data)
         raise exception.WrongUserInputRegistration('First name is must be between 3 and 50 symbols')
     if len(last_name) < 3 or len(last_name) > 50:
-        add_form_data_in_session(form_data)
+        utils.add_form_data_in_session(form_data)
         raise exception.WrongUserInputRegistration('Last name must be between 3 and 50 symbols')
         
     regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
 
     if not (re.fullmatch(regex, email)):
-        add_form_data_in_session(form_data)
+        utils.add_form_data_in_session(form_data)
         raise exception.WrongUserInputRegistration('Email is not valid')
     
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
@@ -160,10 +136,10 @@ def registration():
 
     if is_email_present_in_database != None:
         if is_email_present_in_database[0] and is_email_verified[0]:
-            add_form_data_in_session(form_data)
+            utils.add_form_data_in_session(form_data)
             raise exception.WrongUserInputRegistration('There is already registration with this email')
         if is_email_present_in_database[0] and not is_email_verified[0]:
-            add_form_data_in_session(form_data)
+            utils.add_form_data_in_session(form_data)
             raise exception.WrongUserInputRegistration('Account was already registered and deleted with this email, type another email')
 
     cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", (first_name, last_name, email, hashed_password, verification_code))
@@ -173,13 +149,7 @@ def registration():
     send_verification_email(email, verification_code)
 
     session['verification_message'] = 'Successful registration'
-    return redirect(url_for('verify'))
-
-def add_form_data_in_session(form_data):
-    if 'form_data_stack' not in session:
-        session['form_data_stack'] = []
-    session['form_data_stack'].append(form_data)
-    
+    return redirect("/verify")
 
 def send_verification_email(user_email, verification_code):
     with app.app_context():
@@ -189,13 +159,7 @@ def send_verification_email(user_email, verification_code):
     msg.body = 'Please insert the verification code in the form: ' + verification_code
     mail.send(msg)
 
-def hash_password(password):
-    hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    return hashed_password.decode('utf-8')
-
-@app.endpoint("verify")
 def verify():
-    # try:
     if request.method != 'GET' and request.method != 'POST':
         raise exception.MethodNotAllowed()
 
@@ -230,9 +194,8 @@ def verify():
     cur.close()
 
     session['login_message'] = 'Successful verification'
-    return redirect(url_for('login'))  
+    return redirect("/login") 
 
-@app.endpoint("login")
 def login():
     if request.method != 'GET' and request.method != 'POST':
         raise exception.MethodNotAllowed()
@@ -255,7 +218,7 @@ def login():
         
     hashed_password = cur.fetchone()['password']
 
-    are_passwords_same = bool(verify_password(password_, hashed_password))
+    are_passwords_same = bool(utils.verify_password(password_, hashed_password))
 
     if not are_passwords_same:
         raise exception.WrongUserInputLogin('Invalid email or password')
@@ -264,30 +227,21 @@ def login():
         raise exception.WrongUserInputLogin('Your account is not verified or has been deleted')
 
     session['user_email'] = email   
-    return redirect(url_for('home'))
-    
-def verify_password(plain_password, hashed_password):
-    return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
+    return redirect("/home")
 
-def is_authenticated():
-    return 'user_email' in session
-
-@app.endpoint("home")
 def home():
-    if not is_authenticated():
-        return redirect(url_for('login'))
+    if not utils.is_authenticated():
+        return redirect('/login')
     
     return render_template('home.html')
 
-@app.endpoint("logout")    
 def logout():
     session.pop('user_email', None) 
-    return redirect(url_for('home'))
+    return redirect('/home')
 
-@app.endpoint("profile")
 def profile():
     if 'user_email' not in session:
-        return redirect(url_for('login'))
+        return redirect('/login')
     
     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
     cur = conn.cursor()
@@ -300,7 +254,6 @@ def profile():
     
     return render_template('profile.html')
 
-@app.endpoint("update_profile")
 def update_profile():
     if 'user_email' not in session:
         raise exception.MethodNotAllowed()
@@ -320,14 +273,14 @@ def update_profile():
     if first_name:
         if len(first_name) < 3 or len(first_name) > 50:
             session['settings_error'] = 'First name must be between 3 and 50 symbols'
-            return redirect(url_for('profile'))
+            return redirect('/profile')
         query_string += "first_name = %s, "
         fields_list.append(first_name)
         updated_fields.append("first name")
     if last_name:
         if len(last_name) < 3 or len(last_name) > 50:
             session['settings_error'] = 'Last name must be between 3 and 50 symbols'
-            return redirect(url_for('profile'))
+            return redirect('/profile')
         query_string += "last_name = %s, "
         fields_list.append(last_name)
         updated_fields.append("last name")
@@ -335,22 +288,22 @@ def update_profile():
         regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
         if not (re.fullmatch(regex, email)):
             session['settings_error'] = 'Invalid email'
-            return redirect(url_for('profile'))
+            return redirect('/profile')
         query_string += "email = %s, "
         fields_list.append(email)
         updated_fields.append("email")
     if password_:
         if len(password_) < 8 or len(password_) > 20:
             session['settings_error'] = 'Password must be between 8 and 20 symbols'
-            return redirect(url_for('profile'))
+            return redirect('/profile')
         query_string += "password = %s, "
-        hashed_password = hash_password(password_)
+        hashed_password = utils.hash_password(password_)
         fields_list.append(hashed_password)
         updated_fields.append("password")
 
     if first_name == "" and last_name == "" and email == "" and password_ == "":
         session['settings_error'] = 'You have to insert data in at least one field'
-        return redirect(url_for('profile'))
+        return redirect('/profile')
 
     query_string = query_string[:-2]
     query_string += " WHERE email = %s"
@@ -368,12 +321,11 @@ def update_profile():
     
     updated_fields_message = ', '.join(updated_fields)
     session['home_message'] = f"You successfully updated your {updated_fields_message}."
-    return redirect(url_for('home'))
+    return redirect('/home')
 
-@app.endpoint("delete_account")
 def delete_account():
     if 'user_email' not in session:
-        raise exception.MethodNotAllowed()
+        raise exception.MethodNotAllowed("You are not logged in")
     
     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
 
@@ -386,9 +338,8 @@ def delete_account():
     cur.close()
     session.clear()
 
-    return redirect(url_for('login'))
+    return redirect('/login')
 
-@app.endpoint("recover_password")
 def recover_password():
     if request.method != 'POST':
         raise exception.MethodNotAllowed()
@@ -402,7 +353,7 @@ def recover_password():
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
     is_email_valid = cur.fetchone()['email']
 
-    hashed_password = hash_password(new_password)
+    hashed_password = utils.hash_password(new_password)
 
     cur.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_password, email))
 
@@ -413,7 +364,7 @@ def recover_password():
     send_recovey_password_email(email, new_password)
     
     session['login_message'] = 'A recovery password has been sent to your email.'
-    return redirect(url_for('login'))
+    return redirect('/login')
 
 def send_recovey_password_email(user_email, recovery_password):
     with app.app_context():
@@ -423,7 +374,6 @@ def send_recovey_password_email(user_email, recovery_password):
     msg.body = 'Your recovery password: ' + recovery_password
     mail.send(msg)
 
-@app.endpoint("resend_verf_code")
 def resend_verf_code():
     if request.method != 'POST':
         raise exception.MethodNotAllowed()
@@ -458,9 +408,8 @@ def resend_verf_code():
     send_verification_email(email, new_verification_code)
 
     session['verification_message'] = 'A new verification code has been sent to your email.'
-    return redirect(url_for('verify'))
+    return redirect('/verify')
 
-@app.endpoint("send_login_link") 
 def send_login_link():
     if request.method != 'POST':
         raise exception.MethodNotAllowed()
@@ -476,7 +425,7 @@ def send_login_link():
     if cur.rowcount == 0:
         raise exception.WrongUserInputVerification('There is no registration with this email')
     
-    expiration_time = datetime.datetime.now() + datetime.timedelta(hours=1)
+    expiration_time = datetime.now() + timedelta(hours=1)
 
     cur.execute("INSERT INTO tokens(login_token, expiration) VALUES (%s, %s)", (login_token, expiration_time))
     conn.commit()
@@ -491,7 +440,7 @@ def send_login_link():
     login_link = f"http://127.0.0.1:5000/log?token={login_token}"
     send_verification_link(email, login_link)
     session['login_message'] = 'A login link has been sent to your email.'
-    return redirect(url_for('login'))
+    return redirect('/login')
 
 def send_verification_link(user_email, verification_link):
     with app.app_context():
@@ -501,7 +450,6 @@ def send_verification_link(user_email, verification_link):
     msg.body = 'Click the link to go directly to your profile: ' + verification_link
     mail.send(msg)
 
-@app.endpoint("login_with_token")
 def login_with_token():
 
     if request.method != 'GET':
@@ -511,7 +459,7 @@ def login_with_token():
 
     if not token:
         session['registration_error'] = 'Invalid login token'
-        return redirect(url_for('registration'))
+        return redirect('/registration')
     
     db_name = config.database
     db_user = config.user
@@ -527,14 +475,14 @@ def login_with_token():
 
     if not token_data or token_data[1] < datetime.datetime.now():
         session['registration_error'] = 'Invalid login token'
-        return redirect(url_for('login'))
+        return redirect('/login')
     
     cur.execute("SELECT * FROM users WHERE token_id = %s", (token_data[0],))
     user = cur.fetchone()
 
     if not user:
         session['registration_error'] = 'Invalid user'
-        return redirect(url_for('login'))
+        return redirect('/login')
     
     # cur.execute("DELETE token_id FROM users WHERE id = %s", (user[0],))
 
@@ -551,7 +499,41 @@ def login_with_token():
     conn.close()
 
     session['user_email'] = email   
-    return redirect(url_for('home'))
+    return redirect('/home')
+
+url_to_function_map = {
+    '/': registration,
+    '/registration': registration,
+    '/verify': verify,
+    '/login': login,
+    '/home': home,
+    '/logout': logout,
+    '/profile': profile,
+    '/update_profile': update_profile,
+    '/delete_account': delete_account,
+    '/recover_password': recover_password,
+    '/resend_verf_code': resend_verf_code,
+    '/send_login_link': send_login_link,
+    '/log': login_with_token,
+}
+
+@app.endpoint("handle_request")
+def handle_request(**kwargs):
+    try:
+        try:
+            request_path = request.path
+            funtion_to_call = url_to_function_map.get(request_path)
+            if funtion_to_call:
+                return funtion_to_call()
+            else:
+                exception.MethodNotAllowed("Wrong url address")
+        except Exception as message:
+            # Всички ексепшъни влизат в едно, за да може да се направи една error страница
+            # Записване на ексепшъните в таблица
+            redirect_url = getattr(message, 'redirect_url')
+            return render_template("error.html", message = str(message), redirect_url = redirect_url)
+    except Exception as e:
+        return render_template("method_not_allowed")
 
 if __name__ == '__main__':
     # app.run(debug=True)
