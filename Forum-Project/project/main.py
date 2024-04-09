@@ -501,6 +501,15 @@ def login_with_token():
     session['user_email'] = email   
     return redirect('/home')
 
+def log_exception(exception_type, message ,email = None):
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    cur = conn.cursor()
+
+    cur.execute("INSERT INTO exception_logs (user_email, exception_type, message) VALUES (%s, %s, %s)", (email, exception_type, message))
+    conn.commit()
+    cur.close()
+    conn.close()
+
 url_to_function_map = {
     '/': registration,
     '/registration': registration,
@@ -528,12 +537,13 @@ def handle_request(**kwargs):
             else:
                 exception.MethodNotAllowed("Wrong url address")
         except Exception as message:
-            # Всички ексепшъни влизат в едно, за да може да се направи една error страница
-            # Записване на ексепшъните в таблица
+            user_email = session.get('user_email', 'Guest')
+            log_exception(message.__class__.__name__, str(message), user_email)
+
             redirect_url = getattr(message, 'redirect_url')
             return render_template("error.html", message = str(message), redirect_url = redirect_url)
     except Exception as e:
-        return render_template("method_not_allowed")
+        return render_template("method_not_allowed.html")
 
 if __name__ == '__main__':
     # app.run(debug=True)
