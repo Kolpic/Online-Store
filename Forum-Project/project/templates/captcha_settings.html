@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Update Settings</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <h2>Update Application Settings</h2>
+        <form action="/update_captcha_settings" method="post">
+            <div class="form-group">
+                <label for="max_captcha_attempts">Maximum CAPTCHA Attempts</label>
+                <input type="number" class="form-control" id="max_captcha_attempts" name="max_captcha_attempts" value="{{ max_captcha_attempts }}">
+            </div>
+            <div class="form-group">
+                <label for="captcha_timeout_minutes">CAPTCHA Timeout (minutes)</label>
+                <input type="number" class="form-control" id="captcha_timeout_minutes" name="captcha_timeout_minutes" value="{{ captcha_timeout_minutes }}">
+            </div>
+            <button type="submit" class="btn btn-primary">Update Settings</button>
+        </form>
+    </div>
+</body>
+</html>

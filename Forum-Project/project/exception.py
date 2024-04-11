@@ -21,6 +21,12 @@ class WrongUserInputVerification(Exception):
         self.message = message
         self.redirect_url = redirect_url
 
+class WrongCaptchaSetting(Exception):
+    def __init__(self, message, redirect_url='/home'):
+        super().__init__(message)
+        self.message = message
+        self.redirect_url = redirect_url
+
 class MethodNotAllowed(Exception):
     def __init__(self, message, redirect_url='/home'):
         super().__init__(message)

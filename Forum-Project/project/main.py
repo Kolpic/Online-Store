@@ -42,11 +42,20 @@ app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POS
 #     try
 #     cb()
 
+def assertIsMailInSession():
+    if not 'user_email' in session: raise exception.MethodNotAllowed("You tried to asscess resources, you don't have permission for")
+
+def assertIsProvidedMethodsTrue(*args):
+    if len(args) == 2:
+        if not request.method == 'GET' and not request.method == 'POST': raise exception.MethodNotAllowed("You tried to asscess resources, you don't have permission for")
+    else:
+        method_type = str(args[0]).upper()
+        if not request.method == method_type: raise exception.MethodNotAllowed("You tried to asscess resources, you don't have permission for")
+
 def registration():
     user_ip = request.remote_addr
 
-    if request.method != 'GET' and request.method != 'POST':
-        raise exception.MethodNotAllowed()
+    assertIsProvidedMethodsTrue('GET','POST')
 
     if request.method == 'GET':
         form_data = session.get('form_data_stack', []).pop() if 'form_data_stack' in session and len(session['form_data_stack']) > 0 else None
@@ -55,21 +64,25 @@ def registration():
         first_captcha_number = random.randint(0,100)
         second_captcha_number = random.randint(0,100)
 
-        conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-        cur = conn.cursor()
+        # conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        # cur = conn.cursor()
+        conn, cur = utils.getDBConn()
 
         cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING id", (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
         conn.commit()
         captcha_id = cur.fetchone()[0]
+
+        conn.close()
+        cur.close()
         
         session["captcha_id"] = captcha_id
         return render_template('registration.html', form_data=form_data, captcha = {"first": first_captcha_number, "second": second_captcha_number})
 
     form_data = request.form.to_dict()
 
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-
-    cur = conn.cursor()
+    # conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    # cur = conn.cursor()
+    conn, cur = utils.getDBConn()
 
     first_name = request.form['first_name']
     last_name = request.form['last_name']
@@ -86,11 +99,13 @@ def registration():
     attempt_record = cur.fetchone()
 
     attempts = 0
+    max_attempts = int(utils.get_captcha_setting_by_name('max_captcha_attempts'))
+    timeout_minutes = int(utils.get_captcha_setting_by_name('captcha_timeout_minutes'))
 
     if attempt_record:
         attempt_id, last_attempt_time, attempts = attempt_record
         time_since_last_attempt = datetime.now() - last_attempt_time
-        if attempts >= 3 and time_since_last_attempt < timedelta(minutes=30):
+        if attempts >= max_attempts and time_since_last_attempt < timedelta(minutes=timeout_minutes):
             raise exception.WrongUserInputRegistration("You typed wrong captcha 3 times, you have timeout 30 minutes")
         elif time_since_last_attempt >= timedelta(minutes=30):
             attempts = 0
@@ -144,7 +159,9 @@ def registration():
 
     cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", (first_name, last_name, email, hashed_password, verification_code))
     conn.commit()
+
     cur.close()
+    conn.close()
 
     send_verification_email(email, verification_code)
 
@@ -160,18 +177,18 @@ def send_verification_email(user_email, verification_code):
     mail.send(msg)
 
 def verify():
-    if request.method != 'GET' and request.method != 'POST':
-        raise exception.MethodNotAllowed()
+    assertIsProvidedMethodsTrue('GET','POST')
 
     if request.method == 'GET':
         return render_template('verify.html')
     
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    # conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    conn = utils.getDBConn()
 
     email = request.form['email']
     verification_code = request.form['verification_code']
 
-    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+    cur = conn[0].cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
     email_from_database = cur.fetchone()['email']
@@ -190,25 +207,26 @@ def verify():
         raise exception.WrongUserInputVerification('The verification code you typed is different from the one we send you')
     
     cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
-    conn.commit()
+    conn[0].commit()
     cur.close()
+    conn[0].close()
 
     session['login_message'] = 'Successful verification'
     return redirect("/login") 
 
 def login():
-    if request.method != 'GET' and request.method != 'POST':
-        raise exception.MethodNotAllowed()
+    assertIsProvidedMethodsTrue('GET','POST')
 
     if request.method == 'GET':
         return render_template('login.html')
 
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    # conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    conn = utils.getDBConn()
 
     email = request.form['email']
     password_ = request.form['password']
 
-    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+    cur = conn[0].cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
     cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
         
@@ -225,6 +243,9 @@ def login():
 
     if not is_the_email_verified:
         raise exception.WrongUserInputLogin('Your account is not verified or has been deleted')
+
+    conn[0].close()
+    cur.close()
 
     session['user_email'] = email   
     return redirect("/home")
@@ -243,11 +264,14 @@ def profile():
     if 'user_email' not in session:
         return redirect('/login')
     
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-    cur = conn.cursor()
+    # conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    # cur = conn.cursor()
+    conn, cur = utils.getDBConn()
     cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (session['user_email'],))
     user_details = cur.fetchone()
     conn.commit()
+    conn.close()
+    cur.close()
 
     if user_details:
         return render_template('profile.html', user_details=user_details)
@@ -255,11 +279,11 @@ def profile():
     return render_template('profile.html')
 
 def update_profile():
-    if 'user_email' not in session:
-        raise exception.MethodNotAllowed()
-    
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-    cur = conn.cursor()
+    assertIsMailInSession()
+
+    # conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    # cur = conn.cursor()
+    conn, cur = utils.getDBConn()
 
     first_name = request.form['first-name']
     last_name = request.form['last-name']
@@ -313,6 +337,7 @@ def update_profile():
     cur.execute(query_string, (fields_list))
 
     conn.commit()
+    conn.close()
     cur.close()
     
     # Update session email if email was changed
@@ -324,31 +349,30 @@ def update_profile():
     return redirect('/home')
 
 def delete_account():
-    if 'user_email' not in session:
-        raise exception.MethodNotAllowed("You are not logged in")
-    
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    assertIsMailInSession()
+    # conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    # cur = conn.cursor()
+    conn, cur = utils.getDBConn()
 
     user_email = session['user_email']
-    cur = conn.cursor()
 
     cur.execute("UPDATE users SET verification_status = false WHERE email = %s", (user_email,))
     conn.commit()
-
+    conn.close()
     cur.close()
     session.clear()
 
     return redirect('/login')
 
 def recover_password():
-    if request.method != 'POST':
-        raise exception.MethodNotAllowed()
+    assertIsProvidedMethodsTrue('POST')
 
     email = request.form['recovery_email']
     new_password = os.urandom(10).hex()
 
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+    # conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    conn = utils.getDBConn()
+    cur = conn[0].cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
     is_email_valid = cur.fetchone()['email']
@@ -357,9 +381,9 @@ def recover_password():
 
     cur.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_password, email))
 
-    conn.commit()
+    conn[0].commit()
     cur.close()
-    conn.close()
+    conn[0].close()
 
     send_recovey_password_email(email, new_password)
     
@@ -375,15 +399,15 @@ def send_recovey_password_email(user_email, recovery_password):
     mail.send(msg)
 
 def resend_verf_code():
-    if request.method != 'POST':
-        raise exception.MethodNotAllowed()
+    assertIsProvidedMethodsTrue('POST')
     
     email = request.form['resend_verf_code']
 
     new_verification_code = os.urandom(24).hex()
 
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-    cur = conn.cursor()
+    # conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    # cur = conn.cursor()
+    conn, cur = utils.getDBConn()
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
     # is_present = cur.fetchone().statusmessage is "SELECT 0"
@@ -411,15 +435,15 @@ def resend_verf_code():
     return redirect('/verify')
 
 def send_login_link():
-    if request.method != 'POST':
-        raise exception.MethodNotAllowed()
+    assertIsProvidedMethodsTrue('POST') 
     
     email = request.form['resend_verf_code']
     
     login_token = os.urandom(24).hex()
 
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-    cur = conn.cursor()
+    # conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    # cur = conn.cursor()
+    conn, cur = utils.getDBConn()
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
     if cur.rowcount == 0:
@@ -451,9 +475,7 @@ def send_verification_link(user_email, verification_link):
     mail.send(msg)
 
 def login_with_token():
-
-    if request.method != 'GET':
-        raise exception.MethodNotAllowed()
+    assertIsProvidedMethodsTrue('GET')
     
     token = request.args.get('token')
 
@@ -466,8 +488,9 @@ def login_with_token():
     db_password = config.password
     db_host = config.host
 
-    conn = psycopg2.connect(dbname=db_name, user=db_user, password=db_password, host=db_host)
-    cur = conn.cursor()
+    # conn = psycopg2.connect(dbname=db_name, user=db_user, password=db_password, host=db_host)
+    # cur = conn.cursor()
+    conn, cur = utils.getDBConn()
 
     cur.execute("SELECT id, expiration FROM tokens WHERE login_token = %s", (token,))
 
@@ -501,14 +524,65 @@ def login_with_token():
     session['user_email'] = email   
     return redirect('/home')
 
+def update_captcha_settings():
+    assertIsMailInSession()
+
+    if request.method == 'GET':
+        current_settings = utils.get_current_settings()
+        return render_template('captcha_settings.html', **current_settings)
+
+    new_max_attempts = request.form['max_captcha_attempts']
+    new_timeout_minutes = request.form['captcha_timeout_minutes']
+
+    if new_max_attempts and int(new_max_attempts) <= 0:
+        raise exception.WrongCaptchaSetting("Captcha attempts must be possitive number")
+    if new_timeout_minutes and int(new_timeout_minutes) <= 0:
+        raise exception.WrongCaptchaSetting("Timeout minutes must be possitive number")
+
+    conn, cur = utils.getDBConn()
+    str_message = ""
+
+    if new_max_attempts:
+        cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'max_captcha_attempts'", (new_max_attempts,))
+        str_message += 'You updated captcha attempts. '
+    if new_timeout_minutes:
+          cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'captcha_timeout_minutes'", (new_timeout_minutes,))
+          str_message += 'You updated timeout minutes.'
+    
+    conn.commit()
+    conn.close()
+    cur.close()
+ 
+    if str_message != "":
+        session['home_message'] = str_message
+    return redirect('/home')
+
+def view_logs():
+    assertIsMailInSession()
+
+    conn, cur = utils.getDBConn()
+
+    cur.execute("SELECT * FROM exception_logs")
+    log_exceptions = cur.fetchall()
+
+    conn.close()
+    cur.close()
+
+    return render_template('logs.html', log_exceptions = log_exceptions)
+
 def log_exception(exception_type, message ,email = None):
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-    cur = conn.cursor()
+    # conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    # cur = conn.cursor()
+    conn, cur = utils.getDBConn()
 
     cur.execute("INSERT INTO exception_logs (user_email, exception_type, message) VALUES (%s, %s, %s)", (email, exception_type, message))
     conn.commit()
     cur.close()
     conn.close()
+
+@app.route('/favicon.ico')
+def favicon():
+    return app.send_static_file('favicon.ico')
 
 url_to_function_map = {
     '/': registration,
@@ -524,6 +598,9 @@ url_to_function_map = {
     '/resend_verf_code': resend_verf_code,
     '/send_login_link': send_login_link,
     '/log': login_with_token,
+    '/logs': view_logs,
+    '/update_captcha_settings': update_captcha_settings,
+    '/momo': 'momo',
 }
 
 @app.endpoint("handle_request")
@@ -533,7 +610,7 @@ def handle_request(**kwargs):
             request_path = request.path
             funtion_to_call = url_to_function_map.get(request_path)
             if funtion_to_call:
-                return funtion_to_call()
+                 return funtion_to_call()
             else:
                 exception.MethodNotAllowed("Wrong url address")
         except Exception as message:
@@ -546,7 +623,5 @@ def handle_request(**kwargs):
         return render_template("method_not_allowed.html")
 
 if __name__ == '__main__':
-    # app.run(debug=True)
     app.run(debug=True)
-    # assert(x == "goodbye", "x should be 'hello'")
     # flask run --host=0.0.0.0 --port=5000
