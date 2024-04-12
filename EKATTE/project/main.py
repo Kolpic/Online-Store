@@ -84,7 +84,7 @@ def search_town():
         print(town_name)
         conn = psycopg2.connect(**conn_params)
         cur = conn.cursor()
-        # cur.execute("SELECT s.type, s.name, r.name, m.name FROM settlements as s JOIN regions AS r ON s.region_code = r.code JOIN municipalities as m ON s.municipalities_code = m.code WHERE s.name = %s", (town_name,))
+        # '; DROP TABLE settlements; --
         cur.execute("""SELECT s.type, s.name, r.name, m.name, COALESCE(th.name, '-') 
                     FROM settlements as s 
                     JOIN regions AS r ON s.region_code = r.code 
