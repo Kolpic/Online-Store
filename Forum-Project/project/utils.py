@@ -1,7 +1,7 @@
 from flask import session
 import bcrypt
 import psycopg2
-from project import config
+from project import config, exception
 
 database = config.database
 user = config.user
@@ -43,3 +43,28 @@ def get_current_settings():
     settings = {name: value for name, value in cur.fetchall()}
     conn.close()
     return settings
+
+def assertUser(boolean):
+    if boolean is None: raise exception.WrongUserInputException("Invalid url address")
+    if boolean and str(boolean) == "password_ != confirm_password_": raise exception.WrongUserInputException("Password and Confirm Password fields are different")
+
+def assertDev(boolean):
+    if not callable(boolean): raise exception.DevException("You are trying to invoke something that is not function !!!")
+    # if not boolean: raise exception.DevException("Invalid url address")
+
+def Assert(*args):
+    boolean = args[0]
+    string = str(args[1])
+
+    if boolean is None and string == "Invalid url address": raise exception.WrongUserInputException(string)
+    if not callable(boolean) and string == "You are trying to invoke something that is not function !!!": raise exception.DevException(string)
+    if boolean and string == "Password and Confirm Password fields are different": raise exception.WrongUserInputException(string)
+    if boolean and string == "You typed wrong captcha several times, now you have timeout": raise exception.WrongUserInputException(string)
+    if boolean and string == "First name is must be between 3 and 50 symbols": raise exception.WrongUserInputException(string)
+    if boolean and string == "Last name must be between 3 and 50 symbols": raise exception.WrongUserInputException(string)
+    if boolean and string == "Email is not valid": raise exception.WrongUserInputException(string)
+    
+    # if not len(args) > 1:
+    #     return    
+    # string = getattr(str(args[1]))
+    # if boolean and str(string) == "Password and Confirm Password fields are different": raise exception.WrongUserInputException("Password and Confirm Password fields are different")
