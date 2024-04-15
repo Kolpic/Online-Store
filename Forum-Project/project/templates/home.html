@@ -1,28 +1,44 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    {% if 'home_message' in session %}
-        <div class="alert alert-success">
-            {{ session.pop('home_message') }}
-        </div>
-    {% endif %}
     <meta charset="UTF-8">
     <title>Home Page</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
-    <!-- Include Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.4.0/font/bootstrap-icons.min.css">
 </head>
 <body>
     <div class="container">
         <div class="float-right">
-            <!-- Settings Icon -->
             <a href="/profile"><i class="bi bi-gear" style="font-size: 2rem; color: black;"></i></a>
-        </div>
-        <div class="float-right">
             <a href="/logs" class="btn btn-secondary">View Log Exceptions</a>
         </div>
         <h1>Welcome to Our Application!</h1>
         <p>This is the home page of our user registration and authentication system.</p>
+        <form method="post" action="/add_product" enctype="multipart/form-data">
+            <input type="text" name="name" placeholder="Product Name" required>
+            <input type="text" name="price" placeholder="Price" required>
+            <input type="text" name="quantity" placeholder="Quantity" required>
+            <input type="text" name="category" placeholder="Category" required>
+            <input type="file" name="image" accept="image/*" required>
+            <button type="submit">Add Product</button>
+        </form>
+        <br>
+        <div class="row">
+            {% for product in products %}
+            <div class="col-md-4">
+                <div class="card mb-4">
+                    <img class="card-img-top" src="{{ url_for('serve_image', product_id=product[0]) }}" alt="{{ product[1]}}">
+                    <div class="card-body">
+                        <h5 class="card-title">{{ product[1]}}</h5>
+                        <p class="card-text">Цена: {{ product[2]}} лв.</p>
+                        <p class="card-text">Количество: {{ product[3]}}</p>
+                        <p class="card-text">Категория: {{ product[4]}}</p>
+                        <a href="#" class="btn btn-primary">Buy Now</a>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
         <div class="nav">
             {% if 'user_email' in session %}
                 <a href="/logout" class="btn btn-danger">Logout</a>
@@ -33,4 +49,5 @@
         </div>
     </div>
 </body>
-</html> 
+</html>
+

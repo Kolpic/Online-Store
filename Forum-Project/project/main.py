@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, session, abort
+from flask import Flask, request, render_template, redirect, url_for, session, abort, Response
 from flask_mail import Mail, Message
 import psycopg2, os, re, secrets, psycopg2.extras, uuid
 import bcrypt
@@ -238,7 +238,10 @@ def home(conn, cur):
     if not utils.is_authenticated():
         return redirect('/login')
     
-    return render_template('home.html')
+    cur.execute("SELECT * FROM products LIMIT 10")
+    products = cur.fetchall()
+
+    return render_template('home.html', products=products)
 
 def logout(conn, cur):
     session.pop('user_email', None) 
@@ -510,6 +513,25 @@ def log_exception(conn, cur, exception_type, message ,email = None):
     cur.execute("INSERT INTO exception_logs (user_email, exception_type, message) VALUES (%s, %s, %s)", (email, exception_type, message))
     conn.commit()
 
+def add_product(conn, cur):
+    name = request.form['name']
+    price = request.form['price']
+    quantity = request.form['quantity']
+    category = request.form['category']
+    image = request.files['image'].read()
+
+    cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image))
+    conn.commit()
+    return redirect('/home')
+
+@app.route('/image/<int:product_id>')
+def serve_image(product_id):
+    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    cur = conn.cursor()
+    cur.execute("SELECT image FROM products WHERE id = %s", (product_id,))
+    image_blob = cur.fetchone()[0]
+    return Response(image_blob, mimetype='jpeg')
+
 @app.route('/favicon.ico')
 def favicon():
     return app.send_static_file('favicon.ico')
@@ -530,6 +552,8 @@ url_to_function_map = {
     '/log': login_with_token,
     '/logs': view_logs,
     '/update_captcha_settings': update_captcha_settings,
+    '/add_product': add_product,
+    '/image/<int:product_id>': serve_image,
     '/momo': 'momo',
 }
 
