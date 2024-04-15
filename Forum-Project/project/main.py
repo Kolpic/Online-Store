@@ -72,6 +72,7 @@ def registration(conn, cur):
         return render_template('registration.html', form_data=form_data, captcha = {"first": first_captcha_number, "second": second_captcha_number})
 
     form_data = request.form.to_dict()
+    session['form_data'] = form_data
     first_name = request.form['first_name']
     last_name = request.form['last_name']
     email = request.form['email']
@@ -88,8 +89,8 @@ def registration(conn, cur):
     attempt_record = cur.fetchone()
 
     attempts = 0
-    max_attempts = int(utils.get_captcha_setting_by_name('max_captcha_attempts'))
-    timeout_minutes = int(utils.get_captcha_setting_by_name('captcha_timeout_minutes'))
+    max_attempts = int(utils.get_captcha_setting_by_name(cur, 'max_captcha_attempts'))
+    timeout_minutes = int(utils.get_captcha_setting_by_name(cur,'captcha_timeout_minutes'))
 
     if attempt_record:
         attempt_id, last_attempt_time, attempts = attempt_record
@@ -132,7 +133,7 @@ def registration(conn, cur):
     #     raise exception.WrongUserInputRegistration('Last name must be between 3 and 50 symbols')
         
     regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-
+    # boolean_regex = re.fullmatch(regex, email)
     utils.Assert(re.fullmatch(regex, email), "Email is not valid")
     # if not (re.fullmatch(regex, email)):
     #     utils.add_form_data_in_session(form_data)
@@ -144,12 +145,14 @@ def registration(conn, cur):
     is_email_verified = cur.fetchone()
 
     if is_email_present_in_database != None:
-        if is_email_present_in_database[0] and is_email_verified[0]:
-            utils.add_form_data_in_session(form_data)
-            raise exception.WrongUserInputRegistration('There is already registration with this email')
-        if is_email_present_in_database[0] and not is_email_verified[0]:
-            utils.add_form_data_in_session(form_data)
-            raise exception.WrongUserInputRegistration('Account was already registered and deleted with this email, type another email')
+        utils.Assert(is_email_present_in_database[0] and is_email_verified[0], "There is already registration with this email")
+        # if is_email_present_in_database[0] and is_email_verified[0]:
+        #     utils.add_form_data_in_session(form_data)
+        #     raise exception.WrongUserInputRegistration('There is already registration with this email')
+        utils.Assert(is_email_present_in_database[0] and not is_email_verified[0], "Account was already registered and deleted with this email, type another email")
+        # if is_email_present_in_database[0] and not is_email_verified[0]:
+        #     utils.add_form_data_in_session(form_data)
+        #     raise exception.WrongUserInputRegistration('Account was already registered and deleted with this email, type another email')
 
     cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", (first_name, last_name, email, hashed_password, verification_code))
     conn.commit()
@@ -179,6 +182,9 @@ def verify(conn, cur):
     cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
+
+    utils.Assert(cur.rowcount == 0, "There is no registration with this email")
+
     email_from_database = cur.fetchone()['email']
 
     cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
@@ -187,12 +193,9 @@ def verify(conn, cur):
     cur.execute("SELECT verification_code FROM users WHERE email = %s", (email,))
     verification_code_database = cur.fetchone()['verification_code']
 
-    if email_from_database != email:
-        raise exception.WrongUserInputVerification('You entered different email')
-    if is_verified:
-        raise exception.WrongUserInputVerification('The account is already verified')
-    if verification_code_database != verification_code:
-        raise exception.WrongUserInputVerification('The verification code you typed is different from the one we send you')
+    utils.Assert(email_from_database != email, "You entered different email")
+    utils.Assert(is_verified, "The account is already verified")
+    utils.Assert(verification_code_database != verification_code, "The verification code you typed is different from the one we send you")
     
     cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
     conn.commit()
@@ -211,6 +214,10 @@ def login(conn, cur):
 
     cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
+    cur.execute("SELECT email FROM users WHERE email = %s", (email,))
+
+    utils.Assert(cur.rowcount == 0, "There is no registration with this email")
+
     cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
         
     is_the_email_verified = cur.fetchone()['verification_status']
@@ -221,22 +228,19 @@ def login(conn, cur):
 
     are_passwords_same = bool(utils.verify_password(password_, hashed_password))
 
-    if not are_passwords_same:
-        raise exception.WrongUserInputLogin('Invalid email or password')
+    utils.Assert(are_passwords_same, "Invalid email or password")
+    utils.Assert(is_the_email_verified, "Your account is not verified or has been deleted")
 
-    if not is_the_email_verified:
-        raise exception.WrongUserInputLogin('Your account is not verified or has been deleted')
-    
     session['user_email'] = email   
     return redirect("/home")
 
-def home():
+def home(conn, cur):
     if not utils.is_authenticated():
         return redirect('/login')
     
     return render_template('home.html')
 
-def logout():
+def logout(conn, cur):
     session.pop('user_email', None) 
     return redirect('/home')
 
@@ -244,7 +248,6 @@ def profile(conn, cur):
     if 'user_email' not in session:
         return redirect('/login')
     
-    conn, cur = utils.getDBConn()
     cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (session['user_email'],))
     user_details = cur.fetchone()
     conn.commit()
@@ -328,6 +331,7 @@ def delete_account(conn, cur):
     session.clear()
     return redirect('/login')
 
+# 
 def recover_password(conn, cur):
     assertIsProvidedMethodsTrue('POST')
 
@@ -358,6 +362,7 @@ def send_recovey_password_email(user_email, recovery_password):
     msg.body = 'Your recovery password: ' + recovery_password
     mail.send(msg)
 
+# TODO: Този метод се замести със send_login_link 
 def resend_verf_code(conn, cur):
     assertIsProvidedMethodsTrue('POST')
     
@@ -366,18 +371,13 @@ def resend_verf_code(conn, cur):
     new_verification_code = os.urandom(24).hex()
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-    # is_present = cur.fetchone().statusmessage is "SELECT 0"
 
-    # assertUser( cur.rowcount == 0, "There is no registration with this email")
-
-    if cur.rowcount == 0:
-        raise exception.WrongUserInputVerification('There is no registration with this email')
+    utils.Assert(cur.rowcount == 0, "There is no registration with this email")
     
     cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
     is_verified = cur.fetchone()[0]
 
-    if is_verified:
-        raise exception.WrongUserInputVerification('The email is already verified')
+    utils.Assert(is_verified, "The account is already verified")
 
     cur.execute("UPDATE users SET verification_code = %s WHERE email = %s", (new_verification_code, email))
 
@@ -396,8 +396,12 @@ def send_login_link(conn, cur):
     login_token = os.urandom(24).hex()
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-    if cur.rowcount == 0:
-        raise exception.WrongUserInputVerification('There is no registration with this email')
+    utils.Assert(cur.rowcount == 0, "There is no registration with this email")
+
+    cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
+    is_verified = cur.fetchone()[0]
+
+    utils.Assert(is_verified, "The account is already verified")
     
     expiration_time = datetime.now() + timedelta(hours=1)
 
@@ -469,16 +473,14 @@ def update_captcha_settings(conn, cur):
     assertIsMailInSession()
 
     if request.method == 'GET':
-        current_settings = utils.get_current_settings()
+        current_settings = utils.get_current_settings(cur)
         return render_template('captcha_settings.html', **current_settings)
 
     new_max_attempts = request.form['max_captcha_attempts']
     new_timeout_minutes = request.form['captcha_timeout_minutes']
 
-    if new_max_attempts and int(new_max_attempts) <= 0:
-        raise exception.WrongCaptchaSetting("Captcha attempts must be possitive number")
-    if new_timeout_minutes and int(new_timeout_minutes) <= 0:
-        raise exception.WrongCaptchaSetting("Timeout minutes must be possitive number")
+    utils.Assert(new_max_attempts and int(new_max_attempts) <= 0, "Captcha attempts must be possitive number")
+    utils.Assert(new_timeout_minutes and int(new_timeout_minutes) <= 0, "Timeout minutes must be possitive number")
 
     str_message = ""
 
@@ -504,14 +506,9 @@ def view_logs(conn, cur):
     return render_template('logs.html', log_exceptions = log_exceptions)
 
 def log_exception(conn, cur, exception_type, message ,email = None):
-    # conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-    # cur = conn.cursor()
-    # conn, cur = utils.getDBConn()
 
     cur.execute("INSERT INTO exception_logs (user_email, exception_type, message) VALUES (%s, %s, %s)", (email, exception_type, message))
     conn.commit()
-    # cur.close()
-    # conn.close()
 
 @app.route('/favicon.ico')
 def favicon():
@@ -549,16 +546,8 @@ def handle_request(**kwargs):
 
         utils.Assert(funtion_to_call, "Invalid url address")
         utils.Assert(funtion_to_call, "You are trying to invoke something that is not function !!!")
-        # utils.assertUser(funtion_to_call)
-        # utils.assertDev(funtion_to_call)
 
         return funtion_to_call(conn, cur)
-        # if funtion_to_call:
-        #     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-        #     cur = conn.cursor()
-        #     return funtion_to_call(conn, cur)
-        # else:
-        #     exception.MethodNotAllowed("Wrong url address")
     except Exception as message:
         user_email = session.get('user_email', 'Guest')
         log_exception(conn, cur, message.__class__.__name__, str(message), user_email)
@@ -566,8 +555,8 @@ def handle_request(**kwargs):
         if message.__class__.__name__ == 'DevException':
             message = 'Internal error'
 
-        redirect_url = getattr(message, 'redirect_url', '/')
-        return render_template("error.html", message = str(message), redirect_url = redirect_url)
+        utils.add_form_data_in_session(session.get('form_data'))
+        return render_template("error.html", message = str(message), redirect_url = request.url)
     finally:
         if conn is not None:
             conn.close()
