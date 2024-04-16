@@ -525,11 +525,13 @@ def add_product(conn, cur):
     return redirect('/home')
 
 @app.route('/image/<int:product_id>')
-def serve_image(product_id):
+def serve_image(conn, cur, product_id):
     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
     cur = conn.cursor()
     cur.execute("SELECT image FROM products WHERE id = %s", (product_id,))
     image_blob = cur.fetchone()[0]
+    conn.close()
+    cur.close()
     return Response(image_blob, mimetype='jpeg')
 
 @app.route('/favicon.ico')
