@@ -234,14 +234,22 @@ def login(conn, cur):
     session['user_email'] = email   
     return redirect("/home")
 
-def home(conn, cur):
+def home(conn, cur, page = 1):
     if not utils.is_authenticated():
         return redirect('/login')
     
-    cur.execute("SELECT * FROM products LIMIT 10")
+    products_per_page = 2
+    offset = (page - 1) * products_per_page
+
+    cur.execute("SELECT * FROM products LIMIT %s OFFSET %s", (products_per_page, offset))
     products = cur.fetchall()
 
-    return render_template('home.html', products=products)
+    cur.execute("SELECT COUNT(*) FROM products")
+    total_products = cur.fetchone()[0]
+    # total_pages = (total_products + products_per_page - 1)
+    total_pages = int(total_products / products_per_page + 1)
+
+    return render_template('home.html', products=products, page=page, total_pages=total_pages)
 
 def logout(conn, cur):
     session.pop('user_email', None) 
@@ -524,14 +532,9 @@ def add_product(conn, cur):
     conn.commit()
     return redirect('/home')
 
-@app.route('/image/<int:product_id>')
 def serve_image(conn, cur, product_id):
-    conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-    cur = conn.cursor()
     cur.execute("SELECT image FROM products WHERE id = %s", (product_id,))
     image_blob = cur.fetchone()[0]
-    conn.close()
-    cur.close()
     return Response(image_blob, mimetype='jpeg')
 
 @app.route('/favicon.ico')
@@ -544,6 +547,7 @@ url_to_function_map = {
     '/verify': verify,
     '/login': login,
     '/home': home,
+    '/home/<int:page>': home,
     '/logout': logout,
     '/profile': profile,
     '/update_profile': update_profile,
@@ -565,7 +569,16 @@ def handle_request(**kwargs):
     cur = None
     try:
         request_path = request.path
-        funtion_to_call = url_to_function_map.get(request_path)
+        path_parts = request_path.split('/')
+        if len(path_parts) > 2 and path_parts[1] == 'image' and path_parts[2].isdigit():
+            product_id = int(path_parts[2])
+            funtion_to_call = serve_image
+        elif len(path_parts) > 2 and path_parts[1] == 'home' and path_parts[2].isdigit():
+            page = int(path_parts[2])
+            funtion_to_call = home
+        else:
+            funtion_to_call = url_to_function_map.get(request_path)
+        # funtion_to_call = url_to_function_map.get(request_path)
 
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor()
@@ -573,7 +586,12 @@ def handle_request(**kwargs):
         utils.Assert(funtion_to_call, "Invalid url address")
         utils.Assert(funtion_to_call, "You are trying to invoke something that is not function !!!")
 
-        return funtion_to_call(conn, cur)
+        if 'product_id' in locals():
+            return funtion_to_call(conn, cur, product_id=product_id)
+        elif 'page' in locals():
+            return funtion_to_call(conn, cur, page=page)
+        else:           
+            return funtion_to_call(conn, cur)
     except Exception as message:
         user_email = session.get('user_email', 'Guest')
         log_exception(conn, cur, message.__class__.__name__, str(message), user_email)

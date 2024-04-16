@@ -14,6 +14,15 @@
         </div>
         <h1>Welcome to Our Application!</h1>
         <p>This is the home page of our user registration and authentication system.</p>
+        <div class="nav">
+            {% if 'user_email' in session %}
+                <a href="/logout" class="btn btn-danger">Logout</a>
+            {% else %}
+                <a href="/registration" class="btn btn-info">Register</a>
+                <a href="/login" class="btn btn-primary">Login</a>
+            {% endif %}
+        </div>
+        <br>
         <form method="post" action="/add_product" enctype="multipart/form-data">
             <input type="text" name="name" placeholder="Product Name" required>
             <input type="text" name="price" placeholder="Price" required>
@@ -27,7 +36,7 @@
             {% for product in products %}
             <div class="col-md-4">
                 <div class="card mb-4">
-                    <img class="card-img-top" src="{{ url_for('serve_image', product_id=product[0]) }}" alt="{{ product[1]}}">
+                    <img class="card-img-top" src="/image/{{ product[0] }}" alt="{{ product[1] }}">
                     <div class="card-body">
                         <h5 class="card-title">{{ product[1]}}</h5>
                         <p class="card-text">Цена: {{ product[2]}} лв.</p>
@@ -39,15 +48,21 @@
             </div>
             {% endfor %}
         </div>
-        <div class="nav">
-            {% if 'user_email' in session %}
-                <a href="/logout" class="btn btn-danger">Logout</a>
-            {% else %}
-                <a href="/registration" class="btn btn-info">Register</a>
-                <a href="/login" class="btn btn-primary">Login</a>
-            {% endif %}
-        </div>
+        <nav>
+            <ul class="pagination">
+                <li class="page-item {% if page <= 1 %}disabled{% endif %}">
+                    <a class="page-link" href="{% if page > 1 %}/home/{{page - 1}}{% else %}#{% endif %}">Previous</a>
+                </li>
+                {% for i in range(1, total_pages + 1) %}
+                <li class="page-item {% if i == page %}active{% endif %}">
+                    <a class="page-link" href="/home/{{i}}">{{ i }}</a>
+                </li>
+                {% endfor %}
+                <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
+                    <a class="page-link" href="{% if page < total_pages %}/home/{{page + 1}}{% else %}#{% endif %}">Next</a>
+                </li>
+            </ul>
+        </nav>
     </div>
 </body>
 </html>
-
