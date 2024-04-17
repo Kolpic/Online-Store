@@ -55,3 +55,4 @@ def Assert(*args):
     if boolean and string == "There is no registration with this email":  raise exception.WrongUserInputException(string)
     if boolean and string == "Captcha attempts must be possitive number":  raise exception.WrongUserInputException(string)
     if boolean and string == "Timeout minutes must be possitive number":  raise exception.WrongUserInputException(string)
+    if boolean is None and string == "No results with this filter":  raise exception.WrongUserInputException(string)

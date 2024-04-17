@@ -238,18 +238,34 @@ def home(conn, cur, page = 1):
     if not utils.is_authenticated():
         return redirect('/login')
     
-    products_per_page = 2
+    products_per_page = 9
     offset = (page - 1) * products_per_page
+    
+    sort_by = request.args.get('sort','id')
+    sort_order = request.args.get('order', 'asc')
+    product_name = request.args.get('product_name', '')
+    product_category = request.args.get('product_category', '')
 
-    cur.execute("SELECT * FROM products LIMIT %s OFFSET %s", (products_per_page, offset))
+    valid_sort_columns = {'price':'price', 'category':'category', 'name':'name'}
+    sort_column = valid_sort_columns.get(sort_by, 'id')
+    order_by_clause = f"{sort_column} {'DESC' if sort_order == 'desc' else 'ASC'}"
+
+    name_filter = f" AND name ILIKE '%{product_name}%'" if product_name else ''
+    category_filter = f" AND category ILIKE '%{product_category}%'" if product_category else ''
+
+    query = f"SELECT * FROM products WHERE TRUE{name_filter}{category_filter} ORDER BY {order_by_clause} LIMIT {products_per_page} OFFSET {offset}"
+    cur.execute(query)
+
     products = cur.fetchall()
 
-    cur.execute("SELECT COUNT(*) FROM products")
+    count_query = f"SELECT COUNT(*) FROM products WHERE TRUE{name_filter}{category_filter}"
+    cur.execute(count_query)
     total_products = cur.fetchone()[0]
+    utils.Assert(total_products, 'No results with this filter')
     # total_pages = (total_products + products_per_page - 1)
     total_pages = int(total_products / products_per_page + 1)
 
-    return render_template('home.html', products=products, page=page, total_pages=total_pages)
+    return render_template('home.html', products=products, page=page, total_pages=total_pages, sort_by=sort_by, sort_order=sort_order, product_name=product_name, product_category=product_category)
 
 def logout(conn, cur):
     session.pop('user_email', None) 

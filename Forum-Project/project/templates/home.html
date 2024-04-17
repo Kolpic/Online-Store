@@ -32,6 +32,32 @@
             <button type="submit">Add Product</button>
         </form>
         <br>
+        <form method="get" action="/home/{{ page }}">
+            <div class="form-group">
+                <label for="sort">Sort by:</label>
+                <select name="sort" id="sort" onchange="this.form.submit()">
+                    <option value="price" {% if sort_by == 'price' %}selected{% endif %}>Price</option>
+                    <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name</option>
+                    <option value="category" {% if sort_by == 'category' %}selected{% endif %}>Category</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="order">Order:</label>
+                <select name="order" id="order" onchange="this.form.submit()">
+                    <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>Ascending</option>
+                    <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>Descending</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="product_name">Product Name:</label>
+                <input type="text" id="product_name" name="product_name" value="{{ product_name }}" onchange="this.form.submit()">
+            </div>
+            <div class="form-group">
+                <label for="product_category">Category:</label>
+                <input type="text" id="product_category" name="product_category" value="{{ product_category }}" onchange="this.form.submit()">
+            </div>
+        </form>
+        <br>
         <div class="row">
             {% for product in products %}
             <div class="col-md-4">
@@ -55,7 +81,7 @@
                 </li>
                 {% for i in range(1, total_pages + 1) %}
                 <li class="page-item {% if i == page %}active{% endif %}">
-                    <a class="page-link" href="/home/{{i}}">{{ i }}</a>
+                    <a class="page-link" href="/home/{{i}}?sort={{ sort_by }}&order={{ sort_order }}">{{ i }}</a>
                 </li>
                 {% endfor %}
                 <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
