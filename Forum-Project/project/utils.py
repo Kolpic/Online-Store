@@ -37,25 +37,28 @@ def get_current_settings(cur):
 def AssertDev(boolean, str):
     if not boolean: raise exception.DevException(str)
 
-def Assert(*args):
-    boolean = args[0]
-    string = str(args[1])
+def AssertUser(boolean, str):
+    if not boolean: raise exception.WrongUserInputException(str)
 
-    if boolean is None and string == "Invalid url address": raise exception.WrongUserInputException(string)
-    if not callable(boolean) and string == "You are trying to invoke something that is not function !!!": raise exception.DevException(string)
-    if boolean and string == "Password and Confirm Password fields are different": raise exception.WrongUserInputException(string)
-    if boolean and string == "You typed wrong captcha several times, now you have timeout": raise exception.WrongUserInputException(string)
-    if boolean and string == "First name is must be between 3 and 50 symbols": raise exception.WrongUserInputException(string)
-    if boolean and string == "Last name must be between 3 and 50 symbols": raise exception.WrongUserInputException(string)
-    if not boolean and string == "Email is not valid": raise exception.WrongUserInputException(string)
-    if boolean and string == "There is already registration with this email":  raise exception.WrongUserInputException(string)
-    if boolean and string == "Account was already registered and deleted with this email, type another email":  raise exception.WrongUserInputException(string)
-    if boolean and string == "You entered different email":  raise exception.WrongUserInputException(string)
-    if boolean and string == "The account is already verified":  raise exception.WrongUserInputException(string)
-    if boolean and string == "The verification code you typed is different from the one we send you":  raise exception.WrongUserInputException(string)
-    if not boolean and string == "Invalid email or password":  raise exception.WrongUserInputException(string)
-    if not boolean and string == "Your account is not verified or has been deleted":  raise exception.WrongUserInputException(string)
-    if boolean and string == "There is no registration with this email":  raise exception.WrongUserInputException(string)
-    if boolean and string == "Captcha attempts must be possitive number":  raise exception.WrongUserInputException(string)
-    if boolean and string == "Timeout minutes must be possitive number":  raise exception.WrongUserInputException(string)
-    if boolean is None and string == "No results with this filter":  raise exception.WrongUserInputException(string)
+# def Assert(*args):
+#     boolean = args[0]
+#     string = str(args[1])
+
+#     if boolean is None and string == "Invalid url address": raise exception.WrongUserInputException(string)
+#     if not callable(boolean) and string == "You are trying to invoke something that is not function !!!": raise exception.DevException(string)
+#     if boolean and string == "Password and Confirm Password fields are different": raise exception.WrongUserInputException(string)
+#     if boolean and string == "You typed wrong captcha several times, now you have timeout": raise exception.WrongUserInputException(string)
+#     if boolean and string == "First name is must be between 3 and 50 symbols": raise exception.WrongUserInputException(string)
+#     if boolean and string == "Last name must be between 3 and 50 symbols": raise exception.WrongUserInputException(string)
+#     if not boolean and string == "Email is not valid": raise exception.WrongUserInputException(string)
+#     if boolean and string == "There is already registration with this email":  raise exception.WrongUserInputException(string)
+#     if boolean and string == "Account was already registered and deleted with this email, type another email":  raise exception.WrongUserInputException(string)
+#     if boolean and string == "You entered different email":  raise exception.WrongUserInputException(string)
+#     if boolean and string == "The account is already verified":  raise exception.WrongUserInputException(string)
+#     if boolean and string == "The verification code you typed is different from the one we send you":  raise exception.WrongUserInputException(string)
+#     if not boolean and string == "Invalid email or password":  raise exception.WrongUserInputException(string)
+#     if not boolean and string == "Your account is not verified or has been deleted":  raise exception.WrongUserInputException(string)
+#     if boolean and string == "There is no registration with this email":  raise exception.WrongUserInputException(string)
+#     if boolean and string == "Captcha attempts must be possitive number":  raise exception.WrongUserInputException(string)
+#     if boolean and string == "Timeout minutes must be possitive number":  raise exception.WrongUserInputException(string)
+#     if boolean is None and string == "No results with this filter":  raise exception.WrongUserInputException(string)

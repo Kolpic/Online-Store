@@ -80,10 +80,7 @@ def registration(conn, cur):
     confirm_password_ = request.form['confirm_password']
     captcha_ = int(request.form['captcha'])
 
-    utils.Assert(password_ != confirm_password_, "Password and Confirm Password fields are different")
-    # if password_ != confirm_password_:
-    #     utils.add_form_data_in_session(form_data)
-    #     raise exception.WrongUserInputRegistration("Password and Confirm Password fields are different")
+    utils.AssertUser(password_ == confirm_password_, "Password and Confirm Password fields are different")
 
     cur.execute("SELECT id, last_attempt_time, attempts FROM captcha_attempts WHERE ip_address = %s", (user_ip,))
     attempt_record = cur.fetchone()
@@ -95,9 +92,7 @@ def registration(conn, cur):
     if attempt_record:
         attempt_id, last_attempt_time, attempts = attempt_record
         time_since_last_attempt = datetime.now() - last_attempt_time
-        utils.Assert(attempts >= max_attempts and time_since_last_attempt < timedelta(minutes=timeout_minutes), "You typed wrong captcha several times, now you have timeout")
-        # if attempts >= max_attempts and time_since_last_attempt < timedelta(minutes=timeout_minutes):
-        #     raise exception.WrongUserInputRegistration("You typed wrong captcha 3 times, you have timeout 30 minutes")
+        utils.AssertUser(not(attempts >= max_attempts and time_since_last_attempt < timedelta(minutes=timeout_minutes)), "You typed wrong captcha several times, now you have timeout " + str(timeout_minutes) + " minutes")
         if time_since_last_attempt >= timedelta(minutes=timeout_minutes):
             attempts = 0
             
@@ -117,27 +112,16 @@ def registration(conn, cur):
         else:
             cur.execute("INSERT INTO captcha_attempts (ip_address, attempts, last_attempt_time) VALUES (%s, 1, CURRENT_TIMESTAMP)", (user_ip,))
             conn.commit()
-        raise exception.WrongUserInputRegistration("Invalid CAPTCHA. Please try again")
+        raise exception.WrongUserInputException("Invalid CAPTCHA. Please try again")
     else:
         if attempt_record:
             cur.execute("DELETE FROM captcha_attempts WHERE id = %s", (attempt_id,))
 
-    # TODO utils.add_form_data_in_session(form_data)
-    utils.Assert(len(first_name) < 3 or len(first_name) > 50, "First name is must be between 3 and 50 symbols")
-    # if len(first_name) < 3 or len(first_name) > 50:
-    #     utils.add_form_data_in_session(form_data)
-    #     raise exception.WrongUserInputRegistration('First name is must be between 3 and 50 symbols')
-    utils.Assert(len(last_name) < 3 or len(last_name) > 50, "Last name must be between 3 and 50 symbols")
-    # if len(last_name) < 3 or len(last_name) > 50:
-    #     utils.add_form_data_in_session(form_data)
-    #     raise exception.WrongUserInputRegistration('Last name must be between 3 and 50 symbols')
+    utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
+    utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
         
     regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-    # boolean_regex = re.fullmatch(regex, email)
-    utils.Assert(re.fullmatch(regex, email), "Email is not valid")
-    # if not (re.fullmatch(regex, email)):
-    #     utils.add_form_data_in_session(form_data)
-    #     raise exception.WrongUserInputRegistration('Email is not valid')
+    utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
     
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
     is_email_present_in_database = cur.fetchone()
@@ -145,14 +129,8 @@ def registration(conn, cur):
     is_email_verified = cur.fetchone()
 
     if is_email_present_in_database != None:
-        utils.Assert(is_email_present_in_database[0] and is_email_verified[0], "There is already registration with this email")
-        # if is_email_present_in_database[0] and is_email_verified[0]:
-        #     utils.add_form_data_in_session(form_data)
-        #     raise exception.WrongUserInputRegistration('There is already registration with this email')
-        utils.Assert(is_email_present_in_database[0] and not is_email_verified[0], "Account was already registered and deleted with this email, type another email")
-        # if is_email_present_in_database[0] and not is_email_verified[0]:
-        #     utils.add_form_data_in_session(form_data)
-        #     raise exception.WrongUserInputRegistration('Account was already registered and deleted with this email, type another email')
+        utils.AssertUser(not(is_email_present_in_database[0] and is_email_verified[0]), "There is already registration with this email")
+        utils.AssertUser(not(is_email_present_in_database[0] and not is_email_verified[0]), "Account was already registered and deleted with this email, type another email")
 
     cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", (first_name, last_name, email, hashed_password, verification_code))
     conn.commit()
@@ -183,7 +161,7 @@ def verify(conn, cur):
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
 
-    utils.Assert(cur.rowcount == 0, "There is no registration with this email")
+    utils.AssertUser(not cur.rowcount == 0, "There is no registration with this email")
 
     email_from_database = cur.fetchone()['email']
 
@@ -193,9 +171,9 @@ def verify(conn, cur):
     cur.execute("SELECT verification_code FROM users WHERE email = %s", (email,))
     verification_code_database = cur.fetchone()['verification_code']
 
-    utils.Assert(email_from_database != email, "You entered different email")
-    utils.Assert(is_verified, "The account is already verified")
-    utils.Assert(verification_code_database != verification_code, "The verification code you typed is different from the one we send you")
+    utils.AssertUser(email_from_database == email, "You entered different email")
+    utils.AssertUser(not is_verified, "The account is already verified")
+    utils.AssertUser(verification_code_database == verification_code, "The verification code you typed is different from the one we send you")
     
     cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
     conn.commit()
@@ -216,7 +194,7 @@ def login(conn, cur):
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
 
-    utils.Assert(cur.rowcount == 0, "There is no registration with this email")
+    utils.AssertUser(not cur.rowcount == 0, "There is no registration with this email")
 
     cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
         
@@ -228,8 +206,8 @@ def login(conn, cur):
 
     are_passwords_same = bool(utils.verify_password(password_, hashed_password))
 
-    utils.Assert(are_passwords_same, "Invalid email or password")
-    utils.Assert(is_the_email_verified, "Your account is not verified or has been deleted")
+    utils.AssertUser(are_passwords_same, "Invalid email or password")
+    utils.AssertUser(is_the_email_verified, "Your account is not verified or has been deleted")
 
     session['user_email'] = email   
     return redirect("/home")
@@ -250,20 +228,28 @@ def home(conn, cur, page = 1):
     sort_column = valid_sort_columns.get(sort_by, 'id')
     order_by_clause = f"{sort_column} {'DESC' if sort_order == 'desc' else 'ASC'}"
 
-    name_filter = f" AND name ILIKE '%{product_name}%'" if product_name else ''
-    category_filter = f" AND category ILIKE '%{product_category}%'" if product_category else ''
+    name_filter = f" AND name ILIKE %s" if product_name else ''
+    category_filter = f" AND category ILIKE %s" if product_category else ''
 
-    query = f"SELECT * FROM products WHERE TRUE{name_filter}{category_filter} ORDER BY {order_by_clause} LIMIT {products_per_page} OFFSET {offset}"
-    cur.execute(query)
+    query = f"SELECT * FROM products WHERE TRUE{name_filter}{category_filter} ORDER BY {order_by_clause} LIMIT %s OFFSET %s"
+
+    query_params = []
+    if product_name:
+        query_params.append(f"%{product_name}%")
+    if product_category:
+        query_params.append(f"%{product_category}%")
+    query_params.extend([products_per_page, offset])
+
+    cur.execute(query,tuple(query_params))
 
     products = cur.fetchall()
 
     count_query = f"SELECT COUNT(*) FROM products WHERE TRUE{name_filter}{category_filter}"
-    cur.execute(count_query)
+    cur.execute(count_query, tuple(query_params[:-2]))
     total_products = cur.fetchone()[0]
-    utils.Assert(total_products, 'No results with this filter')
+    utils.AssertUser(total_products, 'No results with this filter')
     # total_pages = (total_products + products_per_page - 1)
-    total_pages = int(total_products / products_per_page + 1)
+    total_pages = int(total_products / products_per_page) + 1
 
     cur.execute("SELECT id FROM users WHERE email = %s", (session.get('user_email'),))
     user_id = cur.fetchone()[0]
@@ -404,12 +390,12 @@ def resend_verf_code(conn, cur):
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
 
-    utils.Assert(cur.rowcount == 0, "There is no registration with this email")
+    utils.AssertUser(not cur.rowcount == 0, "There is no registration with this email")
     
     cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
     is_verified = cur.fetchone()[0]
 
-    utils.Assert(is_verified, "The account is already verified")
+    utils.AssertUser(not is_verified, "The account is already verified")
 
     cur.execute("UPDATE users SET verification_code = %s WHERE email = %s", (new_verification_code, email))
 
@@ -428,12 +414,12 @@ def send_login_link(conn, cur):
     login_token = os.urandom(24).hex()
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-    utils.Assert(cur.rowcount == 0, "There is no registration with this email")
+    utils.AssertUser(not cur.rowcount == 0, "There is no registration with this email")
 
     cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
     is_verified = cur.fetchone()[0]
 
-    utils.Assert(is_verified, "The account is already verified")
+    utils.AssertUser(not is_verified, "The account is already verified")
     
     expiration_time = datetime.now() + timedelta(hours=1)
 
@@ -511,8 +497,8 @@ def update_captcha_settings(conn, cur):
     new_max_attempts = request.form['max_captcha_attempts']
     new_timeout_minutes = request.form['captcha_timeout_minutes']
 
-    utils.Assert(new_max_attempts and int(new_max_attempts) <= 0, "Captcha attempts must be possitive number")
-    utils.Assert(new_timeout_minutes and int(new_timeout_minutes) <= 0, "Timeout minutes must be possitive number")
+    utils.AssertUser(not(new_max_attempts and int(new_max_attempts)) <= 0, "Captcha attempts must be possitive number")
+    utils.AssertUser(not(new_timeout_minutes and int(new_timeout_minutes)) <= 0, "Timeout minutes must be possitive number")
 
     str_message = ""
 
@@ -681,9 +667,8 @@ def handle_request(**kwargs):
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor()
 
-        # utils.AssertDev(not callable(funtion_to_call))
-        utils.Assert(funtion_to_call, "Invalid url ")
-        utils.Assert(funtion_to_call, "You are trying to invoke something that is not function !!!")
+        utils.AssertUser(funtion_to_call is not None, "Invalid url")
+        utils.AssertDev(callable(funtion_to_call), "You are trying to invoke something that is not a funtion")
 
         if 'product_id' in locals():
             return funtion_to_call(conn, cur, product_id=product_id)
