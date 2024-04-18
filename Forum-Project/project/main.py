@@ -265,7 +265,12 @@ def home(conn, cur, page = 1):
     # total_pages = (total_products + products_per_page - 1)
     total_pages = int(total_products / products_per_page + 1)
 
-    return render_template('home.html', products=products, page=page, total_pages=total_pages, sort_by=sort_by, sort_order=sort_order, product_name=product_name, product_category=product_category)
+    cur.execute("SELECT id FROM users WHERE email = %s", (session.get('user_email'),))
+    user_id = cur.fetchone()[0]
+
+    cart_count = get_cart_items_count(conn, cur, user_id)
+
+    return render_template('home.html', products=products, page=page, total_pages=total_pages, sort_by=sort_by, sort_order=sort_order, product_name=product_name, product_category=product_category, cart_count=cart_count)
 
 def logout(conn, cur):
     session.pop('user_email', None) 
@@ -553,6 +558,80 @@ def serve_image(conn, cur, product_id):
     image_blob = cur.fetchone()[0]
     return Response(image_blob, mimetype='jpeg')
 
+def add_to_cart(conn, cur, user_id, product_id, quantity):
+    cur.execute("SELECT cart_id FROM carts WHERE user_id = %s", (user_id,))
+    result = cur.fetchone()
+    if result:
+        cart_id = result[0]
+    else:
+        cur.execute("INSERT INTO carts(user_id) VALUES (%s) RETURNING cart_id", (user_id,))
+        cart_id = cur.fetchone()[0]
+        conn.commit()
+    
+    cur.execute("SELECT id FROM cart_itmes WHERE cart_id = %s AND product_id = %s", (cart_id, product_id))
+    item = cur.fetchone()
+    if item:
+        cur.execute("UPDATE cart_itmes SET quantity = quantity + %s WHERE id = %s", (quantity, item[0]))
+    else:
+        cur.execute("INSERT INTO cart_itmes (cart_id, product_id, quantity) VALUES (%s, %s, %s)", (cart_id, product_id, quantity))
+    conn.commit()
+    return "You successfully added item."
+
+def view_cart(conn, cur, user_id):
+    cur.execute("""
+                SELECT p.name, p.price, ci.quantity, p.id FROM CARTS AS c 
+                JOIN cart_itmes AS ci ON c.cart_id=ci.cart_id 
+                JOIN products AS p ON ci.product_id=p.id 
+                WHERE c.user_id = %s
+                """, (user_id,))
+    items = cur.fetchall()
+    return items
+
+def get_cart_items_count(conn, cur, user_id):
+    cur.execute("""
+                SELECT p.name, p.price, ci.quantity, p.id FROM CARTS AS c 
+                JOIN cart_itmes AS ci ON c.cart_id=ci.cart_id 
+                JOIN products AS p ON ci.product_id=p.id 
+                WHERE c.user_id = %s
+                """, (user_id,))
+    items = cur.fetchall()
+    return len(items)
+
+def remove_from_cart(conn, cur, item_id):
+    cur.execute("DELETE FROM cart_itmes where product_id = %s", (item_id))
+    conn.commit()
+    return "You successfully deleted item."
+
+def add_to_cart_meth(conn, cur):
+    if 'user_email' not in session:
+        return redirect('/login')
+    user_email = session.get('user_email')
+    cur.execute("SELECT id FROM users WHERE email = %s", (user_email,))
+    user_id = cur.fetchone()[0]
+    product_id = request.form['product_id']
+    quantity = request.form.get('quantity', 1)
+    response = add_to_cart(conn, cur, user_id, product_id, quantity)
+    session['home_message'] = response
+    return redirect('/home')
+
+def cart(conn, cur):
+    if 'user_email' not in session:
+        return redirect('/login')
+    user_email = session.get('user_email')
+    cur.execute("SELECT id FROM users WHERE email = %s", (user_email,))
+    user_id = cur.fetchone()[0]
+    items = view_cart(conn, cur, user_id)
+    total_sum = sum(item[1] * item[2] for item in items)
+    return render_template('cart.html', items=items, total_sum=total_sum)
+
+def remove_from_cart_meth(conn, cur):
+    if 'user_email' not in session:
+        return redirect('/login')
+    item_id = request.form['item_id']
+    response = remove_from_cart(conn, cur, item_id)
+    session['cart_message'] = response
+    return redirect('/cart')
+
 @app.route('/favicon.ico')
 def favicon():
     return app.send_static_file('favicon.ico')
@@ -576,6 +655,9 @@ url_to_function_map = {
     '/update_captcha_settings': update_captcha_settings,
     '/add_product': add_product,
     '/image/<int:product_id>': serve_image,
+    '/add_to_cart': add_to_cart_meth,
+    '/cart': cart,
+    '/remove_from_cart': remove_from_cart_meth,
     '/momo': 'momo',
 }
 
@@ -599,7 +681,8 @@ def handle_request(**kwargs):
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor()
 
-        utils.Assert(funtion_to_call, "Invalid url address")
+        # utils.AssertDev(not callable(funtion_to_call))
+        utils.Assert(funtion_to_call, "Invalid url ")
         utils.Assert(funtion_to_call, "You are trying to invoke something that is not function !!!")
 
         if 'product_id' in locals():

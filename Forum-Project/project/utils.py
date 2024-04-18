@@ -34,6 +34,9 @@ def get_current_settings(cur):
     settings = {name: value for name, value in cur.fetchall()}
     return settings
 
+def AssertDev(boolean, str):
+    if not boolean: raise exception.DevException(str)
+
 def Assert(*args):
     boolean = args[0]
     string = str(args[1])

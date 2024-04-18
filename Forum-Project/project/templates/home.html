@@ -7,10 +7,23 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.4.0/font/bootstrap-icons.min.css">
 </head>
 <body>
+    {% if 'home_message' in session %}
+        <div class="alert alert-success">
+            {{ session.pop('home_message') }}
+        </div>
+    {% endif %}
     <div class="container">
         <div class="float-right">
             <a href="/profile"><i class="bi bi-gear" style="font-size: 2rem; color: black;"></i></a>
-            <a href="/logs" class="btn btn-secondary">View Log Exceptions</a>
+            <a href="/cart" class="position-relative" style="margin-right: 15px;">
+                <i class="bi bi-cart3" style="font-size: 2rem; color: black;"></i>
+                {% if cart_count > 0 %}
+                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success">
+                    {{ cart_count }}
+                    <span class="visually-hidden">items in cart</span>
+                </span>
+                {% endif %}
+            </a>
         </div>
         <h1>Welcome to Our Application!</h1>
         <p>This is the home page of our user registration and authentication system.</p>
@@ -68,7 +81,11 @@
                         <p class="card-text">Цена: {{ product[2]}} лв.</p>
                         <p class="card-text">Количество: {{ product[3]}}</p>
                         <p class="card-text">Категория: {{ product[4]}}</p>
-                        <a href="#" class="btn btn-primary">Buy Now</a>
+                        <form action="/add_to_cart" method="post">
+                            <input type="hidden" name="product_id" value="{{ product[0] }}">
+                            <input type="number" name="quantity" value="1" min="1" max="{{ product[3] }}">
+                            <button type="submit" class="btn btn-primary">Add to Cart</button>
+                        </form>
                     </div>
                 </div>
             </div>
