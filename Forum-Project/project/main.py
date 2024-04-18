@@ -37,14 +37,6 @@ host = config.host
 app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 
-# def main:
-#     cb = getCommandByEndpoint()
-#     try
-#     cb()
-
-def assertIsMailInSession():
-    if not 'user_email' in session: raise exception.MethodNotAllowed("You tried to asscess resources, you don't have permission for")
-
 def assertIsProvidedMethodsTrue(*args):
     if len(args) == 2:
         if not request.method == 'GET' and not request.method == 'POST': raise exception.MethodNotAllowed("You tried to asscess resources, you don't have permission for")
@@ -276,7 +268,8 @@ def profile(conn, cur):
     return render_template('profile.html')
 
 def update_profile(conn, cur):
-    assertIsMailInSession()
+    if 'user_email' not in session:
+        return redirect('/login')
 
     first_name = request.form['first-name']
     last_name = request.form['last-name']
@@ -340,7 +333,8 @@ def update_profile(conn, cur):
     return redirect('/home')
 
 def delete_account(conn, cur):
-    assertIsMailInSession()
+    if 'user_email' not in session:
+        return redirect('/login')
 
     user_email = session['user_email']
 
@@ -488,7 +482,8 @@ def login_with_token(conn, cur):
     return redirect('/home')
 
 def update_captcha_settings(conn, cur):
-    assertIsMailInSession()
+    if 'user_email' not in session:
+        return redirect('/login')
 
     if request.method == 'GET':
         current_settings = utils.get_current_settings(cur)
@@ -516,7 +511,8 @@ def update_captcha_settings(conn, cur):
     return redirect('/home')
 
 def view_logs(conn, cur):
-    assertIsMailInSession()
+    if 'user_email' not in session:
+        return redirect('/login')
 
     cur.execute("SELECT * FROM exception_logs")
     log_exceptions = cur.fetchall()
