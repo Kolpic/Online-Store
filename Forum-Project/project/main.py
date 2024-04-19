@@ -1,6 +1,7 @@
 from flask import Flask, request, render_template, redirect, url_for, session, abort, Response
 from flask_mail import Mail, Message
 import psycopg2, os, re, secrets, psycopg2.extras, uuid
+import json
 import bcrypt
 import datetime, random
 from datetime import timedelta, datetime
@@ -615,6 +616,84 @@ def remove_from_cart_meth(conn, cur):
     session['cart_message'] = response
     return redirect('/cart')
 
+def confirm_purchase(conn, cur):
+    if 'user_email' not in session:
+        return redirect('/login')
+    if request.method == 'GET':
+        return render_template('purchase.html')
+
+    email = request.form['email']
+    first_name = request.form['first_name']
+    last_name = request.form['last_name']
+    town = request.form['town']
+    address = request.form['address']
+    phone = request.form['phone']
+
+    cur.execute("SELECT id FROM users WHERE email = %s", (session.get('user_email'),))
+    user_id = cur.fetchone()[0]
+
+    # Check fields
+    utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
+    utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
+    regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
+    utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
+    utils.AssertUser(len(phone) >= 10, "Phone number is not valid")
+
+    # Retrieve cart items for the user
+    cur.execute("""
+                SELECT c.cart_id FROM users AS u 
+                JOIN carts AS c ON u.id = c.user_id
+                WHERE u.id = %s
+                """, (user_id,))
+    cart_id = cur.fetchone()[0]
+
+    cur.execute("""
+                SELECT ci.product_id, p.name, ci.quantity, p.price FROM cart_itmes AS ci
+                JOIN products AS p ON ci.product_id = p.id
+                WHERE ci.cart_id = %s
+                """, (cart_id,))
+    cart_items = cur.fetchall()
+
+    # current_prices = {item['poroduct_id']: item['price'] for item in cart_items}
+    price_mismatch = False
+    for item in cart_items:
+        product_id, name, quantity, cart_price = item
+        cur.execute("SELECT price FROM products WHERE id = %s", (product_id,))
+        current_price = cur.fetchone()[0]
+        if current_price != cart_price:
+            # Price can be updated here
+            price_mismatch = True
+            break
+    utils.AssertUser(not price_mismatch, "The price on some of your product's in the cart has been changed, you can't make the purchase")
+    # Build JSON object of cart items if no mismatch
+    products_json = [{"product_id": item[0], "name": item[1], "quantity": item[2], "price": str(item[3])} for item in cart_items]
+
+    # First make order, then make shipping_details
+    cur.execute("INSERT INTO orders (user_id, status, product_details) VALUES (%s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", json.dumps(products_json)))
+    order_id = cur.fetchone()[0]
+
+    cur.execute("INSERT INTO shipping_details (order_id, email, first_name, last_name, town, address, phone) VALUES (%s, %s, %s, %s, %s, %s, %s)", (order_id, email, first_name, last_name, town, address, phone))
+    
+    conn.commit()
+    # When the purchase is made we empty the user cart 
+    cur.execute("SELECT cart_id FROM carts WHERE user_id = %s", (user_id,))
+    cart_id = cur.fetchone()[0]
+    cur.execute("DELETE FROM cart_itmes WHERE cart_id = %s", (cart_id,))
+
+    conn.commit()
+    cur.execute("SELECT * FROM shipping_details AS shd JOIN orders AS o ON shd.order_id=o.order_id WHERE o.order_id = %s", (order_id,))
+    shipping_details = cur.fetchall()
+    return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details)
+
+def finish_payment(conn, cur):
+    if 'user_email' not in session:
+        return redirect('/login')
+    
+    order_id = request.form['order_id']
+    card_number = request.form['card_number']
+    expiry_date = request.form['expiry_date']
+    cvv = request.form['cvv']
+
 @app.route('/favicon.ico')
 def favicon():
     return app.send_static_file('favicon.ico')
@@ -641,6 +720,8 @@ url_to_function_map = {
     '/add_to_cart': add_to_cart_meth,
     '/cart': cart,
     '/remove_from_cart': remove_from_cart_meth,
+    '/confirm_purchase': confirm_purchase,
+    '/finish_payment': finish_payment,
     '/momo': 'momo',
 }
 
