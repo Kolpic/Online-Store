@@ -122,7 +122,7 @@ def registration(conn, cur):
 
     if is_email_present_in_database != None:
         utils.AssertUser(not(is_email_present_in_database[0] and is_email_verified[0]), "There is already registration with this email")
-        utils.AssertUser(not(is_email_present_in_database[0] and not is_email_verified[0]), "Account was already registered and deleted with this email, type another email")
+        utils.AssertUser(not(is_email_present_in_database[0] and not is_email_verified[0]), "Account was already registered with this email, but it's not verified")
 
     cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", (first_name, last_name, email, hashed_password, verification_code))
     conn.commit()
@@ -338,9 +338,10 @@ def delete_account(conn, cur):
 
     user_email = session['user_email']
 
-    cur.execute("UPDATE users SET verification_status = false WHERE email = %s", (user_email,))
+    cur.execute("DELETE FROM users WHERE email = %s", (user_email,))
     conn.commit()
     session.clear()
+    session['login_message'] = 'You successful deleted your account'
     return redirect('/login')
 
 # 
@@ -425,7 +426,7 @@ def send_login_link(conn, cur):
 
     conn.commit()
 
-    login_link = f"http://127.0.0.1:5000/log?token={login_token}"
+    login_link = f"http://10.20.3.101:5000/log?token={login_token}"
     send_verification_link(email, login_link)
     session['login_message'] = 'A login link has been sent to your email.'
     return redirect('/login')

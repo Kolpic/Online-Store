@@ -28,7 +28,7 @@
                     {% for item in items %}
                         <tr>
                             <td>{{ item[0]}}</td>
-                            <td>{{ item[1] }}</td>
+                            <td>{{ item[1] }} {{"лв."}}</td>
                             <td>{{ item[2] }}</td>
                             <td>{{ (item[1] * item[2]) }}</td>
                             <td>
@@ -39,15 +39,15 @@
                             </td>
                         </tr>
                     {% endfor %}
+                    <tr>
+                        <td colspan="3" class="text-right"><strong>Total Sum:</strong></td>
+                        <td>{{ total_sum}}</td>
+                        <td></td>
+                    </tr>
                 </tbody>
             </table>
-            <div class="row justify-content-between align-items-center">
-                <div class="col-auto">
-                    <h3>Total Sum: {{ total_sum }} </h3>
-                </div>
-                <div class="col-auto">
-                    <button class="btn btn-success" onclick="location.href='/make_purchase'">Make Purchase</button>
-                </div>
+            <div class="text-right mb-3">
+                <button class="btn btn-success" onclick="location.href='/make_purchase'">Make Purchase</button>
             </div>
         {% else %}
             <div class="alert alert-info">Your cart is empty.</div>
