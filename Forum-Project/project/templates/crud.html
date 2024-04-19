@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Product Management</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container mt-3">
+        <h2>Product Management</h2>
+        <div class="mb-2">
+            <button onclick="location.href='/add_product_form'" class="btn btn-primary">Add New Product</button>
+            <button onclick="location.href='/download_products'" class="btn btn-info">Download as CSV</button>
+        </div>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Name</th>
+                    <th>Price</th>
+                    <th>Quantity</th>
+                    <th>Category</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                <tr>
+                    <td>{{ product[0]}}</td>
+                    <td>{{ product[1]}}</td>
+                    <td>{{ product[2]}}</td>
+                    <td>{{ product[3]}}</td>
+                    <td>{{ product[4]}}</td>
+                    <td>
+                        <button onclick="location.href='/edit_product/{{ product.id }}'" class="btn btn-secondary">Edit</button>
+                        <button onclick="if(confirm('Are you sure?')) location.href='/delete_product/{{ product.id }}'" class="btn btn-danger">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>

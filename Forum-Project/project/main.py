@@ -209,7 +209,7 @@ def home(conn, cur, page = 1):
     if not utils.is_authenticated():
         return redirect('/login')
     
-    products_per_page = 9
+    products_per_page = 3
     offset = (page - 1) * products_per_page
     
     sort_by = request.args.get('sort','id')
@@ -694,6 +694,11 @@ def finish_payment(conn, cur):
     expiry_date = request.form['expiry_date']
     cvv = request.form['cvv']
 
+def crud_inf(conn, cur):
+    cur.execute("SELECT * FROM products")
+    products = cur.fetchall()
+    return render_template('crud.html', products=products)
+
 @app.route('/favicon.ico')
 def favicon():
     return app.send_static_file('favicon.ico')
@@ -722,6 +727,7 @@ url_to_function_map = {
     '/remove_from_cart': remove_from_cart_meth,
     '/confirm_purchase': confirm_purchase,
     '/finish_payment': finish_payment,
+    '/crud': crud_inf,
     '/momo': 'momo',
 }
 
