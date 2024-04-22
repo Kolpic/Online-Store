@@ -614,27 +614,15 @@ def add_to_cart_meth(conn, cur):
 def cart(conn, cur):
     if 'user_email' not in session:
         return redirect('/login')
-    user_email = session.get('user_email')
-    cur.execute("SELECT id FROM users WHERE email = %s", (user_email,))
-    user_id = cur.fetchone()[0]
-    items = view_cart(conn, cur, user_id)
-    total_sum = sum(item[1] * item[2] for item in items)
-    return render_template('cart.html', items=items, total_sum=total_sum)
-
-def remove_from_cart_meth(conn, cur):
-    if 'user_email' not in session:
-        return redirect('/login')
-    item_id = request.form['item_id']
-    response = remove_from_cart(conn, cur, item_id)
-    session['cart_message'] = response
-    return redirect('/cart')
-
-def confirm_purchase(conn, cur):
-    if 'user_email' not in session:
-        return redirect('/login')
+    
     if request.method == 'GET':
-        return render_template('purchase.html')
-
+        user_email = session.get('user_email')
+        cur.execute("SELECT id FROM users WHERE email = %s", (user_email,))
+        user_id = cur.fetchone()[0]
+        items = view_cart(conn, cur, user_id)
+        total_sum = sum(item[1] * item[2] for item in items)
+        return render_template('cart.html', items=items, total_sum=total_sum)
+   
     email = request.form['email']
     first_name = request.form['first_name']
     last_name = request.form['last_name']
@@ -699,6 +687,14 @@ def confirm_purchase(conn, cur):
     shipping_details = cur.fetchall()
     return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details)
 
+def remove_from_cart_meth(conn, cur):
+    if 'user_email' not in session:
+        return redirect('/login')
+    item_id = request.form['item_id']
+    response = remove_from_cart(conn, cur, item_id)
+    session['cart_message'] = response
+    return redirect('/cart')
+
 def finish_payment(conn, cur):
     if 'user_email' not in session:
         return redirect('/login')
@@ -739,7 +735,7 @@ url_to_function_map = {
     '/add_to_cart': add_to_cart_meth,
     '/cart': cart,
     '/remove_from_cart': remove_from_cart_meth,
-    '/confirm_purchase': confirm_purchase,
+    # '/confirm_purchase': confirm_purchase,
     '/finish_payment': finish_payment,
     '/crud': crud_inf,
     '/momo': 'momo',
