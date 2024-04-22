@@ -8,16 +8,26 @@
 <body>
     <div class="container mt-3">
         <h2>Order Summary</h2>
-        <div>
-            {% for product in order_products %}
-            <p>
-                <strong>Product:</strong> {{ product[1]}}<br>
-                <strong>Price:</strong> {{ product[3]}}<br>
-                <strong>Quantity:</strong> {{ product[2]}}<br>
-                <strong>Total:</strong> {{ product[3] * product[2] }}
-            </p>
-            {% endfor %}
-        </div>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Product Name</th>
+                    <th>Quantity</th>
+                    <th class="text-right">Price (Per Item)</th>
+                    <th class="text-right">Total Price</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in order_products %}
+                    <tr>
+                        <td>{{ product[1]}}</td>
+                        <td>{{ product[2] }}</td>
+                        <td class="text-right">{{ product[3] }} {{"лв."}}</td>
+                        <td class="text-right">{{ (product[3] * product[2])}} {{"лв."}}</td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
         <div>
             <h4>Shipping Details</h4>
             <p>

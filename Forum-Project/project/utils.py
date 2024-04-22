@@ -34,6 +34,10 @@ def get_current_settings(cur):
     settings = {name: value for name, value in cur.fetchall()}
     return settings
 
+def getUserNamesAndEmail(conn, cur):
+    cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (session.get('user_email'),))
+    return cur.fetchone()
+
 def AssertDev(boolean, str):
     if not boolean: raise exception.DevException(str)
 

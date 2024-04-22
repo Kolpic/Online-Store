@@ -208,14 +208,22 @@ def login(conn, cur):
 def home(conn, cur, page = 1):
     if not utils.is_authenticated():
         return redirect('/login')
-    
-    products_per_page = 3
+
+    first_name, last_name, email__ = utils.getUserNamesAndEmail(conn, cur)
+
+    prodcuts_user_wants = request.args.get('products_per_page', 10)
+    if prodcuts_user_wants == '':
+        prodcuts_user_wants = 10
+    # utils.AssertUser(isinstance(prodcuts_user_wants, int), "You must enter a number in the \'Products per page\' form ")
+    products_per_page = int(prodcuts_user_wants)
     offset = (page - 1) * products_per_page
     
     sort_by = request.args.get('sort','id')
     sort_order = request.args.get('order', 'asc')
     product_name = request.args.get('product_name', '')
     product_category = request.args.get('product_category', '')
+    price_min = request.args.get('price_min', '')
+    pric_max = request.args.get('price_max', '')
 
     valid_sort_columns = {'price':'price', 'category':'category', 'name':'name'}
     sort_column = valid_sort_columns.get(sort_by, 'id')
@@ -223,33 +231,38 @@ def home(conn, cur, page = 1):
 
     name_filter = f" AND name ILIKE %s" if product_name else ''
     category_filter = f" AND category ILIKE %s" if product_category else ''
-
-    query = f"SELECT * FROM products WHERE TRUE{name_filter}{category_filter} ORDER BY {order_by_clause} LIMIT %s OFFSET %s"
-
+    price_filter = ""
     query_params = []
+
     if product_name:
         query_params.append(f"%{product_name}%")
     if product_category:
         query_params.append(f"%{product_category}%")
-    query_params.extend([products_per_page, offset])
+
+    if price_min.isdigit() and pric_max.isdigit():
+        price_filter = " AND price BETWEEN %s AND %s"
+        query_params.extend([price_min, pric_max])
+
+    query = f"SELECT * FROM products WHERE TRUE{name_filter}{category_filter}{price_filter} ORDER BY {order_by_clause} LIMIT %s OFFSET %s"
+    query_params.extend([products_per_page, (page - 1) * products_per_page])
 
     cur.execute(query,tuple(query_params))
-
     products = cur.fetchall()
 
-    count_query = f"SELECT COUNT(*) FROM products WHERE TRUE{name_filter}{category_filter}"
+    count_query = f"SELECT COUNT(*) FROM products WHERE TRUE{name_filter}{category_filter}{price_filter}"
     cur.execute(count_query, tuple(query_params[:-2]))
     total_products = cur.fetchone()[0]
     utils.AssertUser(total_products, 'No results with this filter')
     # total_pages = (total_products + products_per_page - 1)
-    total_pages = int(total_products / products_per_page) + 1
+    # total_pages = int(total_products / products_per_page) + 1
+    total_pages = (total_products // products_per_page) + (1 if total_products % products_per_page > 0 else 0)
 
     cur.execute("SELECT id FROM users WHERE email = %s", (session.get('user_email'),))
     user_id = cur.fetchone()[0]
 
     cart_count = get_cart_items_count(conn, cur, user_id)
 
-    return render_template('home.html', products=products, page=page, total_pages=total_pages, sort_by=sort_by, sort_order=sort_order, product_name=product_name, product_category=product_category, cart_count=cart_count)
+    return render_template('home.html', first_name=first_name, last_name=last_name, email = email__,products=products, page=page, total_pages=total_pages, sort_by=sort_by, sort_order=sort_order, product_name=product_name, product_category=product_category, cart_count=cart_count)
 
 def logout(conn, cur):
     session.pop('user_email', None) 
@@ -427,7 +440,7 @@ def send_login_link(conn, cur):
 
     conn.commit()
 
-    login_link = f"http://10.20.3.101:5000/log?token={login_token}"
+    login_link = f"http://10.20.3.101:5001/log?token={login_token}"
     send_verification_link(email, login_link)
     session['login_message'] = 'A login link has been sent to your email.'
     return redirect('/login')
@@ -631,13 +644,14 @@ def confirm_purchase(conn, cur):
 
     cur.execute("SELECT id FROM users WHERE email = %s", (session.get('user_email'),))
     user_id = cur.fetchone()[0]
+    regexx = r'^\+359 \d{9}$'
 
     # Check fields
     utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
     utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
     regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
     utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
-    utils.AssertUser(len(phone) >= 10, "Phone number is not valid")
+    utils.AssertUser(re.fullmatch(regexx, phone), "Phone number is not valid")
 
     # Retrieve cart items for the user
     cur.execute("""

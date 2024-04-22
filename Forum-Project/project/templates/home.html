@@ -13,28 +13,7 @@
         </div>
     {% endif %}
     <div class="container">
-        <div class="float-right">
-            <a href="/profile"><i class="bi bi-gear" style="font-size: 2rem; color: black;"></i></a>
-            <a href="/cart" class="position-relative" style="margin-right: 15px;">
-                <i class="bi bi-cart3" style="font-size: 2rem; color: black;"></i>
-                {% if cart_count > 0 %}
-                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success">
-                    {{ cart_count }}
-                    <span class="visually-hidden">items in cart</span>
-                </span>
-                {% endif %}
-            </a>
-        </div>
-        <h1>Welcome to Our Application!</h1>
-        <p>This is the home page of our user registration and authentication system.</p>
-        <div class="nav">
-            {% if 'user_email' in session %}
-                <a href="/logout" class="btn btn-danger">Logout</a>
-            {% else %}
-                <a href="/registration" class="btn btn-info">Register</a>
-                <a href="/login" class="btn btn-primary">Login</a>
-            {% endif %}
-        </div>
+        {% include '_header.html' %}
         <br>
         <form method="post" action="/add_product" enctype="multipart/form-data">
             <input type="text" name="name" placeholder="Product Name" required>
@@ -62,12 +41,28 @@
                 </select>
             </div>
             <div class="form-group">
+                <label for="product_category">Category:</label>
+                <select name="product_category" id="product_category" onchange="this.form.submit()">
+                    <option value=""{% if product_category == '' %}selected{% endif %}>Всички</option>
+                    <option value="Осветителни тела" {% if product_category == 'Осветителни тела' %}selected{% endif %}>Осветителни тела</option>
+                    <option value="Разклонители" {% if product_category == 'Разклонители' %}selected{% endif %}>Разклонители</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="price_min">Price from:</label>
+                <input type="text" id="price_min" name="price_min" value="{{ price_min }}" placeholder="Min Price">
+            </div>
+            <div class="form-group">
+                <label for="price_max">Price to:</label>
+                <input type="text" id="price_max" name="price_max" value="{{ price_max }}" placeholder="Max Price">
+            </div>
+            <div class="form-group">
                 <label for="product_name">Product Name:</label>
                 <input type="text" id="product_name" name="product_name" value="{{ product_name }}" onchange="this.form.submit()">
             </div>
             <div class="form-group">
-                <label for="product_category">Category:</label>
-                <input type="text" id="product_category" name="product_category" value="{{ product_category }}" onchange="this.form.submit()">
+                <label for="products_per_page">Products per page:</label>
+                <input type="text" id="products_per_page" name="products_per_page" value="{{ products_per_page }}" onchange="validateAndSubmit(this)">
             </div>
         </form>
         <br>
@@ -79,7 +74,7 @@
                     <div class="card-body">
                         <h5 class="card-title">{{ product[1]}}</h5>
                         <p class="card-text">Цена: {{ product[2]}} лв.</p>
-                        <p class="card-text">Количество: {{ product[3]}}</p>
+                        <p class="card-text">{{ 'Налично в момента' if product[3] > 0 else 'Изкупено, нямаме в наличност' }}</p>
                         <p class="card-text">Категория: {{ product[4]}}</p>
                         <form action="/add_to_cart" method="post">
                             <input type="hidden" name="product_id" value="{{ product[0] }}">
@@ -108,4 +103,16 @@
         </nav>
     </div>
 </body>
+<script>
+    function validateAndSubmit(input) {
+        let value = parseInt(input.value, 10);
+        if (/^\d+$/.test(value) && value >= 1 ) {
+            input.value = parseInt(value, 10);
+            input.form.submit();
+        } else {
+            alert('Please enter a valid number and bigger than zero');
+            input.value = ''; 
+        }
+    }
+    </script>
 </html>
