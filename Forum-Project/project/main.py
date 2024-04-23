@@ -34,7 +34,7 @@ database = config.database
 user = config.user
 password = config.password
 host = config.host
- 
+
 app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 
@@ -145,8 +145,13 @@ def verify(conn, cur):
     assertIsProvidedMethodsTrue('GET','POST')
 
     if request.method == 'GET':
-        return render_template('verify.html')
+        form_data = session.get('form_data_stack', []).pop() if 'form_data_stack' in session and len(session['form_data_stack']) > 0 else None
+        if form_data:
+            session.modified = True
+        return render_template('verify.html', form_data=form_data)
 
+    form_data = request.form.to_dict()
+    session['form_data'] = form_data
     email = request.form['email']
     verification_code = request.form['verification_code']
 
@@ -178,8 +183,13 @@ def login(conn, cur):
     assertIsProvidedMethodsTrue('GET','POST')
 
     if request.method == 'GET':
-        return render_template('login.html')
+        form_data = session.get('form_data_stack', []).pop() if 'form_data_stack' in session and len(session['form_data_stack']) > 0 else None
+        if form_data:
+            session.modified = True
+        return render_template('login.html', form_data=form_data)
 
+    form_data = request.form.to_dict()
+    session['form_data'] = form_data
     email = request.form['email']
     password_ = request.form['password']
 
@@ -295,15 +305,15 @@ def update_profile(conn, cur):
     updated_fields = []
 
     if first_name:
-        if len(first_name) < 3 or len(first_name) > 50:
-            session['settings_error'] = 'First name must be between 3 and 50 symbols'
+        if len(first_name) < 3 or len(first_name) > 50 or first_name.isdigit():
+            session['settings_error'] = 'First name must be between 3 and 50 letters'
             return redirect('/profile')
         query_string += "first_name = %s, "
         fields_list.append(first_name)
         updated_fields.append("first name")
     if last_name:
-        if len(last_name) < 3 or len(last_name) > 50:
-            session['settings_error'] = 'Last name must be between 3 and 50 symbols'
+        if len(last_name) < 3 or len(last_name) > 50 or last_name.isdigit():
+            session['settings_error'] = 'Last name must be between 3 and 50 letters'
             return redirect('/profile')
         query_string += "last_name = %s, "
         fields_list.append(last_name)

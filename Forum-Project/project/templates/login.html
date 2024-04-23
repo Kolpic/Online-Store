@@ -19,10 +19,10 @@
     {% endif %}
     <div class="container">
         <h2>Login</h2>
-        <form method="POST" action="/login">
+        <form id="myForm" method="POST" action="/login">
             <div class="form-group">
                 <label for="email">Email</label>
-                <input type="email" class="form-control" id="email" name="email" required>
+                <input type="email" class="form-control" id="email" name="email" value="{{form_data['email'] if form_data else ''}}" required>
             </div>
             <div class="form-group">
                 <label for="password">Password</label>
@@ -42,5 +42,12 @@
         </div>
     </div>
 </body>
+<script>
+    window.addEventListener("pageshow", function (event) {
+      if (event.persisted) {
+        document.getElementById("myForm").reset();
+      }
+    });
+  </script>
 </html>
 

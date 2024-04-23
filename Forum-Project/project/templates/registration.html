@@ -6,7 +6,6 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 </head>
 <body>
-    <!-- When the user has a error in the registration form the custom exception is shown throw here -->
     {% if 'registration_error' in session %}
         <div class="alert alert-danger">
             {{ session.pop('registration_error') }}
@@ -14,7 +13,7 @@
     {% endif %}
     <div class="container">
         <h2>Register</h2>
-        <form method="POST" action="/registration">
+        <form  id="myForm" method="POST" action="/registration">
             <div class="form-group">
                 <label for="first_name">First Name</label>
                 <input type="text" class="form-control" id="first_name" name="first_name" value="{{form_data['first_name'] if form_data else ''}}" required>
@@ -44,4 +43,11 @@
         </form>
     </div>
 </body>
+<script>
+    window.addEventListener("pageshow", function (event) {
+      if (event.persisted) {
+        document.getElementById("myForm").reset();
+      }
+    });
+  </script>
 </html>
