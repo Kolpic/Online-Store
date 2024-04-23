@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, session, abort, Response
+from flask import Flask, request, render_template, redirect, url_for, session, abort, Response, jsonify
 from flask_mail import Mail, Message
 import psycopg2, os, re, secrets, psycopg2.extras, uuid
 import json
@@ -44,6 +44,16 @@ def assertIsProvidedMethodsTrue(*args):
     else:
         method_type = str(args[0]).upper()
         if not request.method == method_type: raise exception.MethodNotAllowed("You tried to asscess resources, you don't have permission for")
+
+def refresh_captcha(conn, cur):
+    first_captcha_number = random.randint(0, 100)
+    second_captcha_number = random.randint(0, 100)
+    cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING id", 
+                (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
+    conn.commit()
+    captcha_id = cur.fetchone()[0]
+    session["captcha_id"] = captcha_id
+    return jsonify({'first': first_captcha_number, 'second': second_captcha_number, 'captcha_id': captcha_id})
 
 def registration(conn, cur):
     user_ip = request.remote_addr
@@ -726,6 +736,7 @@ def favicon():
 url_to_function_map = {
     '/': registration,
     '/registration': registration,
+    '/refresh_captcha': refresh_captcha,
     '/verify': verify,
     '/login': login,
     '/home': home,

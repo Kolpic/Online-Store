@@ -36,13 +36,30 @@
             </div>
             <div class="form-group">
                 <label for="captcha">Captcha</label>
-                <p>Solve the following: {{ captcha['first'] }} + {{ captcha['second'] }} = ?</p>
+                <p>Solve the following: <span id="first_number">{{ captcha['first'] }}</span> + <span id="second_number">{{ captcha['second'] }}</span> = ?</p>
+                <button type="button" id="refresh_captcha" class="btn btn-info">Refresh Captcha</button>
+                <br>
+                <br>
                 <input type="text" class="form-control" id="captcha" name="captcha" placeholder="Enter the sum" required>
             </div>
             <button type="submit" class="btn btn-primary">Register</button>
         </form>
     </div>
 </body>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script>
+$(document).ready(function() { // Ensures that the entire page is fully loaded
+    $('#refresh_captcha').click(function() { // Binds a click event to the element with the ID 'refresh_captcha'
+        $.getJSON('/refresh_captcha', function(data) { // Makes an AJAX [get] request to the server at the endpoint /refresh_captcha. This function expects the server to return JSON data.
+            $('#first_number').text(data.first); //  Finds an element with the ID first_number and sets its text content to data.first.
+            $('#second_number').text(data.second);
+            $('#captcha_id').val(data.captcha_id);
+        }).fail(function() {
+            console.error('Error: Unable to fetch new captcha.');
+        });;
+    });
+});
+</script>
 <script>
     window.addEventListener("pageshow", function (event) {
       if (event.persisted) {
