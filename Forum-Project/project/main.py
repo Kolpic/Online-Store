@@ -517,8 +517,8 @@ def login_with_token(conn, cur):
     return redirect('/home')
 
 def update_captcha_settings(conn, cur):
-    if 'user_email' not in session:
-        return redirect('/login')
+    if 'staff_username' not in session:
+        return redirect('/login_staff')
 
     if request.method == 'GET':
         current_settings = utils.get_current_settings(cur)
@@ -546,8 +546,8 @@ def update_captcha_settings(conn, cur):
     return redirect('/home')
 
 def view_logs(conn, cur):
-    if 'user_email' not in session:
-        return redirect('/login')
+    if 'staff_username' not in session:
+        return redirect('/staff_login')
 
     cur.execute("SELECT * FROM exception_logs")
     log_exceptions = cur.fetchall()
@@ -725,9 +725,36 @@ def finish_payment(conn, cur):
     cvv = request.form['cvv']
 
 def crud_inf(conn, cur):
+    if 'staff_username' not in session:
+        return redirect('/staff_login')
+    
     cur.execute("SELECT * FROM products")
     products = cur.fetchall()
     return render_template('crud.html', products=products)
+
+def staff_login(conn, cur):
+    if request.method == 'GET':
+        return render_template('staff_login.html')
+    
+    username = request.form['username']
+    password = request.form['password']
+
+    cur.execute("SELECT username, password FROM staff WHERE username = %s AND password = %s", (username, password))
+    utils.AssertUser(cur.fetchone(), "There is no registration with this staff username and password")
+
+    session['staff_username'] = username
+    return redirect('/staff_portal')
+
+def staff_portal(conn, cur):
+    if 'staff_username' not in session:
+        return redirect('/staff_login')
+
+    if request.method == 'GET':
+        return render_template('staff_portal.html')
+    
+def logout_staff(conn, cur):
+    session.pop('staff_username', None) 
+    return redirect('/staff_login')
 
 @app.route('/favicon.ico')
 def favicon():
@@ -759,6 +786,9 @@ url_to_function_map = {
     # '/confirm_purchase': confirm_purchase,
     '/finish_payment': finish_payment,
     '/crud': crud_inf,
+    '/staff_login': staff_login,
+    '/staff_portal': staff_portal,
+    '/logout_staff': logout_staff,
     '/momo': 'momo',
 }
 

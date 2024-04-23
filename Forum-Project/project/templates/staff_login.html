@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Staff Login</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body>
+    <!-- Displaying messages -->
+    {% if 'login_error' in session %}
+        <div class="alert alert-danger">
+            {{ session.pop('login_error') }}
+        </div>
+    {% endif %}
+    {% if 'login_message' in session %}
+        <div class="alert alert-success">
+            {{ session.pop('login_message') }}
+        </div>
+    {% endif %}
+    <div class="container">
+        <h2>Staff Login</h2>
+        <form id="staffForm" method="POST" action="/staff_login">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" class="form-control" id="username" name="username" required>
+            </div>
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" class="form-control" id="password" name="password" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Log In</button>
+        </form>
+    </div>
+</body>
+<script>
+    window.addEventListener("pageshow", function (event) {
+        var form = document.getElementById("staffForm");
+        if (event.persisted) {
+            form.reset();
+        }
+    });
+</script>
+</html>
