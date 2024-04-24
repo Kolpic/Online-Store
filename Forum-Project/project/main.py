@@ -2,6 +2,7 @@ from flask import Flask, request, render_template, redirect, url_for, session, a
 from flask_mail import Mail, Message
 import psycopg2, os, re, secrets, psycopg2.extras, uuid
 import json
+import csv
 import bcrypt
 import datetime, random
 from datetime import timedelta, datetime
@@ -231,9 +232,9 @@ def home(conn, cur, page = 1):
 
     first_name, last_name, email__ = utils.getUserNamesAndEmail(conn, cur)
 
-    prodcuts_user_wants = request.args.get('products_per_page', 10)
+    prodcuts_user_wants = request.args.get('products_per_page', 100)
     if prodcuts_user_wants == '':
-        prodcuts_user_wants = 10
+        prodcuts_user_wants = 100
     # utils.AssertUser(isinstance(prodcuts_user_wants, int), "You must enter a number in the \'Products per page\' form ")
     products_per_page = int(prodcuts_user_wants)
     offset = (page - 1) * products_per_page
@@ -626,7 +627,7 @@ def get_cart_items_count(conn, cur, user_id):
     return len(items)
 
 def remove_from_cart(conn, cur, item_id):
-    cur.execute("DELETE FROM cart_itmes where product_id = %s", (item_id))
+    cur.execute("DELETE FROM cart_itmes where product_id = %s", (item_id,))
     conn.commit()
     return "You successfully deleted item."
 
@@ -750,7 +751,7 @@ def crud_inf(conn, cur):
         session['crud_error'] = "You must fill both min and max price, not only max price"
         return redirect('/crud')
 
-    query = "SELECT * FROM products"
+    query = "SELECT * FROM products LIMIT 100"
     conditions = []
     query_params = []
 
@@ -824,6 +825,19 @@ def delete_product(conn, cur, product_id):
     session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
     return redirect('/crud')
 
+def add_products_from_file(conn, cur, string_path):
+    with open(string_path, mode='r', encoding='utf-8') as file:
+        reader = csv.DictReader(file)
+
+        for row in reader:
+            name = row['name']
+            price = float(row['price'])
+            quantity = int(row['quantity'])
+            category = row['category']
+            
+            cur.execute("INSERT INTO products (name, price, quantity, category) VALUES (%s, %s, %s, %s)", (name, price, quantity, category))
+            conn.commit()
+            
 @app.route('/favicon.ico')
 def favicon():
     return app.send_static_file('favicon.ico')
@@ -859,6 +873,7 @@ url_to_function_map = {
     '/logout_staff': logout_staff,
     '/edit_product/<int:product_id>': edit_product,
     '/delete_product/<int:product_id>': delete_product,
+    '/add_products_from_file/<str:path>': add_products_from_file,
     '/momo': 'momo',
 }
 
@@ -881,6 +896,11 @@ def handle_request(**kwargs):
         elif len(path_parts) > 2 and path_parts[1] == 'delete_product' and path_parts[2].isdigit():
             product_id = int(path_parts[2])
             funtion_to_call = delete_product
+        elif len(path_parts) > 2 and path_parts[1] == 'add_products_from_file':
+            # |home|galin|Desktop|projects|GitHub|Forum-Project|large_products.csv
+            # /add_products_from_file/%7Chome%7Cgalin%7CDesktop%7Cprojects%7CGitHub%7CForum-Project%7Clarge_products.csv
+            string_path = path_parts[2].replace("|","/")
+            funtion_to_call = add_products_from_file
         else:
             funtion_to_call = url_to_function_map.get(request_path)
         # funtion_to_call = url_to_function_map.get(request_path)
@@ -895,6 +915,8 @@ def handle_request(**kwargs):
             return funtion_to_call(conn, cur, product_id=product_id)
         elif 'page' in locals():
             return funtion_to_call(conn, cur, page=page)
+        elif 'string_path' in locals():
+            return funtion_to_call(conn, cur, string_path=string_path)
         else:           
             return funtion_to_call(conn, cur)
     except Exception as message:

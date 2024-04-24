@@ -81,18 +81,46 @@
         <nav>
             <ul class="pagination">
                 <li class="page-item {% if page <= 1 %}disabled{% endif %}">
-                    <a class="page-link" href="{% if page > 1 %}/home/{{page - 1}}{% else %}#{% endif %}">Previous</a>
+                    <a class="page-link" href="{% if page > 1 %}/home/{{page - 1}}{% else %}#{% endif %}" aria-label="Previous">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
                 </li>
-                {% for i in range(1, total_pages + 1) %}
+                {% set window = 5 %}
+                {% set start_page = page - window if page - window > 0 else 1 %}
+                {% set end_page = page + window if page + window <= total_pages else total_pages %}
+                
+                {% if start_page > 1 %}
+                <li class="page-item">
+                    <a class="page-link" href="/home/1">1</a>
+                </li>
+                {% if start_page > 2 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+                {% endif %}
+        
+                {% for i in range(start_page, end_page + 1) %}
                 <li class="page-item {% if i == page %}active{% endif %}">
                     <a class="page-link" href="/home/{{i}}?sort={{ sort_by }}&order={{ sort_order }}">{{ i }}</a>
                 </li>
                 {% endfor %}
+                
+                {% if end_page < total_pages %}
+                {% if end_page < total_pages - 1 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+                <li class="page-item">
+                    <a class="page-link" href="/home/{{total_pages}}">{{total_pages}}</a>
+                </li>
+                {% endif %}
+        
                 <li class="page-item {% if page >= total_pages %}disabled{% endif %}">
-                    <a class="page-link" href="{% if page < total_pages %}/home/{{page + 1}}{% else %}#{% endif %}">Next</a>
+                    <a class="page-link" href="{% if page < total_pages %}/home/{{page + 1}}{% else %}#{% endif %}" aria-label="Next">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
                 </li>
             </ul>
         </nav>
+        
     </div>
 </body>
 <script>
