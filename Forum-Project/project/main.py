@@ -491,7 +491,7 @@ def login_with_token(conn, cur):
 
     token_data = cur.fetchone()
 
-    if not token_data or token_data[1] < datetime.datetime.now():
+    if not token_data or token_data[1] < datetime.now():
         session['registration_error'] = 'Invalid login token'
         return redirect('/login')
     
@@ -573,6 +573,8 @@ def add_product(conn, cur):
     image = request.files['image'].read()
 
     utils.AssertUser(name and price and quantity and category and image, "You must add information in every field.")
+    utils.AssertUser(isinstance(float(price), float), "Price is not a number")
+    utils.AssertUser(isinstance(int(quantity), int), "Quantity is not a number")
 
     cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image))
     conn.commit()
@@ -737,9 +739,32 @@ def crud_inf(conn, cur):
     if 'staff_username' not in session:
         return redirect('/staff_login')
     
-    cur.execute("SELECT * FROM products")
+    sort_by = request.args.get('sort', '')
+    price_min = request.args.get('price_min', '', type=float)
+    price_max = request.args.get('price_max', '', type=float)
+
+    if price_min != '' and price_max == '':
+        session['crud_error'] = "You must fill both min and max price, not only min price"
+        return redirect('/crud')
+    if price_min == '' and price_max != '':
+        session['crud_error'] = "You must fill both min and max price, not only max price"
+        return redirect('/crud')
+
+    query = "SELECT * FROM products"
+    conditions = []
+    query_params = []
+
+    if price_min != '' and price_max != '':
+        conditions.append("price BETWEEN %s AND %s")
+        query_params.extend([price_min, price_max])
+        query += " WHERE " + " AND ".join(conditions)
+    
+    if sort_by != '':
+        query += " ORDER BY " + sort_by
+
+    cur.execute(query, query_params)
     products = cur.fetchall()
-    return render_template('crud.html', products=products)
+    return render_template('crud.html', products=products, sort_by=sort_by, price_min=price_min or '', price_max=price_max or '')
 
 def staff_login(conn, cur):
     if request.method == 'GET':
