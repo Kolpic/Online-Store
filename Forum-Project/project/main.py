@@ -560,15 +560,24 @@ def log_exception(conn, cur, exception_type, message ,email = None):
     conn.commit()
 
 def add_product(conn, cur):
+    if session['staff_username'] not in session:
+        redirect('/staff_login')
+
+    if request.method == 'GET':
+        return render_template('add_product_staff.html')
+
     name = request.form['name']
     price = request.form['price']
     quantity = request.form['quantity']
     category = request.form['category']
     image = request.files['image'].read()
 
+    utils.AssertUser(name and price and quantity and category and image, "You must add information in every field.")
+
     cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image))
     conn.commit()
-    return redirect('/home')
+    session['crud_message'] = "Item was added successful"
+    return redirect('/crud')
 
 def serve_image(conn, cur, product_id):
     cur.execute("SELECT image FROM products WHERE id = %s", (product_id,))
@@ -756,6 +765,40 @@ def logout_staff(conn, cur):
     session.pop('staff_username', None) 
     return redirect('/staff_login')
 
+def edit_product(conn, cur, product_id):
+    if 'staff_username' not in session:
+        return redirect('/staff_login')
+    
+    if request.method == 'GET':
+        cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
+        product = cur.fetchone()
+        utils.AssertUser(product, "Invalid product")
+        return render_template('edit_product.html', product=product, product_id=product_id)
+    
+    name = request.form['name']
+    price_ = request.form['price']
+    quantity_ = request.form['quantity']
+    category = request.form['category']
+
+    utils.AssertUser(name and price_ and quantity_ and category, "All fields must be filled")
+
+    price = float(price_)
+    quantity = int(quantity_)
+
+    cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s WHERE id = %s", (name, price, quantity, category, product_id))
+    conn.commit()
+    session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
+    return redirect('/crud')
+
+def delete_product(conn, cur, product_id):
+    if 'staff_username' not in session:
+        return redirect('/staff_login')
+    
+    cur.execute("UPDATE products SET quantity = 0 WHERE id = %s", (product_id,))
+    conn.commit()
+    session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
+    return redirect('/crud')
+
 @app.route('/favicon.ico')
 def favicon():
     return app.send_static_file('favicon.ico')
@@ -789,6 +832,8 @@ url_to_function_map = {
     '/staff_login': staff_login,
     '/staff_portal': staff_portal,
     '/logout_staff': logout_staff,
+    '/edit_product/<int:product_id>': edit_product,
+    '/delete_product/<int:product_id>': delete_product,
     '/momo': 'momo',
 }
 
@@ -805,6 +850,12 @@ def handle_request(**kwargs):
         elif len(path_parts) > 2 and path_parts[1] == 'home' and path_parts[2].isdigit():
             page = int(path_parts[2])
             funtion_to_call = home
+        elif len(path_parts) > 2 and path_parts[1] == 'edit_product' and path_parts[2].isdigit():
+            product_id = int(path_parts[2])
+            funtion_to_call = edit_product
+        elif len(path_parts) > 2 and path_parts[1] == 'delete_product' and path_parts[2].isdigit():
+            product_id = int(path_parts[2])
+            funtion_to_call = delete_product
         else:
             funtion_to_call = url_to_function_map.get(request_path)
         # funtion_to_call = url_to_function_map.get(request_path)

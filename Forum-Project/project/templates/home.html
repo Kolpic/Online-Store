@@ -15,14 +15,6 @@
     <div class="container">
         {% include '_header.html' %}
         <br>
-        <form method="post" action="/add_product" enctype="multipart/form-data">
-            <input type="text" name="name" placeholder="Product Name" required>
-            <input type="text" name="price" placeholder="Price" required>
-            <input type="text" name="quantity" placeholder="Quantity" required>
-            <input type="text" name="category" placeholder="Category" required>
-            <input type="file" name="image" accept="image/*" required>
-            <button type="submit">Add Product</button>
-        </form>
         <br>
         <form method="get" action="/home/{{ page }}">
             <div class="form-group">

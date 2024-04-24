@@ -6,10 +6,15 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 </head>
 <body>
+    {% if 'crud_message' in session %}
+        <div class="alert alert-success">
+            {{ session.pop('crud_message') }}
+        </div>
+    {% endif %}
     <div class="container mt-3">
         <h2>Product Management</h2>
         <div class="mb-2">
-            <button onclick="location.href='/add_product_form'" class="btn btn-primary">Add New Product</button>
+            <button onclick="location.href='/add_product'" class="btn btn-primary">Add New Product</button>
             <button onclick="location.href='/download_products'" class="btn btn-info">Download as CSV</button>
         </div>
         <table class="table">
@@ -32,8 +37,8 @@
                     <td>{{ product[3]}}</td>
                     <td>{{ product[4]}}</td>
                     <td>
-                        <button onclick="location.href='/edit_product/{{ product.id }}'" class="btn btn-secondary">Edit</button>
-                        <button onclick="if(confirm('Are you sure?')) location.href='/delete_product/{{ product.id }}'" class="btn btn-danger">Delete</button>
+                        <button onclick="location.href='/edit_product/{{ product[0] }}'" class="btn btn-secondary">Edit</button>
+                        <button onclick="if(confirm('Are you sure?')) location.href='/delete_product/{{ product[0] }}'" class="btn btn-danger">Delete</button>
                     </td>
                 </tr>
                 {% endfor %}

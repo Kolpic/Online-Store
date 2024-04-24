@@ -6,7 +6,6 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 </head>
 <body>
-    <!-- Displaying messages -->
     {% if 'login_error' in session %}
         <div class="alert alert-danger">
             {{ session.pop('login_error') }}
