@@ -40,7 +40,7 @@ user = config.user
 password = config.password
 host = config.host
 
-ALLOWED_EXTENSIONS = {'jpg'}
+ALLOWED_EXTENSIONS = {'jpg', 'jpeg'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # Maximum file size in bytes (e.g., 10MB)
 
 app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
@@ -877,9 +877,16 @@ def add_products_from_file(conn, cur, string_path):
             price = float(row['price'])
             quantity = int(row['quantity'])
             category = row['category']
+            image_filename = row['image']
             
-            cur.execute("INSERT INTO products (name, price, quantity, category) VALUES (%s, %s, %s, %s)", (name, price, quantity, category))
+            image_path = os.path.join(os.path.dirname(string_path), image_filename)
+            
+            with open(image_path, 'rb') as img_file:
+                image_data = img_file.read()
+
+            cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image_data))
             conn.commit()
+            return "Imprted"
             
 @app.route('/favicon.ico')
 def favicon():
@@ -940,7 +947,7 @@ def handle_request(**kwargs):
             product_id = int(path_parts[2])
             funtion_to_call = delete_product
         elif len(path_parts) > 2 and path_parts[1] == 'add_products_from_file':
-            # |home|galin|Desktop|projects|GitHub|Forum-Project|large_products.csv
+            # |home|galin|Desktop|projects|GitHub|Forum-Project|images|large_productsV2.csv
             # /add_products_from_file/%7Chome%7Cgalin%7CDesktop%7Cprojects%7CGitHub%7CForum-Project%7Clarge_products.csv
             string_path = path_parts[2].replace("|","/")
             funtion_to_call = add_products_from_file
