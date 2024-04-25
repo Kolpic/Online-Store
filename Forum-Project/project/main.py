@@ -1,8 +1,12 @@
 from flask import Flask, request, render_template, redirect, url_for, session, abort, Response, jsonify
 from flask_mail import Mail, Message
 import psycopg2, os, re, secrets, psycopg2.extras, uuid
+from psycopg2 import sql
 import json
+from werkzeug.utils import secure_filename
 import csv
+from PIL import Image
+import io
 import bcrypt
 import datetime, random
 from datetime import timedelta, datetime
@@ -35,6 +39,9 @@ database = config.database
 user = config.user
 password = config.password
 host = config.host
+
+ALLOWED_EXTENSIONS = {'jpg'}
+MAX_FILE_SIZE = 10 * 1024 * 1024  # Maximum file size in bytes (e.g., 10MB)
 
 app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
@@ -550,10 +557,25 @@ def view_logs(conn, cur):
     if 'staff_username' not in session:
         return redirect('/staff_login')
 
-    cur.execute("SELECT * FROM exception_logs")
+    sort_by = request.args.get('sort','time')
+    sort_order = request.args.get('order','asc')
+
+    valid_sort_columns = {'time'}
+    valid_sort_orders = {'asc', 'desc'}
+
+    if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
+        sort_by = 'time'
+        sort_order = 'asc'
+
+    query = "SELECT * FROM exception_logs"
+
+    if sort_by and sort_order:
+        query += f" ORDER BY {sort_by} {sort_order}"
+
+    cur.execute(query)
     log_exceptions = cur.fetchall()
 
-    return render_template('logs.html', log_exceptions = log_exceptions)
+    return render_template('logs.html', log_exceptions = log_exceptions, sort_by=sort_by, sort_order=sort_order)
 
 def log_exception(conn, cur, exception_type, message ,email = None):
 
@@ -561,8 +583,8 @@ def log_exception(conn, cur, exception_type, message ,email = None):
     conn.commit()
 
 def add_product(conn, cur):
-    if session['staff_username'] not in session:
-        redirect('/staff_login')
+    if 'staff_username' not in session:
+        return redirect('/staff_login')
 
     if request.method == 'GET':
         return render_template('add_product_staff.html')
@@ -571,16 +593,31 @@ def add_product(conn, cur):
     price = request.form['price']
     quantity = request.form['quantity']
     category = request.form['category']
-    image = request.files['image'].read()
+    image = request.files['image']
 
     utils.AssertUser(name and price and quantity and category and image, "You must add information in every field.")
     utils.AssertUser(isinstance(float(price), float), "Price is not a number")
     utils.AssertUser(isinstance(int(quantity), int), "Quantity is not a number")
+    
+    if image and allowed_file(image.filename):
+        filename = secure_filename(image.filename)
+        image_data = image.stream
+        image_ = validate_image_size(image_data)
 
-    cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image))
+    cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image_))
     conn.commit()
     session['crud_message'] = "Item was added successful"
     return redirect('/crud')
+
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def validate_image_size(image_stream):
+    image_stream.seek(0, io.SEEK_END) # Seek to the end of the file
+    file_size = image_stream.tell() # Get the current position, which is the file size
+    image_stream.seek(0) # Reset the stream position to the start
+    utils.AssertUser(file_size < MAX_FILE_SIZE, "The image file size must not exceed 10MB.")
+    return image_stream.read()
 
 def serve_image(conn, cur, product_id):
     cur.execute("SELECT image FROM products WHERE id = %s", (product_id,))
@@ -740,32 +777,38 @@ def crud_inf(conn, cur):
     if 'staff_username' not in session:
         return redirect('/staff_login')
     
-    sort_by = request.args.get('sort', '')
-    price_min = request.args.get('price_min', '', type=float)
-    price_max = request.args.get('price_max', '', type=float)
+    sort_by = request.args.get('sort', 'id')
+    sort_order = request.args.get('order', 'asc')
+    price_min = request.args.get('price_min', None, type=float)
+    price_max = request.args.get('price_max', None, type=float)
 
-    if price_min != '' and price_max == '':
-        session['crud_error'] = "You must fill both min and max price, not only min price"
-        return redirect('/crud')
-    if price_min == '' and price_max != '':
-        session['crud_error'] = "You must fill both min and max price, not only max price"
-        return redirect('/crud')
+    valid_sort_columns = {'id', 'name', 'price', 'quantity', 'category'}
+    valid_sort_orders = {'asc', 'desc'}
 
-    query = "SELECT * FROM products LIMIT 100"
+    if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
+        sort_by = 'id'
+        sort_order = 'asc'
+    
+    base_query = sql.SQL("SELECT * FROM products")
     conditions = []
     query_params = []
 
-    if price_min != '' and price_max != '':
-        conditions.append("price BETWEEN %s AND %s")
+    if price_min is not None and price_max is not None:
+        conditions.append(sql.SQL("price BETWEEN %s AND %s"))
         query_params.extend([price_min, price_max])
-        query += " WHERE " + " AND ".join(conditions)
     
-    if sort_by != '':
-        query += " ORDER BY " + sort_by
+    if conditions:
+        base_query = base_query + sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
+    
+    base_query = base_query + sql.SQL(" ORDER BY ") + sql.Identifier(sort_by) + sql.SQL(f" {sort_order}")
+    
+    base_query = base_query + sql.SQL(" LIMIT 100")
 
-    cur.execute(query, query_params)
+    cur.execute(base_query.as_string(conn), query_params)
     products = cur.fetchall()
-    return render_template('crud.html', products=products, sort_by=sort_by, price_min=price_min or '', price_max=price_max or '')
+
+    return render_template('crud.html', products=products, sort_by=sort_by, sort_order=sort_order, price_min=price_min or '', price_max=price_max or '')
+
 
 def staff_login(conn, cur):
     if request.method == 'GET':

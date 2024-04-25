@@ -5,9 +5,40 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Update Settings</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <style>
+        .container {
+            margin-top: 50px;
+        }
+        .list-group-item {
+            font-size: 1.2rem; 
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav {
+            display: flex;
+            justify-content: flex-end;
+        }
+        .nav .btn {
+            margin-left: 10px;
+        }
+    </style>
 </head>
 <body>
     <div class="container mt-5">
+        <div class="header">
+            <h1 class="mb-4">Welcome, {{ session['staff_username'] }}</h1>
+            <div class="nav">
+                {% if 'staff_username' in session %}
+                    <a href="/logout_staff" class="btn btn-danger">Logout</a>
+                {% else %}
+                    <a href="/registration" class="btn btn-info">Register</a>
+                    <a href="/login" class="btn btn-primary">Login</a>
+                {% endif %}
+            </div>
+        </div>
         <h2>Update Application Settings</h2>
         <form action="/update_captcha_settings" method="post">
             <div class="form-group">

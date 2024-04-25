@@ -4,9 +4,40 @@
     <meta charset="UTF-8">
     <title>Edit Product</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <style>
+        .container {
+            margin-top: 50px;
+        }
+        .list-group-item {
+            font-size: 1.2rem; 
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav {
+            display: flex;
+            justify-content: flex-end;
+        }
+        .nav .btn {
+            margin-left: 10px;
+        }
+    </style>
 </head>
 <body>
     <div class="container mt-3">
+        <div class="header">
+            <h1 class="mb-4">Welcome, {{ session['staff_username'] }}</h1>
+            <div class="nav">
+                {% if 'staff_username' in session %}
+                    <a href="/logout_staff" class="btn btn-danger">Logout</a>
+                {% else %}
+                    <a href="/registration" class="btn btn-info">Register</a>
+                    <a href="/login" class="btn btn-primary">Login</a>
+                {% endif %}
+            </div>
+        </div>
         <h2>Edit Product</h2>
         <form method="POST" action="/edit_product/{{ product_id }}">
             <div class="form-group">
