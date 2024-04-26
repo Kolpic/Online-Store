@@ -8,7 +8,7 @@ import csv
 from PIL import Image
 import io
 import bcrypt
-import datetime, random
+import datetime, random, calendar
 from datetime import timedelta, datetime
 # import os
 from project import config, exception
@@ -42,6 +42,7 @@ host = config.host
 
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # Maximum file size in bytes (e.g., 10MB)
+CURRENT_URL = ""
 
 app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
@@ -148,7 +149,7 @@ def registration(conn, cur):
 
     send_verification_email(email, verification_code)
 
-    session['verification_message'] = 'Successful registration'
+    session['verification_message'] = 'Successful registration, we send you a verification code on the provided email'
     return redirect("/verify")
 
 def send_verification_email(user_email, verification_code):
@@ -239,12 +240,15 @@ def home(conn, cur, page = 1):
 
     first_name, last_name, email__ = utils.getUserNamesAndEmail(conn, cur)
 
-    prodcuts_user_wants = request.args.get('products_per_page', 100)
+    prodcuts_user_wants = request.args.get('products_per_page', 50)
     if prodcuts_user_wants == '':
-        prodcuts_user_wants = 100
+        prodcuts_user_wants = 50
     # utils.AssertUser(isinstance(prodcuts_user_wants, int), "You must enter a number in the \'Products per page\' form ")
     products_per_page = int(prodcuts_user_wants)
     offset = (page - 1) * products_per_page
+
+    global CURRENT_URL
+    CURRENT_URL = request.url
     
     sort_by = request.args.get('sort','id')
     sort_order = request.args.get('order', 'asc')
@@ -678,7 +682,7 @@ def add_to_cart_meth(conn, cur):
     quantity = request.form.get('quantity', 1)
     response = add_to_cart(conn, cur, user_id, product_id, quantity)
     session['home_message'] = response
-    return redirect('/home')
+    return redirect(CURRENT_URL)
 
 def cart(conn, cur):
     if 'user_email' not in session:
@@ -887,7 +891,40 @@ def add_products_from_file(conn, cur, string_path):
             cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image_data))
             conn.commit()
             return "Imprted"
-            
+        
+def report(conn, cur):
+    if 'staff_username' not in session:
+        return redirect('/staff_login')
+    
+    if request.method == 'GET':
+        return render_template('report.html')
+    
+    date_from = request.form.get('date_from')
+    date_to = request.form.get('date_to')
+    group_by = request.form.get('group_by')
+
+    utils.AssertUser(date_from or date_to or group_by, "You have to select a date from, date to and how to be grouped")
+
+    # date = request.form.get('report_date')
+    # utils.AssertUser(date != '', "You have to select date")
+
+    query = """
+    SELECT DATE_TRUNC(%s, order_date) AS period, 
+           orders.order_id, 
+           CONCAT(users.first_name, ' ', users.last_name) AS buyer_name,
+           SUM((product_details->>'price')::numeric) AS total_sales, 
+           orders.status
+    FROM orders
+    JOIN users ON orders.user_id = users.id
+    WHERE order_date BETWEEN %s AND %s
+    GROUP BY period, orders.order_id, buyer_name, orders.status
+    ORDER BY period;
+    """
+
+    cur.execute(query, (group_by, date_from, date_to))
+    report = cur.fetchall()
+    return render_template('report.html', report=report)  
+ 
 @app.route('/favicon.ico')
 def favicon():
     return app.send_static_file('favicon.ico')
@@ -924,6 +961,7 @@ url_to_function_map = {
     '/edit_product/<int:product_id>': edit_product,
     '/delete_product/<int:product_id>': delete_product,
     '/add_products_from_file/<str:path>': add_products_from_file,
+    '/reports': report,
     '/momo': 'momo',
 }
 

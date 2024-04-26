@@ -7,12 +7,12 @@
 </head>
 <body>
     {% if 'verification_error' in session %}
-        <div class="alert alert-danger">
+        <div class="alert alert-danger" id="homeAlert">
             {{ session.pop('verification_error') }}
         </div>
     {% endif %}
     {% if 'verification_message' in session %}
-        <div class="alert alert-success">
+        <div class="alert alert-success" id="homeAlert">
             {{ session.pop('verification_message') }}
         </div>
     {% endif %}
@@ -42,6 +42,16 @@
     </div>
 </body>
 <script>
+
+     window.onload = function() {
+        setTimeout(function() {
+            let homeAlert = document.getElementById('homeAlert');
+            if (homeAlert) {
+                homeAlert.style.display = 'none';
+            }
+        }, 3000);
+    };
+
     window.addEventListener("pageshow", function (event) {
       if (event.persisted) {
         document.getElementById("myForm").reset();

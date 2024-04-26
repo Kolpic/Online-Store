@@ -7,7 +7,7 @@
 </head>
 <body>
     {% if 'cart_message' in session %}
-        <div class="alert alert-success">
+        <div class="alert alert-success" id="homeAlert">
             {{ session.pop('cart_message') }}
         </div>
     {% endif %}
@@ -17,6 +17,7 @@
             <table class="table">
                 <thead>
                     <tr>
+                        <th>Product Id</th>
                         <th>Product Name</th>
                         <th>Quantity</th>
                         <th class="text-right">Price (Per Item)</th>
@@ -27,7 +28,8 @@
                 <tbody>
                     {% for item in items %}
                         <tr>
-                            <td>{{ item[0]}}</td>
+                            <td>{{ item[3] }} </td>
+                            <td>{{ item[0] }}</td>
                             <td>{{ item[2] }}</td>
                             <td class="text-right">{{ item[1] }} {{"лв."}}</td>
                             <td class="text-right">{{ (item[1] * item[2])}} {{"лв."}}</td>
@@ -76,7 +78,18 @@
         </form>
         {% else %}
             <div class="alert alert-info">Your cart is empty.</div>
+            <button onclick="location.href='/home'" class="btn btn-primary">Go back to home page</button>
         {% endif %}
     </div>
 </body>
+<script>
+       window.onload = function() {
+        setTimeout(function() {
+            let homeAlert = document.getElementById('homeAlert');
+            if (homeAlert) {
+                homeAlert.style.display = 'none';
+            }
+        }, 3000);
+    };
+</script>
 </html>

@@ -8,12 +8,12 @@
 <body>
     <!-- Displaying message -->
     {% if 'login_error' in session %}
-        <div class="alert alert-danger">
+        <div class="alert alert-danger" id="homeAlert">
             {{ session.pop('login_error') }}
         </div>
     {% endif %}
     {% if 'login_message' in session %}
-        <div class="alert alert-success">
+        <div class="alert alert-success" id="homeAlert">
             {{ session.pop('login_message') }}
         </div>
     {% endif %}
@@ -42,5 +42,15 @@
         </div>
     </div>
 </body>
+<script>
+    window.onload = function() {
+     setTimeout(function() {
+         let homeAlert = document.getElementById('homeAlert');
+         if (homeAlert) {
+             homeAlert.style.display = 'none';
+         }
+     }, 3000);
+ };
+</script>
 </html>
 

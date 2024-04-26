@@ -7,7 +7,7 @@
 </head>
 <body>
     {% if 'settings_error' in session %}
-        <div class="alert alert-danger">
+        <div class="alert alert-danger" id="homeAlert">
             {{ session.pop('settings_error') }}
         </div>
     {% endif %}
@@ -47,4 +47,14 @@
     </div>
     </div>
 </body>
+<script>
+    window.onload = function() {
+     setTimeout(function() {
+         let homeAlert = document.getElementById('homeAlert');
+         if (homeAlert) {
+             homeAlert.style.display = 'none';
+         }
+     }, 3000);
+ };
+</script>
 </html>
