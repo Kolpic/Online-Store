@@ -22,6 +22,12 @@
                 <option value="month">Month</option>
                 <option value="year">Year</option>
             </select>
+
+            <label for="status">Status:</label>
+            <select id="status" name="status">
+                <option value="Ready for Paying">Ready for Paying</option>
+                <option value="Payed">Payed</option>
+            </select>
         
             <button type="submit">Generate Report</button>
         </form>
@@ -34,7 +40,7 @@
                         <th>Date</th>
                         <th>Order ID</th>
                         <th>Name of Buyer</th>
-                        <th>Sum</th>
+                        <th>Total Price</th>
                         <th>Order Status</th>
                     </tr>
                 </thead>
@@ -51,6 +57,9 @@
                 </tbody>
             </table>
         </div>
+        {% else %}
+        <br>
+        <h2>No records with this filters</h2>
         {% endif %}
     </div>
     <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>

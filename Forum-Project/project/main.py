@@ -893,8 +893,8 @@ def add_products_from_file(conn, cur, string_path):
             return "Imprted"
         
 def report(conn, cur):
-    if 'staff_username' not in session:
-        return redirect('/staff_login')
+    # if 'staff_username' not in session:
+    #     return redirect('/staff_login')
     
     if request.method == 'GET':
         return render_template('report.html')
@@ -902,6 +902,7 @@ def report(conn, cur):
     date_from = request.form.get('date_from')
     date_to = request.form.get('date_to')
     group_by = request.form.get('group_by')
+    status = request.form.get('status')
 
     utils.AssertUser(date_from or date_to or group_by, "You have to select a date from, date to and how to be grouped")
 
@@ -909,19 +910,40 @@ def report(conn, cur):
     # utils.AssertUser(date != '', "You have to select date")
 
     query = """
-    SELECT DATE_TRUNC(%s, order_date) AS period, 
-           orders.order_id, 
-           CONCAT(users.first_name, ' ', users.last_name) AS buyer_name,
-           SUM((product_details->>'price')::numeric) AS total_sales, 
-           orders.status
-    FROM orders
-    JOIN users ON orders.user_id = users.id
-    WHERE order_date BETWEEN %s AND %s
-    GROUP BY period, orders.order_id, buyer_name, orders.status
-    ORDER BY period;
+    WITH OrderSums AS (
+    SELECT
+        o.order_id,
+        o.order_date,
+        u.first_name || ' ' || u.last_name AS buyer_name,
+        o.status,
+        SUM((product_detail->>'price')::numeric * (product_detail->>'quantity')::numeric) AS order_sum
+    FROM
+        orders o
+    JOIN
+        users u ON o.user_id = u.id,
+        json_array_elements(o.product_details) AS product_detail
+    WHERE
+        o.order_date BETWEEN %s AND %s
+    GROUP BY
+        o.order_id, o.order_date, buyer_name, o.status
+    )
+SELECT
+    date_trunc(%s, order_date) AS period,
+    array_agg(order_id) AS order_ids,
+    array_agg(buyer_name) AS names_of_buyers,
+    SUM(order_sum) AS total_sum,
+    array_agg(status) AS order_statuses
+FROM
+    OrderSums
+WHERE 
+    status = %s
+GROUP BY
+    period
+ORDER BY
+    period;
     """
 
-    cur.execute(query, (group_by, date_from, date_to))
+    cur.execute(query, (date_from, date_to, group_by, status))
     report = cur.fetchall()
     return render_template('report.html', report=report)  
  
