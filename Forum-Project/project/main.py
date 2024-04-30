@@ -893,8 +893,8 @@ def add_products_from_file(conn, cur, string_path):
             return "Imprted"
         
 def report(conn, cur):
-    # if 'staff_username' not in session:
-    #     return redirect('/staff_login')
+    if 'staff_username' not in session:
+        return redirect('/staff_login')
     
     if request.method == 'GET':
         return render_template('report.html')
@@ -947,6 +947,23 @@ ORDER BY
     report = cur.fetchall()
     return render_template('report.html', report=report)  
  
+def update_cart_quantity(conn, cur):
+    item_id = request.form['item_id']
+    quantity = request.form['quantity']
+
+    utils.AssertUser(isinstance(int(quantity), int), "You must enter number")
+
+    quantity_ = int(quantity)
+
+    cur.execute("SELECT price FROM products WHERE id = %s", (item_id,))
+    price = cur.fetchone()[0]
+    new_total = price * quantity_
+
+    cur.execute("UPDATE cart_itmes SET quantity = %s WHERE product_id = %s", (quantity_, item_id))
+    conn.commit()
+
+    return jsonify(success=True, new_total=new_total)
+
 @app.route('/favicon.ico')
 def favicon():
     return app.send_static_file('favicon.ico')
@@ -984,6 +1001,7 @@ url_to_function_map = {
     '/delete_product/<int:product_id>': delete_product,
     '/add_products_from_file/<str:path>': add_products_from_file,
     '/reports': report,
+    '/update_cart_quantity': update_cart_quantity,
     '/momo': 'momo',
 }
 
