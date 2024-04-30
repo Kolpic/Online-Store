@@ -48,10 +48,10 @@
                     {% for row in report %}
                     <tr>
                         <td>{{ row[0] }}</td>
-                        <td>{{ row[1] }}</td>
-                        <td>{{ row[2] }}</td>
+                        <td>{{ "-" if row[1]|length > 2 else row[1]|join(', ') }}</td>
+                        <td>{{ "-" if row[2]|length > 2 else row[2]|join(', ') }}</td>
                         <td>{{ row[3] }}</td>
-                        <td>{{ row[4] }}</td>
+                        <td>{{ row[4][0] }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

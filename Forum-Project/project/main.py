@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, session, abort, Response, jsonify
+from flask import Flask, request, render_template, redirect, url_for, session, abort, Response, jsonify, flash
 from flask_mail import Mail, Message
 import psycopg2, os, re, secrets, psycopg2.extras, uuid
 from psycopg2 import sql
@@ -772,10 +772,26 @@ def finish_payment(conn, cur):
     if 'user_email' not in session:
         return redirect('/login')
     
-    order_id = request.form['order_id']
-    card_number = request.form['card_number']
-    expiry_date = request.form['expiry_date']
-    cvv = request.form['cvv']
+    order_id = request.form.get('order_id')
+    utils.AssertUser(isinstance(float(request.form.get('payment_amount')), float), "You must enter a number")
+    payment_amount = float(request.form.get('payment_amount'))
+
+    cur.execute("SELECT SUM((product_detail->>'price')::numeric * (product_detail->>'quantity')::numeric) FROM orders, json_array_elements(product_details) AS product_detail WHERE order_id = %s", (order_id,))
+    total = cur.fetchone()[0]
+    
+    cur.execute("SELECT status FROM orders WHERE order_id= %s", (order_id,))
+    order_status = cur.fetchone()[0]
+    utils.AssertUser(order_status == 'Ready for Paying', "This order is not ready for payment or has already been payed")
+
+    if payment_amount < total:
+        session['payment_error'] = "You entered amout, which is less than the order you have"
+        return redirect('/finish_payment')
+    formatted_datetime = datetime.now().strftime('%Y-%m-%d')
+    cur.execute("UPDATE orders SET status = 'Payed', order_date = %s WHERE order_id = %s", (formatted_datetime, order_id))
+    conn.commit()
+    session['home_message'] = "You payed the order successful"
+    return redirect('/home')
+
 
 def crud_inf(conn, cur):
     if 'staff_username' not in session:
@@ -890,7 +906,7 @@ def add_products_from_file(conn, cur, string_path):
 
             cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image_data))
             conn.commit()
-            return "Imprted"
+        return "Imprted"
         
 def report(conn, cur):
     if 'staff_username' not in session:
@@ -913,7 +929,7 @@ def report(conn, cur):
     WITH OrderSums AS (
     SELECT
         o.order_id,
-        o.order_date,
+        DATE(o.order_date) AS order_date,
         u.first_name || ' ' || u.last_name AS buyer_name,
         o.status,
         SUM((product_detail->>'price')::numeric * (product_detail->>'quantity')::numeric) AS order_sum
@@ -928,7 +944,7 @@ def report(conn, cur):
         o.order_id, o.order_date, buyer_name, o.status
     )
 SELECT
-    date_trunc(%s, order_date) AS period,
+    DATE(date_trunc(%s, order_date)) AS period,
     array_agg(order_id) AS order_ids,
     array_agg(buyer_name) AS names_of_buyers,
     SUM(order_sum) AS total_sum,
@@ -1025,6 +1041,7 @@ def handle_request(**kwargs):
             product_id = int(path_parts[2])
             funtion_to_call = delete_product
         elif len(path_parts) > 2 and path_parts[1] == 'add_products_from_file':
+            # |C:|Added Programs|Telebid Pro|Forum-Project|images|large_productsV2.csv
             # |home|galin|Desktop|projects|GitHub|Forum-Project|images|large_productsV2.csv
             # /add_products_from_file/%7Chome%7Cgalin%7CDesktop%7Cprojects%7CGitHub%7CForum-Project%7Clarge_products.csv
             string_path = path_parts[2].replace("|","/")
