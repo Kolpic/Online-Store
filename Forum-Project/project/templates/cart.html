@@ -11,6 +11,11 @@
             {{ session.pop('cart_message') }}
         </div>
     {% endif %}
+    {% if 'cart_error' in session %}
+        <div class="alert alert-danger" id="homeAlert">
+            {{ session.pop('cart_error') }}
+        </div>
+    {% endif %}
     <div class="container mt-5">
         <h2>Your Cart</h2>
         {% if items %}
@@ -129,7 +134,7 @@ $(document).ready(function() {
             if (homeAlert) {
                 homeAlert.style.display = 'none';
             }
-        }, 3000);
+        }, 10000);
     };
 </script>
 </html>

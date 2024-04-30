@@ -729,6 +729,16 @@ def cart(conn, cur):
                 """, (cart_id,))
     cart_items = cur.fetchall()
 
+    cur.execute("SELECT quantity FROM products WHERE id = %s", (cart_items[0][0],))
+    quantity_db = cur.fetchone()[0]
+
+    for item in cart_items:
+        product_id_, name, quantity, price = item
+        if quantity > quantity_db:
+            session['cart_error'] = "We don't have " + str(quantity) + " from product: " + str(name) + " in our store. You can purchase less or to remove the product from your cart"
+            return redirect('/cart')
+        cur.execute("UPDATE products SET quantity = quantity - %s WHERE id = %s", (quantity, product_id_))
+
     # current_prices = {item['poroduct_id']: item['price'] for item in cart_items}
     price_mismatch = False
     for item in cart_items:
