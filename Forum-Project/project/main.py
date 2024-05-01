@@ -694,18 +694,21 @@ def cart(conn, cur):
         user_id = cur.fetchone()[0]
         items = view_cart(conn, cur, user_id)
         total_sum = sum(item[1] * item[2] for item in items)
-        return render_template('cart.html', items=items, total_sum=total_sum)
+        cur.execute("SELECT * FROM country_codes")
+        country_codes = cur.fetchall()
+        return render_template('cart.html', items=items, total_sum=total_sum, country_codes=country_codes)
    
-    email = request.form['email']
-    first_name = request.form['first_name']
-    last_name = request.form['last_name']
-    town = request.form['town']
-    address = request.form['address']
-    phone = request.form['phone']
+    email = request.form['email'].strip()
+    first_name = request.form['first_name'].strip()
+    last_name = request.form['last_name'].strip()
+    town = request.form['town'].strip()
+    address = request.form['address'].strip()
+    country_code = request.form['country_code']
+    phone = request.form['phone'].strip()
 
     cur.execute("SELECT id FROM users WHERE email = %s", (session.get('user_email'),))
     user_id = cur.fetchone()[0]
-    regexx = r'^\+359 \d{9}$'
+    regexx = r'^\d{7,15}$'
 
     # Check fields
     utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
@@ -732,6 +735,7 @@ def cart(conn, cur):
     cur.execute("SELECT quantity FROM products WHERE id = %s", (cart_items[0][0],))
     quantity_db = cur.fetchone()[0]
 
+    # Check and change quantity 
     for item in cart_items:
         product_id_, name, quantity, price = item
         if quantity > quantity_db:
@@ -757,7 +761,9 @@ def cart(conn, cur):
     cur.execute("INSERT INTO orders (user_id, status, product_details) VALUES (%s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", json.dumps(products_json)))
     order_id = cur.fetchone()[0]
 
-    cur.execute("INSERT INTO shipping_details (order_id, email, first_name, last_name, town, address, phone) VALUES (%s, %s, %s, %s, %s, %s, %s)", (order_id, email, first_name, last_name, town, address, phone))
+    cur.execute("SELECT id FROM country_codes WHERE code = %s", (country_code,))
+    country_code_id = cur.fetchone()[0]
+    cur.execute("INSERT INTO shipping_details (order_id, email, first_name, last_name, town, address, phone, country_code_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (order_id, email, first_name, last_name, town, address, phone, country_code_id))
     
     conn.commit()
     # When the purchase is made we empty the user cart 
