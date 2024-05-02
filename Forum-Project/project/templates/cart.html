@@ -41,7 +41,6 @@
                         <td class="text-right" id="price-per-item-{{ item[3] }}">{{ item[1] }} {{"лв."}}</td>
                         <td class="text-right"><span id="total-{{ item[3] }}">{{ (item[1] * item[2]) }}</span> {{"лв."}}</td>
                         <td>
-                            <button type="button" class="btn btn-info btn-sm update-cart" data-item-id="{{ item[3] }}">Update</button>
                             <form action="/remove_from_cart" method="post" style="display:inline;">
                                 <input type="hidden" name="item_id" value="{{ item[3] }}">
                                 <button type="submit" class="btn btn-danger btn-sm">Remove</button>
@@ -60,33 +59,33 @@
         <form action="/cart" method="post">
             <div class="form-group">
                 <label for="email">Email Address:</label>
-                <input type="email" id="email" name="email" class="form-control" required>
+                <input type="email" id="email" name="email" class="form-control" value="{{form_data['email'] if form_data else ''}}" required>
             </div>
             <div class="form-group">
                 <label for="first_name">First Name:</label>
-                <input type="text" id="first_name" name="first_name" class="form-control" required>
+                <input type="text" id="first_name" name="first_name" class="form-control" value="{{form_data['first_name'] if form_data else ''}}" required>
             </div>
             <div class="form-group">
                 <label for="last_name">Last Name:</label>
-                <input type="text" id="last_name" name="last_name" class="form-control" required>
+                <input type="text" id="last_name" name="last_name" class="form-control" value="{{form_data['last_name'] if form_data else ''}}" required>
             </div>
             <div class="form-group">
                 <label for="town">Town:</label>
-                <input type="text" id="town" name="town" class="form-control" required>
+                <input type="text" id="town" name="town" class="form-control" value="{{form_data['town'] if form_data else ''}}" required>
             </div>
             <div class="form-group">
                 <label for="address">Address for Shipping:</label>
-                <input type="text" id="address" name="address" class="form-control" required>
+                <input type="text" id="address" name="address" class="form-control" value="{{form_data['address'] if form_data else ''}}" required>
             </div>
             <div class="form-group">
                 <label for="phone">Phone Number:</label>
                 <div class="input-group">
-                    <select class="custom-select" id="country_code" name="country_code" required>
+                    <select class="custom-select" id="country_code" name="country_code" value="{{form_data['country_code'] if form_data else ''}}" required>
                         {% for code in country_codes %}
                             <option value="{{ code[2] }}">{{ code[1] }} ({{ code[2] }})</option>
                         {% endfor %}
                     </select>
-                    <input type="tel" class="form-control" id="phone" name="phone" placeholder="Enter phone number" required>
+                    <input type="tel" class="form-control" id="phone" name="phone" placeholder="Enter phone number" value="{{form_data['phone'] if form_data else ''}}" required>
                 </div>
             </div>
             <button type="submit" class="btn btn-primary">Proceed to Payment</button>
@@ -100,48 +99,52 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 <script>
 $(document).ready(function() {
-    $('.update-cart').click(function() { // This line sets up an event listener for a click event on any element with the class update-cart. 
+    $('.quantity').change(function() { // This attaches the event listener to the quantity inputs.
         const itemId = $(this).data('item-id');
-        const newQuantity = parseFloat($(`.quantity[data-item-id=${itemId}]`).val());
-        const oldQuantity = parseFloat($(`.quantity[data-item-id=${itemId}]`).data('old-quantity') || 0);
+        const inputField = $(this);
+        const newQuantity = parseFloat($(this).val());
+        const oldQuantity = parseFloat($(this).data('old-quantity') || 0);
 
-        $.ajax({
-            url: '/update_cart_quantity',
-            method: 'POST',
-            data: {
-                item_id: itemId,
-                quantity: newQuantity
-            },
-            success: function(response) { // If the server successfully processes the request, this function will be called with the server's response.
-                console.log('AJAX response:', response);
-                if (response.success) {
-                    const pricePerItemText = $(`#price-per-item-${itemId}`).text();
-                    const pricePerItem = parseFloat(pricePerItemText.replace(/[^\d.-]/g, ''));
-                    const newLineTotal = newQuantity * pricePerItem;
-                    $(`#total-${itemId}`).text(newLineTotal.toFixed(2)); // updates the item's total price in the table on the webpage.
+        if (newQuantity !== oldQuantity) { // Only make the AJAX call if the quantity has actually changed.
+            $.ajax({
+                url: '/update_cart_quantity',
+                method: 'POST',
+                data: {
+                    item_id: itemId,
+                    quantity: newQuantity
+                },
+                success: function(response) {
+                    console.log('AJAX response:', response);
+                    if (response.success) {
+                        const pricePerItemText = $(`#price-per-item-${itemId}`).text();
+                        const pricePerItem = parseFloat(pricePerItemText.replace(/[^\d.-]/g, ''));
+                        const newLineTotal = newQuantity * pricePerItem;
+                        $(`#total-${itemId}`).text(newLineTotal.toFixed(2));
 
-                    const difference = (newQuantity - oldQuantity) * pricePerItem;
-                    const totalSumText = $('#total-sum').text();
-                    let totalSum = parseFloat(totalSumText.replace(/[^\d.-]/g, ''));
-                    totalSum += difference;
-                    $('#total-sum').text(totalSum.toFixed(2) + ' лв.'); // The total sum is then adjusted by the difference, and the DOM is updated with the new total sum.
+                        const difference = (newQuantity - oldQuantity) * pricePerItem;
+                        const totalSumText = $('#total-sum').text();
+                        let totalSum = parseFloat(totalSumText.replace(/[^\d.-]/g, ''));
+                        totalSum += difference;
+                        $('#total-sum').text(totalSum.toFixed(2) + ' лв.');
 
-                    $(`.quantity[data-item-id=${itemId}]`).data('old-quantity', newQuantity);// Sets old quantity with the updated quantity (which is the new old quantitiy)
-                } else {
-                    alert('Failed to update cart. Please try again!');
+                        $(`.quantity[data-item-id=${itemId}]`).data('old-quantity', newQuantity); // Update the old quantity data attribute.
+                    } else {
+                        alert('Failed to update cart. Please try again! (Quantity can\'t be zero or below)');
+                        inputField.val(oldQuantity);
+                    }
                 }
-            }
-        });
+            });
+        }
     });
 });
 
-       window.onload = function() {
-        setTimeout(function() {
-            let homeAlert = document.getElementById('homeAlert');
-            if (homeAlert) {
-                homeAlert.style.display = 'none';
-            }
-        }, 10000);
-    };
+window.onload = function() {
+    setTimeout(function() {
+        let homeAlert = document.getElementById('homeAlert');
+        if (homeAlert) {
+            homeAlert.style.display = 'none';
+        }
+    }, 10000);
+};
 </script>
 </html>

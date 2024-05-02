@@ -37,6 +37,10 @@
                     </tr>
                 {% endfor %}
             </tbody>
+            <tr>
+                <td colspan="3" class="text-right"><strong>Total Sum:</strong></td>
+                <td class="text-right">{{ total_sum }} {{"лв."}}</td>
+            </tr>
         </table>
         <div>
             <h4>Shipping Details</h4>
@@ -67,7 +71,7 @@
          if (homeAlert) {
              homeAlert.style.display = 'none';
          }
-     }, 3000);
+     }, 5000);
  };
 </script>
 </html>

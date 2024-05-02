@@ -238,6 +238,9 @@ def home(conn, cur, page = 1):
     if not utils.is_authenticated():
         return redirect('/login')
 
+    cur.execute("SELECT DISTINCT(category) FROM products")
+    categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
+
     first_name, last_name, email__ = utils.getUserNamesAndEmail(conn, cur)
 
     prodcuts_user_wants = request.args.get('products_per_page', 50)
@@ -294,7 +297,7 @@ def home(conn, cur, page = 1):
 
     cart_count = get_cart_items_count(conn, cur, user_id)
 
-    return render_template('home.html', first_name=first_name, last_name=last_name, email = email__,products=products, page=page, total_pages=total_pages, sort_by=sort_by, sort_order=sort_order, product_name=product_name, product_category=product_category, cart_count=cart_count)
+    return render_template('home.html', first_name=first_name, last_name=last_name, email = email__,products=products, page=page, total_pages=total_pages, sort_by=sort_by, sort_order=sort_order, product_name=product_name, product_category=product_category, cart_count=cart_count, categories=categories)
 
 def logout(conn, cur):
     session.pop('user_email', None) 
@@ -591,7 +594,9 @@ def add_product(conn, cur):
         return redirect('/staff_login')
 
     if request.method == 'GET':
-        return render_template('add_product_staff.html')
+        cur.execute("SELECT DISTINCT(category) FROM products")
+        categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
+        return render_template('add_product_staff.html', categories=categories)
 
     name = request.form['name']
     price = request.form['price']
@@ -689,6 +694,9 @@ def cart(conn, cur):
         return redirect('/login')
     
     if request.method == 'GET':
+        form_data = session.get('form_data_stack', []).pop() if 'form_data_stack' in session and len(session['form_data_stack']) > 0 else None
+        if form_data:
+            session.modified = True
         user_email = session.get('user_email')
         cur.execute("SELECT id FROM users WHERE email = %s", (user_email,))
         user_id = cur.fetchone()[0]
@@ -696,8 +704,10 @@ def cart(conn, cur):
         total_sum = sum(item[1] * item[2] for item in items)
         cur.execute("SELECT * FROM country_codes")
         country_codes = cur.fetchall()
-        return render_template('cart.html', items=items, total_sum=total_sum, country_codes=country_codes)
+        return render_template('cart.html', items=items, total_sum=total_sum, country_codes=country_codes, form_data=form_data)
    
+    form_data = request.form.to_dict()
+    session['form_data'] = form_data
     email = request.form['email'].strip()
     first_name = request.form['first_name'].strip()
     last_name = request.form['last_name'].strip()
@@ -740,6 +750,7 @@ def cart(conn, cur):
         product_id_, name, quantity, price = item
         if quantity > quantity_db:
             session['cart_error'] = "We don't have " + str(quantity) + " from product: " + str(name) + " in our store. You can purchase less or to remove the product from your cart"
+            utils.add_form_data_in_session(session.get('form_data'))
             return redirect('/cart')
         cur.execute("UPDATE products SET quantity = quantity - %s WHERE id = %s", (quantity, product_id_))
 
@@ -758,7 +769,8 @@ def cart(conn, cur):
     products_json = [{"product_id": item[0], "name": item[1], "quantity": item[2], "price": str(item[3])} for item in cart_items]
 
     # First make order, then make shipping_details
-    cur.execute("INSERT INTO orders (user_id, status, product_details) VALUES (%s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", json.dumps(products_json)))
+    formatted_datetime = datetime.now().strftime('%Y-%m-%d')
+    cur.execute("INSERT INTO orders (user_id, status, product_details, order_date) VALUES (%s, %s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", json.dumps(products_json), formatted_datetime))
     order_id = cur.fetchone()[0]
 
     cur.execute("SELECT id FROM country_codes WHERE code = %s", (country_code,))
@@ -766,6 +778,11 @@ def cart(conn, cur):
     cur.execute("INSERT INTO shipping_details (order_id, email, first_name, last_name, town, address, phone, country_code_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (order_id, email, first_name, last_name, town, address, phone, country_code_id))
     
     conn.commit()
+
+    # Total sum to be passed to the payment.html
+    items = view_cart(conn, cur, user_id)
+    total_sum = sum(item[1] * item[2] for item in items)
+
     # When the purchase is made we empty the user cart 
     cur.execute("SELECT cart_id FROM carts WHERE user_id = %s", (user_id,))
     cart_id = cur.fetchone()[0]
@@ -774,7 +791,8 @@ def cart(conn, cur):
     conn.commit()
     cur.execute("SELECT * FROM shipping_details AS shd JOIN orders AS o ON shd.order_id=o.order_id WHERE o.order_id = %s", (order_id,))
     shipping_details = cur.fetchall()
-    return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details)
+
+    return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum=total_sum)
 
 def remove_from_cart_meth(conn, cur):
     if 'user_email' not in session:
@@ -788,7 +806,17 @@ def finish_payment(conn, cur):
     if 'user_email' not in session:
         return redirect('/login')
     
+    if request.method == 'GET':
+        order_id = session.get('order_id')
+        cur.execute("SELECT * FROM orders WHERE order_id = %s", (order_id,))
+        order = cur.fetchone()
+        order_products = json.loads(order['product_details'])
+        cur.execute("SELECT * FROM shipping_details WHERE order_id = %s", (order_id,))
+        shipping_details = cur.fetchone()
+        return render_template('payment.html', order_products=order_products, shipping_details=shipping_details)
+
     order_id = request.form.get('order_id')
+    session['order_id'] = order_id
     utils.AssertUser(isinstance(float(request.form.get('payment_amount')), float), "You must enter a number")
     payment_amount = float(request.form.get('payment_amount'))
 
@@ -986,6 +1014,7 @@ def update_cart_quantity(conn, cur):
     utils.AssertUser(isinstance(int(quantity), int), "You must enter number")
 
     quantity_ = int(quantity)
+    utils.AssertUser(quantity_ > 0, "You can't enter quantity zero or below")
 
     cur.execute("SELECT price FROM products WHERE id = %s", (item_id,))
     price = cur.fetchone()[0]
@@ -1086,6 +1115,10 @@ def handle_request(**kwargs):
 
         if message.__class__.__name__ == 'DevException':
             message = 'Internal error'
+
+        # TODO: Change url for QA
+        if request.url == 'http://127.0.0.1:5000/staff_login':
+            session['staff_login'] = "Yes"
 
         utils.add_form_data_in_session(session.get('form_data'))
         return render_template("error.html", message = str(message), redirect_url = request.url)

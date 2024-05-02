@@ -14,7 +14,11 @@
             <hr>
             <p class="mb-0">Please try again.</p>
             <a href="{{ redirect_url }}" class="btn btn-primary">Return to previous page</a>
+            {% if 'staff_login' is in session %}
+            <a href="/staff_login" class="btn btn-primary">Return to login</a>
+            {% else %}
             <a href="/login" class="btn btn-primary">Return to login</a>
+            {% endif %}
         </div>
     </div>
 </body>

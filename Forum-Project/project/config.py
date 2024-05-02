@@ -5,6 +5,7 @@ MAIL_PASSWORD = "kskf nciq lqfm zevh"
 MAIL_USE_TLS = False
 MAIL_USE_SSL = True
 
+# TODO: work database -> user_registration, laptop database -> users_registration
 database = "users_registration"
 user = "myuser"
 password = "1234"

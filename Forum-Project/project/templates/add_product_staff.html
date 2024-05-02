@@ -60,8 +60,9 @@
             <div class="form-group">
                 <label for="category">Category</label>
                 <select class="form-control" id="category" name="category" required>
-                    <option value="Осветителни тела">Осветителни тела</option>
-                    <option value="Разклонители">Разклонители</option>
+                    {% for categ in categories %}
+                    <option value="{{ categ }}">{{categ}}</option>
+                    {% endfor %}
                 </select>
             </div>
             <button type="submit" class="btn btn-primary">Add Product</button>
