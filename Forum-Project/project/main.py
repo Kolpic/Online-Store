@@ -593,6 +593,8 @@ def add_product(conn, cur):
     if 'staff_username' not in session:
         return redirect('/staff_login')
 
+    utils.AssertUser(has_permission('add_product'), "You don't have permission for this resource")
+
     if request.method == 'GET':
         cur.execute("SELECT DISTINCT(category) FROM products")
         categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
@@ -884,8 +886,19 @@ def staff_login(conn, cur):
     cur.execute("SELECT username, password FROM staff WHERE username = %s AND password = %s", (username, password))
     utils.AssertUser(cur.fetchone(), "There is no registration with this staff username and password")
 
+    cur.execute("SELECT role_id FROM staff WHERE username = %s", (username,))
+    role_id = cur.fetchone()[0]
+
+    session['permissions'] = get_permissions(conn, cur, role_id)
     session['staff_username'] = username
     return redirect('/staff_portal')
+
+def get_permissions(conn, cur, role_id):
+    cur.execute("SELECT p.permissions_name FROM permissions JOIN role_permissions rp ON p,permission_id = rp.permission_id WHERE rp.role_id = %s", (role_id,))
+    return [row[0] for row in cur.fetchall()]
+
+def has_permission(permission_name):
+    return permission_name in session.get('permissions', [])
 
 def staff_portal(conn, cur):
     if 'staff_username' not in session:
