@@ -1,6 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    {% if 'staff_error' in session %}
+    <div class="alert alert-danger">
+        {{ session.pop('staff_error') }}
+    </div>
+    {% endif %}
+    {% if 'staff_message' in session %}
+    <div class="alert alert-success">
+        {{ session.pop('staff_message') }}
+    </div>
+    {% endif %}
     <meta charset="UTF-8">
     <title>Staff Portal</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
@@ -43,6 +53,7 @@
             <a href="/crud" class="list-group-item list-group-item-action">2. Manage Products</a>
             <a href="/update_captcha_settings" class="list-group-item list-group-item-action">3. Update Captcha Settings</a>
             <a href="/reports" class="list-group-item list-group-item-action">4. Report Sales</a>
+            <a href="/staff_role" class="list-group-item list-group-item-action">5. Assign a role to staff</a>
         </div>
     </div>
 </body>

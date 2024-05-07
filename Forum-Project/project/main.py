@@ -329,15 +329,17 @@ def update_profile(conn, cur):
     fields_list = []
     updated_fields = []
 
+    name_regex = r'^[A-Za-z]+$'
+
     if first_name:
-        if len(first_name) < 3 or len(first_name) > 50 or first_name.isdigit():
-            session['settings_error'] = 'First name must be between 3 and 50 letters'
+        if len(first_name) < 3 or len(first_name) > 50 or not re.match(name_regex, first_name):
+            session['settings_error'] = 'First name must be between 3 and 50 letters and contain no special characters or digits'
             return redirect('/profile')
         query_string += "first_name = %s, "
         fields_list.append(first_name)
         updated_fields.append("first name")
     if last_name:
-        if len(last_name) < 3 or len(last_name) > 50 or last_name.isdigit():
+        if len(last_name) < 3 or len(last_name) > 50 or not re.match(name_regex, last_name):
             session['settings_error'] = 'Last name must be between 3 and 50 letters'
             return redirect('/profile')
         query_string += "last_name = %s, "
@@ -809,13 +811,30 @@ def finish_payment(conn, cur):
         return redirect('/login')
     
     if request.method == 'GET':
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         order_id = session.get('order_id')
         cur.execute("SELECT * FROM orders WHERE order_id = %s", (order_id,))
         order = cur.fetchone()
-        order_products = json.loads(order['product_details'])
+
+        order_products = order['product_details']
+        list_products = [
+            [
+                product['product_id'],
+                product['name'],
+                int(product['quantity']),
+                float(product['price']),
+                float(product['price']) * int(product['quantity'])
+            ]
+            for product in order_products
+        ]
+
+        total_summ = sum(product[4] for product in list_products)
+        total_sum = round(total_summ, 2)
+
         cur.execute("SELECT * FROM shipping_details WHERE order_id = %s", (order_id,))
         shipping_details = cur.fetchone()
-        return render_template('payment.html', order_products=order_products, shipping_details=shipping_details)
+        session['order_id'] = order_id
+        return render_template('payment.html', order_products=list_products, shipping_details=shipping_details, total_sum=total_sum)
 
     order_id = request.form.get('order_id')
     session['order_id'] = order_id
@@ -889,7 +908,7 @@ def staff_login(conn, cur):
     cur.execute("SELECT role_id FROM staff WHERE username = %s", (username,))
     role_id = cur.fetchone()[0]
 
-    session['permissions'] = get_permissions(conn, cur, role_id)
+    # session['permissions'] = get_permissions(conn, cur, role_id)
     session['staff_username'] = username
     return redirect('/staff_portal')
 
@@ -1038,6 +1057,50 @@ def update_cart_quantity(conn, cur):
 
     return jsonify(success=True, new_total=new_total)
 
+def staff_role(conn, cur):
+    if 'staff_username' not in session:
+        return redirect('/staff_login')
+    
+    if request.method == 'GET':
+        cur.execute("SELECT s.username, r.role_name, sr.staff_id, sr.role_id FROM staff_roles sr JOIN staff s ON s.id = sr.staff_id JOIN roles r ON r.role_id = sr.role_id")
+        relations = cur.fetchall()
+        return render_template('staff_role_assignment.html', relations=relations)
+
+def staff_role_add(conn, cur):
+    if 'staff_username' not in session:
+        return redirect('/staff_login')
+
+    if request.method == 'GET':
+        cur.execute("SELECT id, username FROM staff")
+        staff = cur.fetchall()
+
+        cur.execute("SELECT role_id, role_name FROM roles")
+        roles = cur.fetchall()
+
+        return render_template('add_staff_role.html', staff=staff, roles=roles) 
+
+    staff_name = request.form['staff']
+    staff_role = request.form['role']
+
+    cur.execute("SELECT id FROM staff WHERE username = %s", (staff_name,))
+    staff_id = cur.fetchone()[0]
+
+    cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (staff_role,))
+    role_id = cur.fetchone()[0]
+
+    cur.execute('INSERT INTO staff_roles (staff_id, role_id) VALUES (%s, %s)', (staff_id, role_id))
+    conn.commit()
+
+    session['staff_message'] = "You successful gave a role: " + staff_role + "to user: " + staff_name
+    return redirect('/staff_portal')
+
+def delete_role(conn, cur, staff_id, role_id):
+    cur.execute('DELETE FROM staff_roles WHERE staff_id = %s AND role_id = %s', (staff_id, role_id))
+    conn.commit()
+
+    session['staff_message'] = "You successful deleted a role"
+    return redirect('/staff_role')
+
 @app.route('/favicon.ico')
 def favicon():
     return app.send_static_file('favicon.ico')
@@ -1076,6 +1139,9 @@ url_to_function_map = {
     '/add_products_from_file/<str:path>': add_products_from_file,
     '/reports': report,
     '/update_cart_quantity': update_cart_quantity,
+    '/staff_role': staff_role,
+    '/staff_role_add': staff_role_add,
+    '/delete_role/<int:staff_id>/<int:role_id>': delete_role,
     '/momo': 'momo',
 }
 
@@ -1098,6 +1164,10 @@ def handle_request(**kwargs):
         elif len(path_parts) > 2 and path_parts[1] == 'delete_product' and path_parts[2].isdigit():
             product_id = int(path_parts[2])
             funtion_to_call = delete_product
+        elif len(path_parts) > 2 and path_parts[1] == 'delete_role' and path_parts[2].isdigit() and path_parts[3].isdigit():
+            staff_id = int(path_parts[2])
+            role_id = int(path_parts[3])
+            funtion_to_call = delete_role
         elif len(path_parts) > 2 and path_parts[1] == 'add_products_from_file':
             # |C:|Added Programs|Telebid Pro|Forum-Project|images|large_productsV2.csv
             # |home|galin|Desktop|projects|GitHub|Forum-Project|images|large_productsV2.csv
@@ -1120,6 +1190,8 @@ def handle_request(**kwargs):
             return funtion_to_call(conn, cur, page=page)
         elif 'string_path' in locals():
             return funtion_to_call(conn, cur, string_path=string_path)
+        elif 'staff_id' and 'role_id' in locals():
+            return funtion_to_call(conn, cur, staff_id=staff_id, role_id=role_id)
         else:           
             return funtion_to_call(conn, cur)
     except Exception as message:

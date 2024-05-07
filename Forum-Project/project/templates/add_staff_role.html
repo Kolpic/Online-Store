@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Staff Roles Management</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Assign Role to Staff</h1>
+        <form action="/staff_role_add" method="POST">
+            <div class="form-group">
+                <label for="staff">Select Staff Member:</label>
+                <select id="staff" name="staff" class="form-control">
+                    {% for sta in staff %}
+                    <option value="{{ sta[1] }}">{{ sta[1] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="role">Select Role:</label>
+                <select id="role" name="role" class="form-control">
+                    {% for role in roles %}
+                    <option value="{{ role[1] }}">{{ role[1] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary">Assign Role</button>
+        </form>
+    </div>
+</body>
+</html>

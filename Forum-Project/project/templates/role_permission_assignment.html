@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Assign Permissions to Role</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body>
+    <div class="container mt-5">
+        <h1>Assign Permissions to Role</h1>
+        <form action="/assign_permissions" method="POST">
+            <div class="form-group">
+                <label for="role">Select Role:</label>
+                <select id="role" name="role" class="form-control">
+                    <!-- Role options dynamically populated from the database -->
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Select Permissions:</label>
+                <!-- Permissions options dynamically populated from the database -->
+                <div>
+                    <input type="checkbox" name="permissions[]" value="read"> Read<br>
+                    <input type="checkbox" name="permissions[]" value="write"> Write<br>
+                    <input type="checkbox" name="permissions[]" value="update"> Update<br>
+                    <input type="checkbox" name="permissions[]" value="delete"> Delete<br>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Assign Permissions</button>
+        </form>
+    </div>
+</body>
+</html>
