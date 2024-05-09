@@ -50,7 +50,8 @@
                 <strong>Last Name:</strong> {{ shipping_details[0][4] }}<br>
                 <strong>Town:</strong> {{ shipping_details[0][5] }}<br>
                 <strong>Address:</strong> {{ shipping_details[0][6] }}<br>
-                <strong>Phone:</strong> {{ shipping_details[0][7] }}
+                <strong>Country code:</strong> {{ shipping_details[0][8] }}
+                <strong>Phone:</strong> {{ shipping_details[0][7] }}<br>
             </p>
         </div>
         <h2>Payment Details</h2>
@@ -58,7 +59,7 @@
             <input type="hidden" name="order_id" value="{{ order_id }}">
             <div class="form-group">
                 <label for="payment_amount">Enter Payment Amount:</label>
-                <input type="number" id="payment_amount" name="payment_amount" class="form-control" required>
+                <input type="number" id="payment_amount" name="payment_amount" class="form-control" step="0.01" required>
             </div>
             <button type="submit" class="btn btn-primary">Submit Payment</button>
         </form>

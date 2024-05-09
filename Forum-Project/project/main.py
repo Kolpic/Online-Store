@@ -1,5 +1,6 @@
 from flask import Flask, request, render_template, redirect, url_for, session, abort, Response, jsonify, flash
 from flask_mail import Mail, Message
+from decimal import Decimal
 import psycopg2, os, re, secrets, psycopg2.extras, uuid
 from psycopg2 import sql
 import json
@@ -722,14 +723,14 @@ def cart(conn, cur):
 
     cur.execute("SELECT id FROM users WHERE email = %s", (session.get('user_email'),))
     user_id = cur.fetchone()[0]
-    regexx = r'^\d{7,15}$'
+    regexx = r'^8\d{8}$'
 
     # Check fields
     utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
     utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
     regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
     utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
-    utils.AssertUser(re.fullmatch(regexx, phone), "Phone number is not valid")
+    utils.AssertUser(re.fullmatch(regexx, phone), "Phone number is not valid. Should be nine digits")
 
     # Retrieve cart items for the user
     cur.execute("""
@@ -793,7 +794,13 @@ def cart(conn, cur):
     cur.execute("DELETE FROM cart_itmes WHERE cart_id = %s", (cart_id,))
 
     conn.commit()
-    cur.execute("SELECT * FROM shipping_details AS shd JOIN orders AS o ON shd.order_id=o.order_id WHERE o.order_id = %s", (order_id,))
+    cur.execute("""
+                SELECT shd.shipping_id, shd.order_id, shd.email, shd.first_name, shd.last_name, shd.town, shd.address, shd.phone, cc.code 
+                FROM shipping_details AS shd 
+                JOIN orders AS o ON shd.order_id=o.order_id 
+                JOIN country_codes AS cc ON shd.country_code_id = cc.id 
+                WHERE o.order_id = %s
+                """, (order_id,))
     shipping_details = cur.fetchall()
 
     return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum=total_sum)
@@ -837,9 +844,11 @@ def finish_payment(conn, cur):
         return render_template('payment.html', order_products=list_products, shipping_details=shipping_details, total_sum=total_sum)
 
     order_id = request.form.get('order_id')
-    session['order_id'] = order_id
+    if order_id == "":
+        order_id = session.get('order_id')
     utils.AssertUser(isinstance(float(request.form.get('payment_amount')), float), "You must enter a number")
-    payment_amount = float(request.form.get('payment_amount'))
+    payment_amountt = float(request.form.get('payment_amount'))
+    payment_amount = round(Decimal(payment_amountt), 2)
 
     cur.execute("SELECT SUM((product_detail->>'price')::numeric * (product_detail->>'quantity')::numeric) FROM orders, json_array_elements(product_details) AS product_detail WHERE order_id = %s", (order_id,))
     total = cur.fetchone()[0]
@@ -849,7 +858,12 @@ def finish_payment(conn, cur):
     utils.AssertUser(order_status == 'Ready for Paying', "This order is not ready for payment or has already been payed")
 
     if payment_amount < total:
+        session['order_id'] = order_id
         session['payment_error'] = "You entered amout, which is less than the order you have"
+        return redirect('/finish_payment')
+    if payment_amount > total:
+        session['order_id'] = order_id
+        session['payment_error'] = "You entered amout, which is bigger than the order you have"
         return redirect('/finish_payment')
     formatted_datetime = datetime.now().strftime('%Y-%m-%d')
     cur.execute("UPDATE orders SET status = 'Payed', order_date = %s WHERE order_id = %s", (formatted_datetime, order_id))
