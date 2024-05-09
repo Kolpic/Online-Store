@@ -905,8 +905,8 @@ def staff_login(conn, cur):
     cur.execute("SELECT username, password FROM staff WHERE username = %s AND password = %s", (username, password))
     utils.AssertUser(cur.fetchone(), "There is no registration with this staff username and password")
 
-    cur.execute("SELECT role_id FROM staff WHERE username = %s", (username,))
-    role_id = cur.fetchone()[0]
+    # cur.execute("SELECT role_id FROM staff WHERE username = %s", (username,))
+    # role_id = cur.fetchone()[0]
 
     # session['permissions'] = get_permissions(conn, cur, role_id)
     session['staff_username'] = username
@@ -1101,6 +1101,44 @@ def delete_role(conn, cur, staff_id, role_id):
     session['staff_message'] = "You successful deleted a role"
     return redirect('/staff_role')
 
+def role_permissions(conn, cur):
+    if 'staff_username' not in session:
+        return redirect('/staff_login')
+    
+    interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles',]
+
+    if request.method == 'GET':
+        cur.execute('SELECT role_id, role_name FROM roles')
+        roles = cur.fetchall()
+
+        selected_role = int(request.args.get('role', roles[0][0] if roles else None))
+
+        cur.execute('SELECT role_id, role_name FROM roles WHERE role_id = %s', (selected_role,))
+        role_to_display = cur.fetchall()
+
+        role_permissions = {role[0]: {interface: {'create': False, 'read': False, 'update': False, 'delete': False} for interface in interfaces} for role in role_to_display}
+
+        cur.execute('SELECT rp.role_id, p.interface, p.permission_name FROM role_permissions AS rp JOIN permissions AS p ON rp.permission_id=p.permission_id')
+        permissions = cur.fetchall()
+
+        for role_id, interface, permission_name in permissions:
+            if role_id in role_permissions and interface in role_permissions[role_id]:
+                role_permissions[role_id][interface][permission_name] = True
+
+        return render_template('role_permissions.html', roles=roles, interfaces=interfaces, role_permissions=role_permissions, selected_role=selected_role)
+    
+    role_id = request.form['role']
+    cur.execute('DELETE FROM role_permissions WHERE role_id = %s', (role_id,))
+    for interface in interfaces:
+        for action in ['create', 'read', 'update', 'delete']:
+            if f'{interface}_{action}' in request.form:
+                cur.execute("SELECT permission_id FROM permissions WHERE permission_name = %s AND interface = %s", (action, interface))
+                permission_id = cur.fetchone()[0]
+                cur.execute('INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)', 
+                            (role_id, permission_id))
+    conn.commit()
+    return redirect('/role_permissions?role=' + role_id)
+
 @app.route('/favicon.ico')
 def favicon():
     return app.send_static_file('favicon.ico')
@@ -1142,6 +1180,7 @@ url_to_function_map = {
     '/staff_role': staff_role,
     '/staff_role_add': staff_role_add,
     '/delete_role/<int:staff_id>/<int:role_id>': delete_role,
+    '/role_permissions': role_permissions,
     '/momo': 'momo',
 }
 
@@ -1198,6 +1237,7 @@ def handle_request(**kwargs):
         user_email = session.get('user_email', 'Guest')
         log_exception(conn, cur, message.__class__.__name__, str(message), user_email)
 
+        # != 'WrongUSerInputException'
         if message.__class__.__name__ == 'DevException':
             message = 'Internal error'
 

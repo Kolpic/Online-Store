@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Role Permissions Management</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script>
+        function onRoleChange() {
+            var role = document.getElementById("role").value;
+            window.location.href = '/role_permissions?role=' + role;
+        }
+    </script>
+</head>
+<body>
+    <div class="container mt-5">
+        <h2>Manage Role Permissions</h2>
+        <form action="/role_permissions" method="POST">
+            <div class="form-group">
+                <label for="role">Select Role:</label>
+                <select id="role" name="role" class="form-control" onchange="onRoleChange()">
+                    {% for role in roles %}
+                        <option value="{{ role[0] }}" {% if selected_role == role[0] %}selected{% endif %}>{{ role[1] }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Interface</th>
+                        <th>Create</th>
+                        <th>Read</th>
+                        <th>Update</th>
+                        <th>Delete</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for interface in interfaces %}
+                    <tr>
+                        <td>{{ interface }}</td>
+                        {% for action in ['create', 'read', 'update', 'delete'] %}
+                        <td>
+                            <input type="checkbox" name="{{ interface }}_{{ action }}" 
+                                   {% if role_permissions[selected_role][interface][action] %}checked{% endif %}>
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <button type="submit" class="btn btn-primary">Save Permissions</button>
+            <a href="/staff_portal" class="btn btn-primary">Home page</a>
+        </form>
+    </div>
+</body>
+</html>
