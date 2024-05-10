@@ -81,7 +81,7 @@ class Token(db.Model):
 class CountryCode(db.Model):
     __tablename__ = 'country_codes'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), nullable=False)
+    name = db.Column(db.String(50), nullable=False, unique=True)
     code = db.Column(db.String(10), nullable=False)
 
 class StaffRole(db.Model):

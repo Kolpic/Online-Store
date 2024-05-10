@@ -78,14 +78,14 @@
                 <input type="text" id="address" name="address" class="form-control" value="{{form_data['address'] if form_data else ''}}" required>
             </div>
             <div class="form-group">
-                <label for="phone">Phone Number:</label>
+                <label for="phone">Phone Number: select country code e.g(+359), type phone number in format 894703986</label>
                 <div class="input-group">
                     <select class="custom-select" id="country_code" name="country_code" value="{{form_data['country_code'] if form_data else ''}}" required>
                         {% for code in country_codes %}
                             <option value="{{ code[2] }}">{{ code[1] }} ({{ code[2] }})</option>
                         {% endfor %}
                     </select>
-                    <input type="tel" class="form-control" id="phone" name="phone" placeholder="Enter phone number" value="{{form_data['phone'] if form_data else ''}}" required>
+                    <input type="tel" class="form-control" id="phone" name="phone" placeholder="Enter phone number without the country code" value="{{form_data['phone'] if form_data else ''}}" required>
                 </div>
             </div>
             <button type="submit" class="btn btn-primary">Proceed to Payment</button>

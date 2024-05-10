@@ -742,7 +742,8 @@ def cart(conn, cur):
     utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
     regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
     utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
-    utils.AssertUser(re.fullmatch(regexx, phone), "Phone number is not valid. Should be nine digits")
+    utils.AssertUser(re.fullmatch(regexx, phone), "Phone number format is not valid.")
+    utils.AssertUser(phone[0] != "0", "Phone number format is not valid.")
 
     # Retrieve cart items for the user
     cur.execute("""
