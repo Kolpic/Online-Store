@@ -608,8 +608,6 @@ def add_product(conn, cur):
     if 'staff_username' not in session:
         return redirect('/staff_login')
 
-    utils.AssertUser(has_permission('add_product'), "You don't have permission for this resource")
-
     if request.method == 'GET':
         cur.execute("SELECT DISTINCT(category) FROM products")
         categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
@@ -624,6 +622,8 @@ def add_product(conn, cur):
     utils.AssertUser(name and price and quantity and category and image, "You must add information in every field.")
     utils.AssertUser(isinstance(float(price), float), "Price is not a number")
     utils.AssertUser(isinstance(int(quantity), int), "Quantity is not a number")
+    utils.AssertUser(float(price) > 0, "Price must be possitive number")
+    utils.AssertUser(int(quantity) > 0, "Quantity must be possitive")
     
     if image and allowed_file(image.filename):
         filename = secure_filename(image.filename)
