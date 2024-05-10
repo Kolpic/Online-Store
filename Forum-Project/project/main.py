@@ -735,7 +735,7 @@ def cart(conn, cur):
 
     cur.execute("SELECT id FROM users WHERE email = %s", (session.get('user_email'),))
     user_id = cur.fetchone()[0]
-    regexx = r'^8\d{8}$'
+    regexx = r'^\d{7,15}$'
 
     # Check fields
     utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
