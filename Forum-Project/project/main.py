@@ -822,6 +822,7 @@ def cart(conn, cur):
                 """, (order_id,))
     shipping_details = cur.fetchall()
 
+    session['payment_message'] = "You successful made an order with id = " + str(order_id)
     return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum=total_sum)
 
 def remove_from_cart_meth(conn, cur):
