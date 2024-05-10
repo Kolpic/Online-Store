@@ -1,4 +1,5 @@
 from flask_sqlalchemy import SQLAlchemy
+import json
 
 db = SQLAlchemy()
 
@@ -44,9 +45,18 @@ class Order(db.Model):
     order_id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     status = db.Column(db.String(50), nullable=False)
-    product_details = db.Column(db.JSON, nullable=False)
+    # product_details = db.Column(db.JSON, nullable=False)
     order_date = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
     shipping_details = db.relationship('ShippingDetail', backref='order', lazy=True)
+    items = db.relationship('OrderItem', backref='order', lazy=True)
+
+class OrderItem(db.Model):
+    __tablename__ = 'order_items'
+    id = db.Column(db.Integer, primary_key=True)
+    order_id = db.Column(db.Integer, db.ForeignKey('orders.order_id'), nullable=False)
+    product_id = db.Column(db.Integer, db.ForeignKey('products.id'), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False)
+    price = db.Column(db.Numeric, nullable=False)
 
 class User(db.Model):
     __tablename__ = 'users'
@@ -132,3 +142,20 @@ class ExceptionLog(db.Model):
     exception_type = db.Column(db.String(255), nullable=False)
     message = db.Column(db.String(255), nullable=False)
     time = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
+
+def order_items_to_json(order_id):
+    order = Order.query.get(order_id)
+    if not order:
+        return None
+
+    order_items_json = []
+    for item in order.items:
+        product = Product.query.get(item.product_id)
+        order_items_json.append({
+            'product_id': item.product_id,
+            'name': product.name,
+            'quantity': item.quantity,
+            'price': str(item.price)
+        })
+
+    return json.dumps(order_items_json)

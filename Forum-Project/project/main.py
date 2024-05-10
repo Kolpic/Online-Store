@@ -47,7 +47,7 @@ migrate = Migrate(app, db)
 
 # End of database configuration migration
 
-# Dev database 
+# Dev database
 database = config.database
 user = config.user
 password = config.password
@@ -785,10 +785,17 @@ def cart(conn, cur):
     # Build JSON object of cart items if no mismatch
     products_json = [{"product_id": item[0], "name": item[1], "quantity": item[2], "price": str(item[3])} for item in cart_items]
 
-    # First make order, then make shipping_details
+    # First make order, then make shipping_details #
     formatted_datetime = datetime.now().strftime('%Y-%m-%d')
-    cur.execute("INSERT INTO orders (user_id, status, product_details, order_date) VALUES (%s, %s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", json.dumps(products_json), formatted_datetime))
+    # cur.execute("INSERT INTO orders (user_id, status, product_details, order_date) VALUES (%s, %s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", json.dumps(products_json), formatted_datetime))
+    # order_id = cur.fetchone()[0]
+    # #
+    cur.execute("INSERT INTO orders (user_id, status, order_date) VALUES (%s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", formatted_datetime))
     order_id = cur.fetchone()[0]
+
+    # Insert order items into order_items table
+    for item in cart_items:
+        cur.execute("INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (%s, %s, %s, %s)", (order_id, item[0], item[2], item[3]))
 
     cur.execute("SELECT id FROM country_codes WHERE code = %s", (country_code,))
     country_code_id = cur.fetchone()[0]
@@ -832,28 +839,31 @@ def finish_payment(conn, cur):
     if request.method == 'GET':
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         order_id = session.get('order_id')
-        cur.execute("SELECT * FROM orders WHERE order_id = %s", (order_id,))
-        order = cur.fetchone()
+        # cur.execute("SELECT * FROM orders WHERE order_id = %s", (order_id,))
+        # order = cur.fetchone()
 
-        order_products = order['product_details']
-        list_products = [
-            [
-                product['product_id'],
-                product['name'],
-                int(product['quantity']),
-                float(product['price']),
-                float(product['price']) * int(product['quantity'])
-            ]
-            for product in order_products
-        ]
+        cur.execute("SELECT oi.product_id, p.name, oi.quantity, oi.price FROM order_items AS oi JOIN products AS p ON oi.product_id=p.id WHERE order_id = %s", (order_id,))
+        order_products = cur.fetchall()
 
-        total_summ = sum(product[4] for product in list_products)
+        # order_products = order['product_details']
+        # list_products = [
+        #     [
+        #         product['product_id'],
+        #         product['name'],
+        #         int(product['quantity']),
+        #         float(product['price']),
+        #         float(product['price']) * int(product['quantity'])
+        #     ]
+        #     for product in order_products
+        # ]
+
+        total_summ = sum(int(product[2]) * Decimal(product[3]) for product in order_products)
         total_sum = round(total_summ, 2)
 
         cur.execute("SELECT * FROM shipping_details WHERE order_id = %s", (order_id,))
         shipping_details = cur.fetchone()
         session['order_id'] = order_id
-        return render_template('payment.html', order_products=list_products, shipping_details=shipping_details, total_sum=total_sum)
+        return render_template('payment.html', order_products=order_products, shipping_details=shipping_details, total_sum=total_sum)
 
     order_id = request.form.get('order_id')
     if order_id == "":
@@ -862,8 +872,14 @@ def finish_payment(conn, cur):
     payment_amountt = float(request.form.get('payment_amount'))
     payment_amount = round(Decimal(payment_amountt), 2)
 
-    cur.execute("SELECT SUM((product_detail->>'price')::numeric * (product_detail->>'quantity')::numeric) FROM orders, json_array_elements(product_details) AS product_detail WHERE order_id = %s", (order_id,))
-    total = cur.fetchone()[0]
+    cur.execute("SELECT quantity, price FROM order_items WHERE order_id = %s", (order_id,))
+    all_products_from_the_order = cur.fetchall()
+    total = 0
+    for product in all_products_from_the_order:
+        total += int(product[0]) * Decimal(product[1])
+
+    # cur.execute("SELECT SUM((product_detail->>'price')::numeric * (product_detail->>'quantity')::numeric) FROM orders, json_array_elements(product_details) AS product_detail WHERE order_id = %s", (order_id,))
+    # total = cur.fetchone()[0]
     
     cur.execute("SELECT status FROM orders WHERE order_id= %s", (order_id,))
     order_status = cur.fetchone()[0]
@@ -1022,46 +1038,59 @@ def report(conn, cur):
     group_by = request.form.get('group_by')
     status = request.form.get('status')
 
-    utils.AssertUser(date_from or date_to or group_by, "You have to select a date from, date to and how to be grouped")
+    utils.AssertUser(date_from or date_to, "You have to select a date from, date to")
 
-    # date = request.form.get('report_date')
-    # utils.AssertUser(date != '', "You have to select date")
+    if group_by:
+        group_by_clause = f"DATE(date_trunc(%s, order_date))"
+    else:
+        group_by_clause = "o.order_id"
 
-    query = """
+    status_filter = ""
+    if status:
+        status_filter = "AND o.status = %s"
+
+    query = f"""
     WITH OrderSums AS (
-    SELECT
-        o.order_id,
-        DATE(o.order_date) AS order_date,
-        u.first_name || ' ' || u.last_name AS buyer_name,
-        o.status,
-        SUM((product_detail->>'price')::numeric * (product_detail->>'quantity')::numeric) AS order_sum
-    FROM
-        orders o
-    JOIN
-        users u ON o.user_id = u.id,
-        json_array_elements(o.product_details) AS product_detail
-    WHERE
-        o.order_date BETWEEN %s AND %s
-    GROUP BY
-        o.order_id, o.order_date, buyer_name, o.status
+        SELECT
+            o.order_id,
+            DATE(o.order_date) AS order_date,
+            u.first_name || ' ' || u.last_name AS buyer_name,
+            o.status,
+            SUM(oi.quantity * oi.price) AS order_sum
+        FROM
+            orders o
+        JOIN
+            users u ON o.user_id = u.id
+        JOIN
+            order_items oi ON o.order_id = oi.order_id
+        WHERE
+            o.order_date BETWEEN %s AND %s
+            {status_filter}
+        GROUP BY
+            o.order_id, o.order_date, buyer_name, o.status
     )
-SELECT
-    DATE(date_trunc(%s, order_date)) AS period,
-    array_agg(order_id) AS order_ids,
-    array_agg(buyer_name) AS names_of_buyers,
-    SUM(order_sum) AS total_sum,
-    array_agg(status) AS order_statuses
-FROM
-    OrderSums
-WHERE 
-    status = %s
-GROUP BY
-    period
-ORDER BY
-    period;
+    SELECT
+        {group_by_clause} AS period,
+        array_agg(order_id) AS order_ids,
+        array_agg(buyer_name) AS names_of_buyers,
+        SUM(order_sum) AS total_sum,
+        array_agg(status) AS order_statuses,
+        status
+    FROM
+        OrderSums as o
+    GROUP BY
+        period, status
+    ORDER BY
+        period, status;
     """
 
-    cur.execute(query, (date_from, date_to, group_by, status))
+    params = [date_from, date_to]
+    if status:
+        params.append(status)
+    if group_by:
+        params.append(group_by)
+
+    cur.execute(query, tuple(params))
     report = cur.fetchall()
     return render_template('report.html', report=report)  
  

@@ -14,5 +14,5 @@ host = "localhost"
 # Database for QA
 test_qa_database = "user_registration_qa_testing"
 
-# Database for migration to look 
+# Database for migration to look (emty database to test the new scripts - mig)
 postgres_db = 'postgresql://myuser:1234@localhost/users_registration'
