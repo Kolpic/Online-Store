@@ -1,5 +1,6 @@
 from flask import Flask, request, render_template, redirect, url_for, session, abort, Response, jsonify, flash
 from flask_mail import Mail, Message
+from flask_migrate import Migrate
 from decimal import Decimal
 import psycopg2, os, re, secrets, psycopg2.extras, uuid
 from psycopg2 import sql
@@ -36,6 +37,17 @@ app.config['MAIL_USE_SSL'] = config.MAIL_USE_SSL
 
 mail = Mail(app)
 
+# Database configuration migration
+app.config['SQLALCHEMY_DATABASE_URI'] = config.postgres_db
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+from .models import db
+db.init_app(app)
+migrate = Migrate(app, db)
+
+# End of database configuration migration
+
+# Dev database 
 database = config.database
 user = config.user
 password = config.password

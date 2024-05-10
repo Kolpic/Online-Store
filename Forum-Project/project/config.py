@@ -11,5 +11,8 @@ user = "myuser"
 password = "1234"
 host = "localhost"
 
-test_database = "user_registration_testing"
+# Database for QA
 test_qa_database = "user_registration_qa_testing"
+
+# Database for migration to look 
+postgres_db = 'postgresql://myuser:1234@localhost/users_registration'
