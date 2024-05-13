@@ -885,7 +885,7 @@ def finish_payment(conn, cur):
     
     cur.execute("SELECT status FROM orders WHERE order_id= %s", (order_id,))
     order_status = cur.fetchone()[0]
-    utils.AssertUser(order_status == 'Ready for Paying', "This order is not ready for payment or has already been payed")
+    utils.AssertUser(order_status == 'Ready for Paying', "This order is not ready for payment or has already been paid")
 
     if payment_amount < total:
         session['order_id'] = order_id
@@ -896,9 +896,9 @@ def finish_payment(conn, cur):
         session['payment_error'] = "You entered amout, which is bigger than the order you have"
         return redirect('/finish_payment')
     formatted_datetime = datetime.now().strftime('%Y-%m-%d')
-    cur.execute("UPDATE orders SET status = 'Payed', order_date = %s WHERE order_id = %s", (formatted_datetime, order_id))
+    cur.execute("UPDATE orders SET status = 'Paid', order_date = %s WHERE order_id = %s", (formatted_datetime, order_id))
     conn.commit()
-    session['home_message'] = "You payed the order successful"
+    session['home_message'] = "You paid the order successful"
     return redirect('/home')
 
 
