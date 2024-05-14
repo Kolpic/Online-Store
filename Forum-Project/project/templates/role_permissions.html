@@ -6,15 +6,16 @@
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
     <script>
         function onRoleChange() {
-            var role = document.getElementById("role").value;
-            window.location.href = '/role_permissions?role=' + role;
+            let role = document.getElementById("role").value;
+            console.log("Changing role to:", role);
+            window.location.href = '/{{role_to_display}}/role_permissions?role=' + role;
         }
     </script>
 </head>
 <body>
     <div class="container mt-5">
         <h2>Manage Role Permissions</h2>
-        <form action="/role_permissions" method="POST">
+        <form action="/{{role_to_display}}/role_permissions" method="POST">
             <div class="form-group">
                 <label for="role">Select Role:</label>
                 <select id="role" name="role" class="form-control" onchange="onRoleChange()">
@@ -47,9 +48,10 @@
                     {% endfor %}
                 </tbody>
             </table>
-            <button type="submit" class="btn btn-primary">Save Permissions</button>
-            <a href="/staff_portal" class="btn btn-primary">Home page</a>
+            <button type="submit" class="btn btn-primary">Save Permissions</button> 
         </form>
+        <br>
+        <a href="/staff_portal" class="btn btn-primary">Home page</a>
     </div>
 </body>
 </html>

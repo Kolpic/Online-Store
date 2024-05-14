@@ -58,7 +58,8 @@ MAX_FILE_SIZE = 10 * 1024 * 1024  # Maximum file size in bytes (e.g., 10MB)
 CURRENT_URL = ""
 
 app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
-app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
+app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
+app.add_url_rule("/<role>/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 
 def assertIsProvidedMethodsTrue(*args):
     if len(args) == 2:
@@ -261,7 +262,12 @@ def home(conn, cur, page = 1):
         prodcuts_user_wants = 50
     # utils.AssertUser(isinstance(prodcuts_user_wants, int), "You must enter a number in the \'Products per page\' form ")
     products_per_page = int(prodcuts_user_wants)
-    offset = (page - 1) * products_per_page
+    offset = 0
+    if page == None:
+        page = 1
+        offset = 50
+    else:
+        offset = (page - 1) * products_per_page
 
     global CURRENT_URL
     CURRENT_URL = request.url
@@ -292,7 +298,7 @@ def home(conn, cur, page = 1):
         query_params.extend([price_min, pric_max])
 
     query = f"SELECT * FROM products WHERE TRUE{name_filter}{category_filter}{price_filter} ORDER BY {order_by_clause} LIMIT %s OFFSET %s"
-    query_params.extend([products_per_page, (page - 1) * products_per_page])
+    query_params.extend([products_per_page, offset])
 
     cur.execute(query,tuple(query_params))
     products = cur.fetchall()
@@ -578,6 +584,8 @@ def update_captcha_settings(conn, cur):
 def view_logs(conn, cur):
     if 'staff_username' not in session:
         return redirect('/staff_login')
+    
+    utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read'), "You don't have permission to this resource")
 
     sort_by = request.args.get('sort','time')
     sort_order = request.args.get('order','asc')
@@ -949,19 +957,8 @@ def staff_login(conn, cur):
     cur.execute("SELECT username, password FROM staff WHERE username = %s AND password = %s", (username, password))
     utils.AssertUser(cur.fetchone(), "There is no registration with this staff username and password")
 
-    # cur.execute("SELECT role_id FROM staff WHERE username = %s", (username,))
-    # role_id = cur.fetchone()[0]
-
-    # session['permissions'] = get_permissions(conn, cur, role_id)
     session['staff_username'] = username
     return redirect('/staff_portal')
-
-def get_permissions(conn, cur, role_id):
-    cur.execute("SELECT p.permissions_name FROM permissions JOIN role_permissions rp ON p,permission_id = rp.permission_id WHERE rp.role_id = %s", (role_id,))
-    return [row[0] for row in cur.fetchall()]
-
-def has_permission(permission_name):
-    return permission_name in session.get('permissions', [])
 
 def staff_portal(conn, cur):
     if 'staff_username' not in session:
@@ -1165,6 +1162,7 @@ def role_permissions(conn, cur):
     interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles',]
 
     if request.method == 'GET':
+        role = request.path.split('/')[1]
         cur.execute('SELECT role_id, role_name FROM roles')
         roles = cur.fetchall()
 
@@ -1182,7 +1180,7 @@ def role_permissions(conn, cur):
             if role_id in role_permissions and interface in role_permissions[role_id]:
                 role_permissions[role_id][interface][permission_name] = True
 
-        return render_template('role_permissions.html', roles=roles, interfaces=interfaces, role_permissions=role_permissions, selected_role=selected_role)
+        return render_template('role_permissions.html', roles=roles, interfaces=interfaces, role_permissions=role_permissions, selected_role=selected_role, role_to_display=role)
     
     role_id = request.form['role']
     cur.execute('DELETE FROM role_permissions WHERE role_id = %s', (role_id,))
@@ -1200,95 +1198,84 @@ def role_permissions(conn, cur):
 def favicon():
     return app.send_static_file('favicon.ico')
 
-url_to_function_map = {
-    '/': registration,
-    '/registration': registration,
-    '/refresh_captcha': refresh_captcha,
-    '/verify': verify,
-    '/login': login,
-    '/home': home,
-    '/home/<int:page>': home,
-    '/logout': logout,
-    '/profile': profile,
-    '/update_profile': update_profile,
-    '/delete_account': delete_account,
-    '/recover_password': recover_password,
-    '/resend_verf_code': resend_verf_code,
-    '/send_login_link': send_login_link,
-    '/log': login_with_token,
-    '/logs': view_logs,
-    '/update_captcha_settings': update_captcha_settings,
-    '/add_product': add_product,
-    '/image/<int:product_id>': serve_image,
-    '/add_to_cart': add_to_cart_meth,
-    '/cart': cart,
-    '/remove_from_cart': remove_from_cart_meth,
-    # '/confirm_purchase': confirm_purchase,
-    '/finish_payment': finish_payment,
-    '/crud': crud_inf,
-    '/staff_login': staff_login,
-    '/staff_portal': staff_portal,
-    '/logout_staff': logout_staff,
-    '/edit_product/<int:product_id>': edit_product,
-    '/delete_product/<int:product_id>': delete_product,
-    '/add_products_from_file/<str:path>': add_products_from_file,
-    '/reports': report,
-    '/update_cart_quantity': update_cart_quantity,
-    '/staff_role': staff_role,
-    '/staff_role_add': staff_role_add,
-    '/delete_role/<int:staff_id>/<int:role_id>': delete_role,
-    '/role_permissions': role_permissions,
-    '/momo': 'momo',
-}
+url_to_function_map = [
+    (r'(?:/[A-z]+)?/registration', registration),
+    (r'(?:/[A-z]+)?/refresh_captcha', refresh_captcha),
+    (r'(?:/[A-z]+)?/verify', verify),
+    (r'(?:/[A-z]+)?/login', login),
+    (r'(?:/[A-z]+)?/home(?:/(\d+))?', home),
+    (r'(?:/[A-z]+)?/logout', logout),
+    (r'(?:/[A-z]+)?/profile', profile),
+    (r'(?:/[A-z]+)?/update_profile', update_profile),
+    (r'(?:/[A-z]+)?/delete_account', delete_account),
+    (r'(?:/[A-z]+)?/recover_password', recover_password),
+    (r'(?:/[A-z]+)?/resend_verf_code', resend_verf_code),
+    (r'(?:/[A-z]+)?/send_login_link', send_login_link),
+    (r'(?:/[A-z]+)?/log', login_with_token),
+    (r'(?:/[A-z]+)?/error_logs', view_logs),
+    (r'(?:/[A-z]+)?/update_captcha_settings', update_captcha_settings),
+    (r'(?:/[A-z]+)?/add_product', add_product),
+    (r'(?:/[A-z]+)?/image/(\d+)', serve_image),
+    (r'(?:/[A-z]+)?/add_to_cart', add_to_cart_meth),
+    (r'(?:/[A-z]+)?/cart', cart),
+    (r'(?:/[A-z]+)?/remove_from_cart', remove_from_cart_meth),
+    (r'(?:/[A-z]+)?/finish_payment', finish_payment),
+    (r'(?:/[A-z]+)?/crud', crud_inf),
+    (r'(?:/[A-z]+)?/staff_login', staff_login),
+    (r'(?:/[A-z]+)?/staff_portal', staff_portal),
+    (r'(?:/[A-z]+)?/logout_staff', logout_staff),
+    (r'(?:/[A-z]+)?/edit_product/(\d+)', edit_product),
+    (r'(?:/[A-z]+)?/delete_product/(\d+)', delete_product),
+    (r'(?:/[A-z]+)?/add_products_from_file/(.+)', add_products_from_file),
+    (r'(?:/[A-z]+)?/reports', report),
+    (r'(?:/[A-z]+)?/update_cart_quantity', update_cart_quantity),
+    (r'(?:/[A-z]+)?/staff_role', staff_role),
+    (r'(?:/[A-z]+)?/staff_role_add', staff_role_add),
+    (r'(?:/[A-z]+)?/delete_role/(\d+)/(\d+)', delete_role),
+    (r'(?:/[A-z]+)?/role_permissions(?:\?role=\d+)?', role_permissions),
+]
+
 
 @app.endpoint("handle_request")
-def handle_request(**kwargs):
+def handle_request(role=None, path=''):
     conn = None
     cur = None
+    roles = None
     try:
-        request_path = request.path
-        path_parts = request_path.split('/')
-        if len(path_parts) > 2 and path_parts[1] == 'image' and path_parts[2].isdigit():
-            product_id = int(path_parts[2])
-            funtion_to_call = serve_image
-        elif len(path_parts) > 2 and path_parts[1] == 'home' and path_parts[2].isdigit():
-            page = int(path_parts[2])
-            funtion_to_call = home
-        elif len(path_parts) > 2 and path_parts[1] == 'edit_product' and path_parts[2].isdigit():
-            product_id = int(path_parts[2])
-            funtion_to_call = edit_product
-        elif len(path_parts) > 2 and path_parts[1] == 'delete_product' and path_parts[2].isdigit():
-            product_id = int(path_parts[2])
-            funtion_to_call = delete_product
-        elif len(path_parts) > 2 and path_parts[1] == 'delete_role' and path_parts[2].isdigit() and path_parts[3].isdigit():
-            staff_id = int(path_parts[2])
-            role_id = int(path_parts[3])
-            funtion_to_call = delete_role
-        elif len(path_parts) > 2 and path_parts[1] == 'add_products_from_file':
-            # |C:|Added Programs|Telebid Pro|Forum-Project|images|large_productsV2.csv
-            # |home|galin|Desktop|projects|GitHub|Forum-Project|images|large_productsV2.csv
-            # /add_products_from_file/%7Chome%7Cgalin%7CDesktop%7Cprojects%7CGitHub%7CForum-Project%7Clarge_products.csv
-            string_path = path_parts[2].replace("|","/")
-            funtion_to_call = add_products_from_file
-        else:
-            funtion_to_call = url_to_function_map.get(request_path)
-        # funtion_to_call = url_to_function_map.get(request_path)
-
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor()
+        staff_username = user_email = session.get('staff_username')
 
-        utils.AssertUser(funtion_to_call is not None, "Invalid url")
-        utils.AssertDev(callable(funtion_to_call), "You are trying to invoke something that is not a funtion")
+        if staff_username is not None:
+            cur.execute("SELECT role_name FROM roles AS r JOIN staff_roles AS sr ON r.role_id=sr.role_id JOIN staff AS s ON sr.staff_id = s.id WHERE s.username = %s", (staff_username,))
+            roles = cur.fetchone()[0]
+        
+        if roles:
+            if role is None:
+                # Redirect to the URL with the role included
+                return redirect(url_for('handle_request', role=roles, path=path))
 
-        if 'product_id' in locals():
-            return funtion_to_call(conn, cur, product_id=product_id)
-        elif 'page' in locals():
-            return funtion_to_call(conn, cur, page=page)
-        elif 'string_path' in locals():
-            return funtion_to_call(conn, cur, string_path=string_path)
-        elif 'staff_id' and 'role_id' in locals():
-            return funtion_to_call(conn, cur, staff_id=staff_id, role_id=role_id)
-        else:           
+        # if roles:
+        #     role=roles
+        #     request_path = str(roles) + request.path
+        # else:
+        #     request_path = request.path
+
+        funtion_to_call = None
+        match = None
+
+        for pattern, function in url_to_function_map:
+            match = re.match(pattern, request.path)
+            if match:
+                funtion_to_call = function
+                break
+
+        utils.AssertUser(funtion_to_call is not None, "Invalid URL")
+        utils.AssertDev(callable(funtion_to_call), "You are trying to invoke something that is not a function")
+
+        if match:
+            return funtion_to_call(conn, cur, *match.groups())
+        else:
             return funtion_to_call(conn, cur)
     except Exception as message:
         user_email = session.get('user_email', 'Guest')
