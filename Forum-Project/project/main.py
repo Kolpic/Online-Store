@@ -989,7 +989,9 @@ def edit_product(conn, cur, product_id):
     utils.AssertUser(name and price_ and quantity_ and category, "All fields must be filled")
 
     price = float(price_)
+    utils.AssertUser(price > 0, "Price must be possitive")
     quantity = int(quantity_)
+    utils.AssertUser(quantity >= 0, "Quantity must be possitive")
 
     cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s WHERE id = %s", (name, price, quantity, category, product_id))
     conn.commit()
@@ -1194,6 +1196,322 @@ def role_permissions(conn, cur):
     conn.commit()
     return redirect('/role_permissions?role=' + role_id)
 
+def back_office_manager(conn, cur, *params):
+    if 'staff_username' not in session:
+        return redirect('/staff_login')
+
+    current_role = request.path.split('/')[1]
+
+    if request.path == f'/{current_role}/error_logs':     
+        utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read'), "You don't have permission to this resource")
+
+        sort_by = request.args.get('sort','time')
+        sort_order = request.args.get('order','asc')
+
+        valid_sort_columns = {'time'}
+        valid_sort_orders = {'asc', 'desc'}
+
+        if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
+            sort_by = 'time'
+            sort_order = 'asc'
+
+        query = "SELECT * FROM exception_logs"
+
+        if sort_by and sort_order:
+            query += f" ORDER BY {sort_by} {sort_order}"
+
+        cur.execute(query)
+        log_exceptions = cur.fetchall()
+
+        return render_template('logs.html', log_exceptions = log_exceptions, sort_by=sort_by, sort_order=sort_order)
+    
+    if request.path == f'/{current_role}/update_captcha_settings':
+        utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'read'), "You don't have permission to this resource")
+
+        if request.method == 'GET':
+            current_settings = utils.get_current_settings(cur)
+            return render_template('captcha_settings.html', current_role=current_role, **current_settings)
+
+        utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update'), "You don't have permission to this resource")
+        new_max_attempts = request.form['max_captcha_attempts']
+        new_timeout_minutes = request.form['captcha_timeout_minutes']
+
+        utils.AssertUser(not(new_max_attempts and int(new_max_attempts)) <= 0, "Captcha attempts must be possitive number")
+        utils.AssertUser(not(new_timeout_minutes and int(new_timeout_minutes)) <= 0, "Timeout minutes must be possitive number")
+
+        str_message = ""
+
+        if new_max_attempts:
+            cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'max_captcha_attempts'", (new_max_attempts,))
+            str_message += 'You updated captcha attempts. '
+        if new_timeout_minutes:
+            cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'captcha_timeout_minutes'", (new_timeout_minutes,))
+            str_message += 'You updated timeout minutes.'
+        
+        conn.commit()
+    
+        if str_message != "":
+            session['staff_message'] = str_message
+        return redirect(f'/{current_role}/staff_portal')
+
+    if request.path == f'/{current_role}/report_sales':
+        utils.AssertUser(utils.has_permission(cur, request, 'Report sales', 'read'), "You don't have permission to this resource")
+
+        if request.method == 'GET':
+            return render_template('report.html', current_role=current_role)
+    
+        date_from = request.form.get('date_from')
+        date_to = request.form.get('date_to')
+        group_by = request.form.get('group_by')
+        status = request.form.get('status')
+
+        utils.AssertUser(date_from or date_to, "You have to select a date from, date to")
+
+        if group_by:
+            group_by_clause = f"DATE(date_trunc(%s, order_date))"
+        else:
+            group_by_clause = "o.order_id"
+
+        status_filter = ""
+        if status:
+            status_filter = "AND o.status = %s"
+
+        query = f"""
+        WITH OrderSums AS (
+            SELECT
+                o.order_id,
+                DATE(o.order_date) AS order_date,
+                u.first_name || ' ' || u.last_name AS buyer_name,
+                o.status,
+                SUM(oi.quantity * oi.price) AS order_sum
+            FROM
+                orders o
+            JOIN
+                users u ON o.user_id = u.id
+            JOIN
+                order_items oi ON o.order_id = oi.order_id
+            WHERE
+                o.order_date BETWEEN %s AND %s
+                {status_filter}
+            GROUP BY
+                o.order_id, o.order_date, buyer_name, o.status
+        )
+        SELECT
+            {group_by_clause} AS period,
+            array_agg(order_id) AS order_ids,
+            array_agg(buyer_name) AS names_of_buyers,
+            SUM(order_sum) AS total_sum,
+            array_agg(status) AS order_statuses,
+            status
+        FROM
+            OrderSums as o
+        GROUP BY
+            period, status
+        ORDER BY
+            period, status;
+        """
+
+        params = [date_from, date_to]
+        if status:
+            params.append(status)
+        if group_by:
+            params.append(group_by)
+
+        cur.execute(query, tuple(params))
+        report = cur.fetchall()
+        return render_template('report.html', report=report, current_role=current_role)
+
+    if request.path == f'/{current_role}/role_permissions':
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read'), "You don't have permission to this resource")
+        interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles',]
+
+        if request.method == 'GET':
+            role = request.path.split('/')[1]
+            cur.execute('SELECT role_id, role_name FROM roles')
+            roles = cur.fetchall()
+
+            selected_role = int(request.args.get('role', roles[0][0] if roles else None))
+
+            cur.execute('SELECT role_id, role_name FROM roles WHERE role_id = %s', (selected_role,))
+            role_to_display = cur.fetchall()
+
+            role_permissions = {role[0]: {interface: {'create': False, 'read': False, 'update': False, 'delete': False} for interface in interfaces} for role in role_to_display}
+
+            cur.execute('SELECT rp.role_id, p.interface, p.permission_name FROM role_permissions AS rp JOIN permissions AS p ON rp.permission_id=p.permission_id')
+            permissions = cur.fetchall()
+
+            for role_id, interface, permission_name in permissions:
+                if role_id in role_permissions and interface in role_permissions[role_id]:
+                    role_permissions[role_id][interface][permission_name] = True
+
+            return render_template('role_permissions.html', roles=roles, interfaces=interfaces, role_permissions=role_permissions, selected_role=selected_role, role_to_display=role)
+    
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'update'), "You don't have permission to this resource")
+        role_id = request.form['role']
+        cur.execute('DELETE FROM role_permissions WHERE role_id = %s', (role_id,))
+        for interface in interfaces:
+            for action in ['create', 'read', 'update', 'delete']:
+                if f'{interface}_{action}' in request.form:
+                    cur.execute("SELECT permission_id FROM permissions WHERE permission_name = %s AND interface = %s", (action, interface))
+                    permission_id = cur.fetchone()[0]
+                    cur.execute('INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)', 
+                                (role_id, permission_id))
+        conn.commit()
+        session['role_permission_message'] = 'You successfull updated permissions for role with id: ' + str(role_id)
+        return redirect(f'/{current_role}/role_permissions?role=' + role_id)
+
+    if request.path.split('_')[0] == f'/{current_role}/crud':
+        if request.path.split('_')[1] == 'products' or request.path.split('_')[1] == 'staff':
+            if request.path.split('_')[1] == 'products':
+                utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read'), "You don't have permission to this resource")
+
+                sort_by = request.args.get('sort', 'id')
+                sort_order = request.args.get('order', 'asc')
+                price_min = request.args.get('price_min', None, type=float)
+                price_max = request.args.get('price_max', None, type=float)
+
+                valid_sort_columns = {'id', 'name', 'price', 'quantity', 'category'}
+                valid_sort_orders = {'asc', 'desc'}
+
+                if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
+                    sort_by = 'id'
+                    sort_order = 'asc'
+                
+                base_query = sql.SQL("SELECT * FROM products")
+                conditions = []
+                query_params = []
+
+                if price_min is not None and price_max is not None:
+                    conditions.append(sql.SQL("price BETWEEN %s AND %s"))
+                    query_params.extend([price_min, price_max])
+                
+                if conditions:
+                    base_query = base_query + sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
+                
+                base_query = base_query + sql.SQL(" ORDER BY ") + sql.Identifier(sort_by) + sql.SQL(f" {sort_order}")
+                
+                base_query = base_query + sql.SQL(" LIMIT 100")
+
+                cur.execute(base_query.as_string(conn), query_params)
+                products = cur.fetchall()
+
+                return render_template('crud.html', products=products, sort_by=sort_by, sort_order=sort_order, price_min=price_min or '', price_max=price_max or '')
+            
+            if request.path.split('_')[1] == 'staff':
+                utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read'), "You don't have permission to this resource")
+
+                cur.execute("SELECT s.username, r.role_name, sr.staff_id, sr.role_id FROM staff_roles sr JOIN staff s ON s.id = sr.staff_id JOIN roles r ON r.role_id = sr.role_id")
+                relations = cur.fetchall()
+                return render_template('staff_role_assignment.html', relations=relations, current_role=current_role)
+        
+        if request.path.split('/')[3] == 'add_product' or request.path.split('/')[3] == 'add_role_staff':
+
+            if request.path.split('/')[3] == 'add_product':
+                utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'create'), "You don't have permission to this resource")
+
+                if request.method == 'GET':
+                    cur.execute("SELECT DISTINCT(category) FROM products")
+                    categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
+                    return render_template('add_product_staff.html', categories=categories, current_role=current_role)
+
+                name = request.form['name']
+                price = request.form['price']
+                quantity = request.form['quantity']
+                category = request.form['category']
+                image = request.files['image']
+
+                utils.AssertUser(name and price and quantity and category and image, "You must add information in every field.")
+                utils.AssertUser(isinstance(float(price), float), "Price is not a number")
+                utils.AssertUser(isinstance(int(quantity), int), "Quantity is not a number")
+                utils.AssertUser(float(price) > 0, "Price must be possitive number")
+                utils.AssertUser(int(quantity) > 0, "Quantity must be possitive")
+                
+                if image and allowed_file(image.filename):
+                    filename = secure_filename(image.filename)
+                    image_data = image.stream
+                    image_ = validate_image_size(image_data)
+
+                cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image_))
+                conn.commit()
+                session['crud_message'] = "Item was added successful"
+                return redirect(f'/{current_role}/crud_products')
+            
+            if request.path.split('/')[3] == 'add_role_staff':
+                utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create'), "You don't have permission to this resource")
+
+                if request.method == 'GET':
+                    cur.execute("SELECT id, username FROM staff")
+                    staff = cur.fetchall()
+
+                    cur.execute("SELECT role_id, role_name FROM roles")
+                    roles = cur.fetchall()
+
+                    return render_template('add_staff_role.html', staff=staff, roles=roles, current_role=current_role) 
+
+                staff_name = request.form['staff']
+                staff_role = request.form['role']
+
+                cur.execute("SELECT id FROM staff WHERE username = %s", (staff_name,))
+                staff_id = cur.fetchone()[0]
+
+                cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (staff_role,))
+                role_id = cur.fetchone()[0]
+
+                cur.execute('INSERT INTO staff_roles (staff_id, role_id) VALUES (%s, %s)', (staff_id, role_id))
+                conn.commit()
+
+                session['staff_message'] = "You successful gave a role: " + staff_role + "to user: " + staff_name
+                return redirect('/staff_portal')
+
+        if request.path.split('/')[3] == 'edit_product':
+            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'update'), "You don't have permission to this resource")
+
+            product_id = request.path.split('/')[4]
+            if request.method == 'GET':
+                cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
+                product = cur.fetchone()
+                utils.AssertUser(product, "Invalid product")
+                return render_template('edit_product.html', product=product, product_id=product_id, current_role=current_role)
+    
+            name = request.form['name']
+            price_ = request.form['price']
+            quantity_ = request.form['quantity']
+            category = request.form['category']
+
+            utils.AssertUser(name and price_ and quantity_ and category, "All fields must be filled")
+
+            price = float(price_)
+            utils.AssertUser(price > 0, "Price must be possitive")
+            quantity = int(quantity_)
+            utils.AssertUser(quantity >= 0, "Quantity must be possitive")
+
+            cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s WHERE id = %s", (name, price, quantity, category, product_id))
+            conn.commit()
+            session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
+            return redirect(f'/{current_role}/crud_products')
+        
+        if request.path.split('/')[3] == 'delete_product' or request.path.split('/')[3] == 'delete_role':
+            if request.path.split('/')[3] == 'delete_product':
+                utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'delete'), "You don't have permission to this resource")
+
+                product_id = request.path.split('/')[4]
+                cur.execute("UPDATE products SET quantity = 0 WHERE id = %s", (product_id,))
+                conn.commit()
+                session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
+                return redirect(f'/{current_role}/crud_products')
+            
+            if request.path.split('/')[3] == 'delete_role':
+                utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'delete'), "You don't have permission to this resource")
+
+                staff_id = request.path.split('/')[4]
+                role_id = request.path.split('/')[5]
+                cur.execute('DELETE FROM staff_roles WHERE staff_id = %s AND role_id = %s', (staff_id, role_id))
+                conn.commit()
+
+                session['staff_message'] = "You successful deleted a role"
+                return redirect(f'/{current_role}/staff_portal')
+                        
+
 @app.route('/favicon.ico')
 def favicon():
     return app.send_static_file('favicon.ico')
@@ -1212,27 +1530,42 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/resend_verf_code', resend_verf_code),
     (r'(?:/[A-z]+)?/send_login_link', send_login_link),
     (r'(?:/[A-z]+)?/log', login_with_token),
-    (r'(?:/[A-z]+)?/error_logs', view_logs),
-    (r'(?:/[A-z]+)?/update_captcha_settings', update_captcha_settings),
-    (r'(?:/[A-z]+)?/add_product', add_product),
     (r'(?:/[A-z]+)?/image/(\d+)', serve_image),
     (r'(?:/[A-z]+)?/add_to_cart', add_to_cart_meth),
     (r'(?:/[A-z]+)?/cart', cart),
+    (r'(?:/[A-z]+)?/update_cart_quantity', update_cart_quantity),
     (r'(?:/[A-z]+)?/remove_from_cart', remove_from_cart_meth),
     (r'(?:/[A-z]+)?/finish_payment', finish_payment),
-    (r'(?:/[A-z]+)?/crud', crud_inf),
     (r'(?:/[A-z]+)?/staff_login', staff_login),
     (r'(?:/[A-z]+)?/staff_portal', staff_portal),
     (r'(?:/[A-z]+)?/logout_staff', logout_staff),
-    (r'(?:/[A-z]+)?/edit_product/(\d+)', edit_product),
-    (r'(?:/[A-z]+)?/delete_product/(\d+)', delete_product),
-    (r'(?:/[A-z]+)?/add_products_from_file/(.+)', add_products_from_file),
-    (r'(?:/[A-z]+)?/reports', report),
-    (r'(?:/[A-z]+)?/update_cart_quantity', update_cart_quantity),
-    (r'(?:/[A-z]+)?/staff_role', staff_role),
-    (r'(?:/[A-z]+)?/staff_role_add', staff_role_add),
-    (r'(?:/[A-z]+)?/delete_role/(\d+)/(\d+)', delete_role),
-    (r'(?:/[A-z]+)?/role_permissions(?:\?role=\d+)?', role_permissions),
+    (r'(/[A-z]+)/logout_staff', logout_staff),
+    (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions)(?:/[\w\d\-_/]*)?', back_office_manager),
+
+    # # (r'(?:/[A-z]+)?/error_logs', view_logs),
+    # (r'(?:/[A-z]+)?/error_logs', back_office_manager),
+    # # (r'(?:/[A-z]+)?/update_captcha_settings', update_captcha_settings),
+    # (r'(?:/[A-z]+)?/update_captcha_settings', back_office_manager),
+    # # (r'(?:/[A-z]+)?/crud', crud_inf),
+    # (r'(?:/[A-z]+)?/crud_products', back_office_manager),
+    # # (r'(?:/[A-z]+)?/add_product', add_product),
+    # (r'(?:/[A-z]+)?/crud_products/add_product', back_office_manager),
+    # # (r'(?:/[A-z]+)?/edit_product/(\d+)', edit_product),
+    # (r'(?:/[A-z]+)?/crud_products/edit_product/(\d+)', back_office_manager),
+    # # (r'(?:/[A-z]+)?/delete_product/(\d+)', delete_product),
+    # (r'(?:/[A-z]+)?/crud_products/delete_product/(\d+)', back_office_manager),
+    # (r'(?:/[A-z]+)?/add_products_from_file/(.+)', add_products_from_file),
+    # # (r'(?:/[A-z]+)?/reports', report),
+    # (r'(?:/[A-z]+)?/report_sales', back_office_manager),
+    # # (r'(?:/[A-z]+)?/staff_role', staff_role),
+    # # (r'(?:/[A-z]+)?/staff_role_add', staff_role_add),
+    # # (r'(?:/[A-z]+)?/delete_role/(\d+)/(\d+)', delete_role),
+    # (r'(?:/[A-z]+)?/crud_staff', back_office_manager),
+    # # (r'(?:/[A-z]+)?/crud_staff/add_staff', back_office_manager),
+    # (r'(?:/[A-z]+)?/crud_staff/add_role_staff', back_office_manager),
+    # (r'(?:/[A-z]+)?/crud_staff/delete_role/(\d+)/(\d+)', back_office_manager),
+    # # (r'(?:/[A-z]+)?/role_permissions(?:\?role=\d+)?', role_permissions),
+    # (r'(?:/[A-z]+)?/role_permissions(?:\?role=\d+)?', back_office_manager),
 ]
 
 

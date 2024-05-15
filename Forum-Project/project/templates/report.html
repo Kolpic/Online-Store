@@ -8,7 +8,7 @@
 <body>
     <div class="container mt-5">
         <h2>Generate Sales Report</h2>
-        <form action="/reports" method="post">
+        <form action="/{{ current_role }}/report_sales" method="post">
             <label for="date_from">From:</label>
             <input type="date" id="date_from" name="date_from" required>
         

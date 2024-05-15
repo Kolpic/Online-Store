@@ -8,7 +8,7 @@
 <body>
     <div class="container mt-5">
         <h1>Assign Role to Staff</h1>
-        <form action="/staff_role_add" method="POST">
+        <form action="/{{ current_role }}/crud_staff/add_role_staff" method="POST">
             <div class="form-group">
                 <label for="staff">Select Staff Member:</label>
                 <select id="staff" name="staff" class="form-control">

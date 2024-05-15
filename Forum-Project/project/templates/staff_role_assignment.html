@@ -10,7 +10,7 @@
         <div class="container mt-3">
             <h2>Staff Roles Management</h2>
             <div class="mb-2">
-                <button onclick="location.href='/staff_role_add'" class="btn btn-primary">Add New Role</button>
+                <button onclick="location.href='/{{current_role}}/crud_staff/add_role_staff'" class="btn btn-primary">Add New Role</button>
             </div>
             <table class="table">
                 <thead>
@@ -26,7 +26,7 @@
                         <td>{{ relation[0] }}</td>
                         <td>{{ relation[1] }}</td>
                         <td>
-                            <button onclick="if(confirm('Are you sure?')) location.href='/delete_role/{{ relation[2] }}/{{ relation[3] }}'" class="btn btn-danger">Delete</button>
+                            <button onclick="if(confirm('Are you sure?')) location.href='/{{current_role}}/crud_staff/delete_role/{{ relation[2] }}/{{ relation[3] }}'" class="btn btn-danger">Delete</button>
                         </td>
                     </tr>
                     {% endfor %}

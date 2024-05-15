@@ -27,12 +27,12 @@
 </style>
 <body>
     {% if 'crud_error' in session %}
-        <div class="alert alert-danger">
+        <div class="alert alert-danger" id="homeAlert">
             {{ session.pop('crud_error') }}
         </div>
     {% endif %}
     {% if 'crud_message' in session %}
-        <div class="alert alert-success">
+        <div class="alert alert-success" id="homeAlert">
             {{ session.pop('crud_message') }}
         </div>
     {% endif %}
@@ -51,8 +51,7 @@
     <div class="container mt-3">
         <h2>Product Management</h2>
         <div class="mb-2">
-            <button onclick="location.href='/add_product'" class="btn btn-primary">Add New Product</button>
-            <button onclick="location.href='/download_products'" class="btn btn-info">Download as CSV</button>
+            <button onclick="navigateTo('add_product')" class="btn btn-primary">Add New Product</button>
         </div>
         <form id="priceForm" method="get">
         <div class="form-row">
@@ -88,8 +87,8 @@
                     <td>{{ product[3]}}</td>
                     <td>{{ product[4]}}</td>
                     <td>
-                        <button onclick="location.href='/edit_product/{{ product[0] }}'" class="btn btn-secondary">Edit</button>
-                        <button onclick="if(confirm('Are you sure?')) location.href='/delete_product/{{ product[0] }}'" class="btn btn-danger">Delete</button>
+                        <button onclick="navigateTo('edit_product/{{ product[0] }}')" class="btn btn-secondary">Edit</button>
+                        <button onclick="if(confirm('Are you sure?')) navigateTo('delete_product/{{ product[0] }}')" class="btn btn-danger">Delete</button>
                     </td>
                 </tr>
                 {% endfor %}
@@ -98,8 +97,21 @@
     </div>
 </body>
 <script>
+    function navigateTo(path) {
+            const baseURL = window.location.href.split('?')[0]; 
+            window.location.href = baseURL + '/' + path;
+    }
+
     function submitForm() {
         document.getElementById("priceForm").submit();
     }
+    window.onload = function() {
+        setTimeout(function() {
+            let homeAlert = document.getElementById('homeAlert');
+            if (homeAlert) {
+                homeAlert.style.display = 'none';
+            }
+        }, 3000);
+    };
 </script>
 </html>
