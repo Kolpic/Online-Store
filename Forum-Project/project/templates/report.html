@@ -8,7 +8,7 @@
 <body>
     <div class="container mt-5">
         <h2>Generate Sales Report</h2>
-        <form action="/{{ current_role }}/report_sales" method="post">
+        <form  id="reportForm" action="/{{ current_role }}/report_sales" method="post">
             <label for="date_from">From:</label>
             <input type="date" id="date_from" name="date_from" required>
         
@@ -29,6 +29,9 @@
                 <option value="Ready for Paying">Ready for Paying</option>
                 <option value="Paid">Paid</option>
             </select>
+
+            <label for="sale_id">Find sale by ID:</label>
+            <input type="number" id="sale_id" name="sale_id">
         
             <button type="submit">Generate Report</button>
         </form>
@@ -66,4 +69,12 @@
     <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 </body>
+<script>
+    document.getElementById('sale_id').addEventListener('change', function() {
+        let saleId = this.value;
+        let form = document.getElementById('reportForm');
+        form.action = '/{{ current_role }}/report_sales/' + saleId;
+        form.submit();
+    });
+</script>
 </html>

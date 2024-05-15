@@ -1254,7 +1254,7 @@ def back_office_manager(conn, cur, *params):
             session['staff_message'] = str_message
         return redirect(f'/{current_role}/staff_portal')
 
-    if request.path == f'/{current_role}/report_sales':
+    if request.path.split('/')[2] == 'report_sales':
         utils.AssertUser(utils.has_permission(cur, request, 'Report sales', 'read'), "You don't have permission to this resource")
 
         if request.method == 'GET':
@@ -1264,7 +1264,33 @@ def back_office_manager(conn, cur, *params):
         date_to = request.form.get('date_to')
         group_by = request.form.get('group_by')
         status = request.form.get('status')
+        order_id = request.path.split('/')[3]
 
+        if order_id:
+            # cur.execute("SELECT o.order_date, array_agg(o.order_id), array_agg(u.first_name || ' ' || u.last_name), array_agg(oi.quantity * oi.price), o.status FROM orders AS o JOIN users AS u ON o.user_id=u.id JOIN order_items AS oi ON o.order_id=oi.order_id WHERE o.order_id = %s GROUP BY o.order_date, status ORDER BY o.order_date, status", (order_id,))
+            cur.execute("""
+                SELECT
+                    o.order_date,
+                    array_agg(o.order_id),
+                    array_agg(u.first_name || ' ' || u.last_name) AS buyer_name,
+                    oi.quantity * oi.price AS item_total,
+                    array_agg(o.status)
+                FROM
+                    orders o
+                JOIN
+                    users u ON o.user_id = u.id
+                JOIN
+                    order_items oi ON o.order_id = oi.order_id
+                WHERE
+                    o.order_id = %s
+                GROUP BY
+                    o.order_date, o.order_id, u.first_name, u.last_name, oi.quantity, oi.price, o.status
+                ORDER BY
+                    o.order_date, o.status;
+                        """, (order_id,))
+            report = cur.fetchall()
+            return render_template('report.html', report=report, current_role=current_role)
+        
         utils.AssertUser(date_from or date_to, "You have to select a date from, date to")
 
         if group_by:
@@ -1587,12 +1613,6 @@ def handle_request(role=None, path=''):
             if role is None:
                 # Redirect to the URL with the role included
                 return redirect(url_for('handle_request', role=roles, path=path))
-
-        # if roles:
-        #     role=roles
-        #     request_path = str(roles) + request.path
-        # else:
-        #     request_path = request.path
 
         funtion_to_call = None
         match = None
