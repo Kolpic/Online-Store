@@ -10,24 +10,24 @@
         <h2>Generate Sales Report</h2>
         <form  id="reportForm" action="/{{ current_role }}/report_sales" method="post">
             <label for="date_from">From:</label>
-            <input type="date" id="date_from" name="date_from" required>
+            <input type="date" id="date_from" name="date_from" value="{{ request.form.date_from if request.form.date_from else '' }}" required>
         
             <label for="date_to">To:</label>
-            <input type="date" id="date_to" name="date_to" required>
+            <input type="date" id="date_to" name="date_to" value="{{ request.form.date_to if request.form.date_to else '' }}" required>
         
             <label for="group_by">Group by:</label>
             <select id="group_by" name="group_by">
                 <option value="">Every order</option>
-                <option value="day">Day</option>
-                <option value="month">Month</option>
-                <option value="year">Year</option>
+                <option value="day" {{ 'selected' if request.form.group_by == 'day' else '' }} >Day</option>
+                <option value="month" {{ 'selected' if request.form.group_by == 'month' else '' }}  >Month</option>
+                <option value="year" {{ 'selected' if request.form.group_by == 'year' else '' }}  >Year</option>
             </select>
 
             <label for="status">Status:</label>
             <select id="status" name="status">
                 <option value="">All</option>
-                <option value="Ready for Paying">Ready for Paying</option>
-                <option value="Paid">Paid</option>
+                <option value="Ready for Paying" {{ 'selected' if request.form.status == 'Ready for Paying' else '' }} >Ready for Paying</option>
+                <option value="Paid" {{ 'selected' if request.form.status == 'Paid' else '' }} >Paid</option>
             </select>
 
             <label for="sale_id">Find sale by ID:</label>
@@ -58,9 +58,25 @@
                         <td class="text-right">{{ row[4][0] }}</td>
                     </tr>
                     {% endfor %}
+                    <tr>
+                        <td> <strong>Total Records: </strong>{{ total_records }} </td>
+                        <td colspan="2" class="text-right"><strong>Total:</strong></td>
+                        <td class="text-right"><strong>{{ total_price }} лв.</strong></td>
+                        <td></td>
+                    </tr>
                 </tbody>
             </table>
         </div>
+        <form action="/{{ current_role }}/download_report" method="post">
+            <input type="hidden" name="date_from" value="{{ request.form['date_from'] }}">
+            <input type="hidden" name="date_to" value="{{ request.form['date_to'] }}">
+            <input type="hidden" name="group_by" value="{{ request.form['group_by'] }}">
+            <input type="hidden" name="status" value="{{ request.form['status'] }}">
+            <input type="hidden" name="total_records" value="{{ total_records }}">
+            <input type="hidden" name="total_price" value="{{ total_price }}">
+            <input type="hidden" name="report_data" value="{{ report_json }}">
+            <button type="submit">Download as CSV</button>
+        </form>
         {% else %}
         <br>
         <h2>No records with this filters</h2>
@@ -70,6 +86,8 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 </body>
 <script>
+    let reportData = JSON.parse('{{ report_json | safe }}');
+    console.log(reportData);
     document.getElementById('sale_id').addEventListener('change', function() {
         let saleId = this.value;
         let form = document.getElementById('reportForm');

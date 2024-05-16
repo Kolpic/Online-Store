@@ -1264,10 +1264,12 @@ def back_office_manager(conn, cur, *params):
         date_to = request.form.get('date_to')
         group_by = request.form.get('group_by')
         status = request.form.get('status')
-        order_id = request.path.split('/')[3]
+        order_id = 0
+        if len(request.path.split('/')) > 3:
+            order_id = request.path.split('/')[3]
+            utils.AssertUser(isinstance(int(order_id), int), 'You must enter a number')
 
-        if order_id:
-            # cur.execute("SELECT o.order_date, array_agg(o.order_id), array_agg(u.first_name || ' ' || u.last_name), array_agg(oi.quantity * oi.price), o.status FROM orders AS o JOIN users AS u ON o.user_id=u.id JOIN order_items AS oi ON o.order_id=oi.order_id WHERE o.order_id = %s GROUP BY o.order_date, status ORDER BY o.order_date, status", (order_id,))
+        if order_id != 0:
             cur.execute("""
                 SELECT
                     o.order_date,
@@ -1345,7 +1347,39 @@ def back_office_manager(conn, cur, *params):
 
         cur.execute(query, tuple(params))
         report = cur.fetchall()
-        return render_template('report.html', report=report, current_role=current_role)
+        total_records = len(report)
+        total_price = sum(row[3] for row in report)
+        report_json = utils.serialize_report(report)
+        return render_template('report.html', report=report, current_role=current_role, total_records=total_records, total_price=total_price, report_json=report_json)
+
+    if request.path == f'/{current_role}/download_report':
+        date_from = request.form['date_from']
+        date_to = request.form['date_to']
+        group_by = request.form['group_by']
+        status = request.form['status']
+        total_records = request.form['total_records']
+        total_price = request.form['total_price']
+        report_data = request.form['report_data']
+
+        si = io.StringIO()
+        cw = csv.writer(si)
+        cw.writerow(['Date', 'Order ID\'s', 'Name of Buyers', 'Total Price', 'Order Status'])
+        for row in json.loads(report_data):
+            cw.writerow(row)
+        cw.writerow(['Total Records: ', total_records, 'Total: ', total_price])
+
+        cw.writerow(['Filters'])
+        cw.writerow(['Date From:', date_from])
+        cw.writerow(['Date To:', date_to])
+        cw.writerow(['Group By:', group_by])
+        cw.writerow(['Status:', status])
+
+        output = si.getvalue()
+        si.close()
+
+        response = Response(output, mimetype= 'text/csv')
+        response.headers['Content-Disposition'] = 'attachment; filename=report.csv'
+        return response
 
     if request.path == f'/{current_role}/role_permissions':
         utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read'), "You don't have permission to this resource")
@@ -1434,7 +1468,7 @@ def back_office_manager(conn, cur, *params):
 
             if request.path.split('/')[3] == 'add_product':
                 utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'create'), "You don't have permission to this resource")
-
+                # TODO: ref
                 if request.method == 'GET':
                     cur.execute("SELECT DISTINCT(category) FROM products")
                     categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
@@ -1445,6 +1479,7 @@ def back_office_manager(conn, cur, *params):
                 quantity = request.form['quantity']
                 category = request.form['category']
                 image = request.files['image']
+
 
                 utils.AssertUser(name and price and quantity and category and image, "You must add information in every field.")
                 utils.AssertUser(isinstance(float(price), float), "Price is not a number")
@@ -1464,7 +1499,7 @@ def back_office_manager(conn, cur, *params):
             
             if request.path.split('/')[3] == 'add_role_staff':
                 utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create'), "You don't have permission to this resource")
-
+                 # TODO: ref
                 if request.method == 'GET':
                     cur.execute("SELECT id, username FROM staff")
                     staff = cur.fetchall()
@@ -1491,7 +1526,7 @@ def back_office_manager(conn, cur, *params):
 
         if request.path.split('/')[3] == 'edit_product':
             utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'update'), "You don't have permission to this resource")
-
+            # TODO: ref
             product_id = request.path.split('/')[4]
             if request.method == 'GET':
                 cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
@@ -1518,6 +1553,7 @@ def back_office_manager(conn, cur, *params):
         
         if request.path.split('/')[3] == 'delete_product' or request.path.split('/')[3] == 'delete_role':
             if request.path.split('/')[3] == 'delete_product':
+                # TODO: ref
                 utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'delete'), "You don't have permission to this resource")
 
                 product_id = request.path.split('/')[4]
@@ -1539,7 +1575,7 @@ def back_office_manager(conn, cur, *params):
                         
 
 @app.route('/favicon.ico')
-def favicon():
+def favicon():#
     return app.send_static_file('favicon.ico')
 
 url_to_function_map = [
@@ -1566,7 +1602,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/staff_portal', staff_portal),
     (r'(?:/[A-z]+)?/logout_staff', logout_staff),
     (r'(/[A-z]+)/logout_staff', logout_staff),
-    (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions)(?:/[\w\d\-_/]*)?', back_office_manager),
+    (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report)(?:/[\w\d\-_/]*)?', back_office_manager),
 
     # # (r'(?:/[A-z]+)?/error_logs', view_logs),
     # (r'(?:/[A-z]+)?/error_logs', back_office_manager),

@@ -1,7 +1,8 @@
 from flask import session
-import bcrypt
+import bcrypt, json
 import psycopg2
 from project import config, exception
+from datetime import date
 
 database = config.database
 user = config.user
@@ -51,3 +52,17 @@ def has_permission(cur, request,interface, permission_needed):
     cur.execute("SELECT permission_name FROM permissions AS p JOIN role_permissions AS rp ON p.permission_id=rp.permission_id JOIN roles AS r ON rp.role_id=r.role_id WHERE r.role_id = %s and p.interface = %s", (role_id, interface))
     permissions = cur.fetchall()
     return any(permission_needed in permission for permission in permissions)
+
+def serialize_report(report):
+    json_ready_report = []
+    for row in report:
+        date_str = row[0].strftime('%Y-%m-%d') if isinstance(row[0], date) else row[0]
+        json_row = [
+            date_str,
+            list(row[1]), 
+            list(row[2]),
+            float(row[3]),
+            list(row[4])
+        ]
+        json_ready_report.append(json_row)
+    return json.dumps(json_ready_report)
