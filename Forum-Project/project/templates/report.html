@@ -8,33 +8,46 @@
 <body>
     <div class="container mt-5">
         <h2>Generate Sales Report</h2>
-        <form  id="reportForm" action="/{{ current_role }}/report_sales" method="post">
-            <label for="date_from">From:</label>
-            <input type="date" id="date_from" name="date_from" value="{{ request.form.date_from if request.form.date_from else '' }}" required>
-        
-            <label for="date_to">To:</label>
-            <input type="date" id="date_to" name="date_to" value="{{ request.form.date_to if request.form.date_to else '' }}" required>
-        
-            <label for="group_by">Group by:</label>
-            <select id="group_by" name="group_by">
-                <option value="">Every order</option>
-                <option value="day" {{ 'selected' if request.form.group_by == 'day' else '' }} >Day</option>
-                <option value="month" {{ 'selected' if request.form.group_by == 'month' else '' }}  >Month</option>
-                <option value="year" {{ 'selected' if request.form.group_by == 'year' else '' }}  >Year</option>
-            </select>
+        <form id="reportForm" action="/{{ current_role }}/report_sales" method="post">
+            <div class="form-row">
+                <div class="col">
+                    <label for="date_from">From:</label>
+                    <input type="date" class="form-control" id="date_from" name="date_from" value="{{ request.form.date_from if request.form.date_from else '' }}" required>
+                </div>
+                <div class="col">
+                    <label for="date_to">To:</label>
+                    <input type="date" class="form-control" id="date_to" name="date_to" value="{{ request.form.date_to if request.form.date_to else '' }}" required>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="col-md-4">
+                    <label for="group_by">Group by:</label>
+                    <select id="group_by" class="form-control" name="group_by">
+                        <option value="">All</option>
+                        <option value="day" {{ 'selected' if request.form.group_by == 'day' else '' }}>Day</option>
+                        <option value="month" {{ 'selected' if request.form.group_by == 'month' else '' }}>Month</option>
+                        <option value="year" {{ 'selected' if request.form.group_by == 'year' else '' }}>Year</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="status">Status:</label>
+                    <select id="status" class="form-control" name="status">
+                        <option value="">All</option>
+                        <option value="Ready for Paying" {{ 'selected' if request.form.status == 'Ready for Paying' else '' }}>Ready for Paying</option>
+                        <option value="Paid" {{ 'selected' if request.form.status == 'Paid' else '' }}>Paid</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="sale_id">Find sale by ID:</label>
+                    <input type="number" class="form-control" id="sale_id" name="sale_id">
+                </div>
+            </div>
 
-            <label for="status">Status:</label>
-            <select id="status" name="status">
-                <option value="">All</option>
-                <option value="Ready for Paying" {{ 'selected' if request.form.status == 'Ready for Paying' else '' }} >Ready for Paying</option>
-                <option value="Paid" {{ 'selected' if request.form.status == 'Paid' else '' }} >Paid</option>
-            </select>
-
-            <label for="sale_id">Find sale by ID:</label>
-            <input type="number" id="sale_id" name="sale_id">
-        
-            <button type="submit">Generate Report</button>
+            <br>
+            <button type="submit" class="btn btn-primary">Generate Report</button>
         </form>
+
         {% if report %}
         <div class="mt-4">
             <h3>Report</h3>
@@ -59,7 +72,7 @@
                     </tr>
                     {% endfor %}
                     <tr>
-                        <td> <strong>Total Records: </strong>{{ total_records }} </td>
+                        <td> <strong>Total Records: </strong>{{ total_records }}</td>
                         <td colspan="2" class="text-right"><strong>Total:</strong></td>
                         <td class="text-right"><strong>{{ total_price }} лв.</strong></td>
                         <td></td>
@@ -75,24 +88,14 @@
             <input type="hidden" name="total_records" value="{{ total_records }}">
             <input type="hidden" name="total_price" value="{{ total_price }}">
             <input type="hidden" name="report_data" value="{{ report_json }}">
-            <button type="submit">Download as CSV</button>
+            <button type="submit" class="btn btn-secondary">Download as CSV</button>
         </form>
         {% else %}
         <br>
-        <h2>No records with this filters</h2>
+        <h2>No records with these filters</h2>
         {% endif %}
     </div>
     <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 </body>
-<script>
-    let reportData = JSON.parse('{{ report_json | safe }}');
-    console.log(reportData);
-    document.getElementById('sale_id').addEventListener('change', function() {
-        let saleId = this.value;
-        let form = document.getElementById('reportForm');
-        form.action = '/{{ current_role }}/report_sales/' + saleId;
-        form.submit();
-    });
-</script>
 </html>

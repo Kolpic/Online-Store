@@ -78,6 +78,62 @@ def refresh_captcha(conn, cur):
     session["captcha_id"] = captcha_id
     return jsonify({'first': first_captcha_number, 'second': second_captcha_number, 'captcha_id': captcha_id})
 
+# Configuration for each field
+FIELD_CONFIG = {
+    'name': {'type': str, 'required': True},
+    'price': {'type': float, 'required': True, 'conditions': [(lambda x: x > 0, "Price must be a positive number")]},
+    'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "Quantity must be a positive number")]},
+    'category': {'type': str, 'required': True},
+    'image': {'type': 'file', 'required': True, 'validator': ALLOWED_EXTENSIONS}
+}
+
+def validate_field(field_name, value, config):
+    # Ensure the field is present if required
+    if config['required'] and not value:
+        raise ValueError(f"You must add information in every field: {field_name}")
+
+    # Check the type and conditions if necessary
+    if 'type' in config and config['type'] in [float, int]:
+        try:
+            value = config['type'](value)
+        except ValueError:
+            raise ValueError(f"{field_name} is not a valid {config['type'].__name__}")
+
+    if 'conditions' in config:
+        for condition, message in config['conditions']:
+            if not condition(value):
+                raise ValueError(message)
+
+    return value
+
+def process_form(conn, cur, current_role):
+    # Collect data from form and files
+    form_data = {}
+    for field, config in FIELD_CONFIG.items():
+        value = request.form.get(field) if config['type'] != 'file' else request.files.get(field)
+        form_data[field] = validate_field(field, value, config)
+
+    # Special handling for file field
+    if 'image' in form_data:
+        w =  FIELD_CONFIG['image']['validator']
+        s = form_data['image'].filename.split('.')[1] # s in w
+        filename = secure_filename(form_data['image'].filename)
+        form_data['image'] = validate_image_size(form_data['image'].stream)
+    else:
+        raise ValueError("Invalid image file extension (must be jpeg) or size (must be under 5 MB)")
+
+     # Insert into database
+    fields = ', '.join(form_data.keys())
+    placeholders = ', '.join(['%s'] * len(form_data))
+    values = tuple(form_data.values())
+    
+    return fields, placeholders, values
+
+    cur.execute(f"INSERT INTO products ({fields}) VALUES ({placeholders})", values)
+    conn.commit()
+    session['crud_message'] = "Item was added successfully"
+    return redirect(f'/{current_role}/crud_products')
+
 def registration(conn, cur):
     user_ip = request.remote_addr
 
@@ -1417,7 +1473,7 @@ def back_office_manager(conn, cur, *params):
                     cur.execute('INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)', 
                                 (role_id, permission_id))
         conn.commit()
-        session['role_permission_message'] = 'You successfull updated permissions for role with id: ' + str(role_id)
+        session['role_permission_message'] = f'You successfull updated permissions for role: {current_role}'
         return redirect(f'/{current_role}/role_permissions?role=' + role_id)
 
     if request.path.split('_')[0] == f'/{current_role}/crud':
@@ -1474,28 +1530,34 @@ def back_office_manager(conn, cur, *params):
                     categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
                     return render_template('add_product_staff.html', categories=categories, current_role=current_role)
 
-                name = request.form['name']
-                price = request.form['price']
-                quantity = request.form['quantity']
-                category = request.form['category']
-                image = request.files['image']
+                data = process_form(conn, cur, current_role)
 
-
-                utils.AssertUser(name and price and quantity and category and image, "You must add information in every field.")
-                utils.AssertUser(isinstance(float(price), float), "Price is not a number")
-                utils.AssertUser(isinstance(int(quantity), int), "Quantity is not a number")
-                utils.AssertUser(float(price) > 0, "Price must be possitive number")
-                utils.AssertUser(int(quantity) > 0, "Quantity must be possitive")
-                
-                if image and allowed_file(image.filename):
-                    filename = secure_filename(image.filename)
-                    image_data = image.stream
-                    image_ = validate_image_size(image_data)
-
-                cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image_))
+                cur.execute(f"INSERT INTO products ({ data[0] }) VALUES ({ data[1] })", data[2])
                 conn.commit()
-                session['crud_message'] = "Item was added successful"
+                session['crud_message'] = "Item was added successfully"
                 return redirect(f'/{current_role}/crud_products')
+        
+                # name = request.form['name']
+                # price = request.form['price']
+                # quantity = request.form['quantity']
+                # category = request.form['category']
+                # image = request.files['image']
+
+                # utils.AssertUser(name and price and quantity and category and image, "You must add information in every field.")
+                # utils.AssertUser(isinstance(float(price), float), "Price is not a number")
+                # utils.AssertUser(isinstance(int(quantity), int), "Quantity is not a number")
+                # utils.AssertUser(float(price) > 0, "Price must be possitive number")
+                # utils.AssertUser(int(quantity) > 0, "Quantity must be possitive")
+                
+                # if image and allowed_file(image.filename):
+                #     filename = secure_filename(image.filename)
+                #     image_data = image.stream
+                #     image_ = validate_image_size(image_data)
+
+                # cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image_))
+                # conn.commit()
+                # session['crud_message'] = "Item was added successful"
+                # return redirect(f'/{current_role}/crud_products')
             
             if request.path.split('/')[3] == 'add_role_staff':
                 utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create'), "You don't have permission to this resource")
@@ -1521,7 +1583,7 @@ def back_office_manager(conn, cur, *params):
                 cur.execute('INSERT INTO staff_roles (staff_id, role_id) VALUES (%s, %s)', (staff_id, role_id))
                 conn.commit()
 
-                session['staff_message'] = "You successful gave a role: " + staff_role + "to user: " + staff_name
+                session['staff_message'] = "You successful gave a role: " + staff_role + " to user: " + staff_name
                 return redirect('/staff_portal')
 
         if request.path.split('/')[3] == 'edit_product':
@@ -1572,7 +1634,6 @@ def back_office_manager(conn, cur, *params):
 
                 session['staff_message'] = "You successful deleted a role"
                 return redirect(f'/{current_role}/staff_portal')
-                        
 
 @app.route('/favicon.ico')
 def favicon():#
