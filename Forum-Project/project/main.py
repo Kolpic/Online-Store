@@ -80,15 +80,24 @@ def refresh_captcha(conn, cur):
 
 # Configuration for each field
 FIELD_CONFIG = {
-    'name': {'type': str, 'required': True},
-    'price': {'type': float, 'required': True, 'conditions': [(lambda x: x > 0, "Price must be a positive number")]},
-    'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "Quantity must be a positive number")]},
-    'category': {'type': str, 'required': True},
-    'image': {'type': 'file', 'required': True, 'validator': ALLOWED_EXTENSIONS}
+    'name': {'type': str, 'required': True, 'interface': 'CRUD Products'},
+    'price': {'type': float, 'required': True, 'interface': 'CRUD Products', 'conditions': [(lambda x: x > 0, "Price must be a positive number")]},
+    'quantity': {'type': int, 'required': True, 'interface': 'CRUD Products', 'conditions': [(lambda x: x > 0, "Quantity must be a positive number")]},
+    'category': {'type': str, 'required': True, 'interface': 'CRUD Products'},
+    'image': {'type': 'file', 'required': True, 'interface': 'CRUD Products','validator': ALLOWED_EXTENSIONS},
+    'staff': {'type': str, 'required': True, 'interface': 'Staff roles'},
+
+    'role': {'type': str, 'required': True, 'interface': 'Staff roles'},
+    # TODO: hash name
+    'name': {'type': str, 'required': True, 'interface': 'Staff roles'},
 }
 
-def validate_field(field_name, value, config):
-    # Ensure the field is present if required
+def get_field_config(interface):
+    # data_to_return = {}
+    data_to_return = {row for row in FIELD_CONFIG if row['interface'] == interface}
+    return data_to_return
+
+def validate_field(field_name, value, config, interface):
     if config['required'] and not value:
         raise ValueError(f"You must add information in every field: {field_name}")
 
@@ -106,17 +115,20 @@ def validate_field(field_name, value, config):
 
     return value
 
-def process_form(conn, cur, current_role):
+def process_form(conn, cur, interface):
+    # Getting the fields we need for our interface
+    # field_config = get_field_config(interface)
+    # TODO: without if 
+    # data_to_return = {row for row in FIELD_CONFIG if row['interface'] == interface}
     # Collect data from form and files
     form_data = {}
     for field, config in FIELD_CONFIG.items():
+        # TODO: if ne na edin red
         value = request.form.get(field) if config['type'] != 'file' else request.files.get(field)
-        form_data[field] = validate_field(field, value, config)
+        form_data[field] = validate_field(field, value, config, interface)
 
-    # Special handling for file field
-    if 'image' in form_data:
-        w =  FIELD_CONFIG['image']['validator']
-        s = form_data['image'].filename.split('.')[1] # s in w
+    # Special handling for file field - > * hook
+    if 'image' in form_data and form_data['image'].filename.split('.')[1] in FIELD_CONFIG['image']['validator']:
         filename = secure_filename(form_data['image'].filename)
         form_data['image'] = validate_image_size(form_data['image'].stream)
     else:
@@ -127,12 +139,8 @@ def process_form(conn, cur, current_role):
     placeholders = ', '.join(['%s'] * len(form_data))
     values = tuple(form_data.values())
     
+    # TODO Tuple -> DIc
     return fields, placeholders, values
-
-    cur.execute(f"INSERT INTO products ({fields}) VALUES ({placeholders})", values)
-    conn.commit()
-    session['crud_message'] = "Item was added successfully"
-    return redirect(f'/{current_role}/crud_products')
 
 def registration(conn, cur):
     user_ip = request.remote_addr
@@ -282,18 +290,18 @@ def login(conn, cur):
     email = request.form['email']
     password_ = request.form['password']
 
+    # TODO: Izpolzvam tova navsqkude
     cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-
     utils.AssertUser(not cur.rowcount == 0, "There is no registration with this email")
+    # TODO: ASSERDEV assert 1
+    # SELECT 1 put vmesto 3
 
     cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
-        
     is_the_email_verified = cur.fetchone()['verification_status']
 
     cur.execute("SELECT password FROM users WHERE email = %s", (email,))
-        
     hashed_password = cur.fetchone()['password']
 
     are_passwords_same = bool(utils.verify_password(password_, hashed_password))
@@ -379,6 +387,7 @@ def logout(conn, cur):
     return redirect('/home')
 
 def profile(conn, cur):
+    # TODO: sigurnost na sesiqta
     if 'user_email' not in session:
         return redirect('/login')
     
@@ -1346,6 +1355,7 @@ def back_office_manager(conn, cur, *params):
                 ORDER BY
                     o.order_date, o.status;
                         """, (order_id,))
+            # TODO: Edin sql
             report = cur.fetchall()
             return render_template('report.html', report=report, current_role=current_role)
         
@@ -1360,6 +1370,7 @@ def back_office_manager(conn, cur, *params):
         if status:
             status_filter = "AND o.status = %s"
 
+        # BETWEEN %s AND %s da se mahne -> < >
         query = f"""
         WITH OrderSums AS (
             SELECT
@@ -1368,17 +1379,13 @@ def back_office_manager(conn, cur, *params):
                 u.first_name || ' ' || u.last_name AS buyer_name,
                 o.status,
                 SUM(oi.quantity * oi.price) AS order_sum
-            FROM
-                orders o
-            JOIN
-                users u ON o.user_id = u.id
-            JOIN
-                order_items oi ON o.order_id = oi.order_id
+            FROM orders o
+            JOIN users u        ON o.user_id = u.id
+            JOIN order_items oi ON o.order_id = oi.order_id
             WHERE
                 o.order_date BETWEEN %s AND %s
                 {status_filter}
-            GROUP BY
-                o.order_id, o.order_date, buyer_name, o.status
+            GROUP BY o.order_id, o.order_date, buyer_name, o.status
         )
         SELECT
             {group_by_clause} AS period,
@@ -1394,7 +1401,6 @@ def back_office_manager(conn, cur, *params):
         ORDER BY
             period, status;
         """
-
         params = [date_from, date_to]
         if status:
             params.append(status)
@@ -1409,6 +1415,8 @@ def back_office_manager(conn, cur, *params):
         return render_template('report.html', report=report, current_role=current_role, total_records=total_records, total_price=total_price, report_json=report_json)
 
     if request.path == f'/{current_role}/download_report':
+        # TODO abstraktno
+        # for loop and 1 if
         date_from = request.form['date_from']
         date_to = request.form['date_to']
         group_by = request.form['group_by']
@@ -1417,6 +1425,7 @@ def back_office_manager(conn, cur, *params):
         total_price = request.form['total_price']
         report_data = request.form['report_data']
 
+        # TODO: Streaming ib Flask download
         si = io.StringIO()
         cw = csv.writer(si)
         cw.writerow(['Date', 'Order ID\'s', 'Name of Buyers', 'Total Price', 'Order Status'])
@@ -1529,13 +1538,13 @@ def back_office_manager(conn, cur, *params):
                     cur.execute("SELECT DISTINCT(category) FROM products")
                     categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
                     return render_template('add_product_staff.html', categories=categories, current_role=current_role)
-
-                data = process_form(conn, cur, current_role)
-
-                cur.execute(f"INSERT INTO products ({ data[0] }) VALUES ({ data[1] })", data[2])
-                conn.commit()
-                session['crud_message'] = "Item was added successfully"
-                return redirect(f'/{current_role}/crud_products')
+                # assertDev
+                else:
+                    data = process_form(conn, cur, 'CRUD Products')
+                    cur.execute(f"INSERT INTO products ({ data[0] }) VALUES ({ data[1] })", data[2])
+                    conn.commit()
+                    session['crud_message'] = "Item was added successfully"
+                    return redirect(f'/{current_role}/crud_products')
         
                 # name = request.form['name']
                 # price = request.form['price']
@@ -1569,16 +1578,18 @@ def back_office_manager(conn, cur, *params):
                     cur.execute("SELECT role_id, role_name FROM roles")
                     roles = cur.fetchall()
 
-                    return render_template('add_staff_role.html', staff=staff, roles=roles, current_role=current_role) 
+                    return render_template('add_staff_role.html', staff=staff, roles=roles, current_role=current_role)
 
-                staff_name = request.form['staff']
-                staff_role = request.form['role']
+                # staff_name = request.form['staff']
+                # staff_role = request.form['role']
 
-                cur.execute("SELECT id FROM staff WHERE username = %s", (staff_name,))
-                staff_id = cur.fetchone()[0]
+                # cur.execute("SELECT id FROM staff WHERE username = %s", (staff_name,))
+                # staff_id = cur.fetchone()[0]
 
-                cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (staff_role,))
-                role_id = cur.fetchone()[0]
+                # cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (staff_role,))
+                # role_id = cur.fetchone()[0]
+
+                data = process_form(conn, cur, 'Staff roles')
 
                 cur.execute('INSERT INTO staff_roles (staff_id, role_id) VALUES (%s, %s)', (staff_id, role_id))
                 conn.commit()
@@ -1612,7 +1623,7 @@ def back_office_manager(conn, cur, *params):
             conn.commit()
             session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
             return redirect(f'/{current_role}/crud_products')
-        
+        # Izlishni if-ove ne trqbva da ima
         if request.path.split('/')[3] == 'delete_product' or request.path.split('/')[3] == 'delete_role':
             if request.path.split('/')[3] == 'delete_product':
                 # TODO: ref
