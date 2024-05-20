@@ -11,7 +11,7 @@
         <form action="/{{ current_role }}/crud_staff/add_role_staff" method="POST">
             <div class="form-group">
                 <label for="staff">Select Staff Member:</label>
-                <select id="staff" name="staff" class="form-control">
+                <select id="staff_id" name="staff_id" class="form-control">
                     {% for sta in staff %}
                     <option value="{{ sta[1] }}">{{ sta[1] }}</option>
                     {% endfor %}
@@ -19,7 +19,7 @@
             </div>
             <div class="form-group">
                 <label for="role">Select Role:</label>
-                <select id="role" name="role" class="form-control">
+                <select id="role_id" name="role_id" class="form-control">
                     {% for role in roles %}
                     <option value="{{ role[1] }}">{{ role[1] }}</option>
                     {% endfor %}

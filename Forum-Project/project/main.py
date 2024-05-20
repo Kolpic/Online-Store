@@ -80,28 +80,37 @@ def refresh_captcha(conn, cur):
 
 # Configuration for each field
 FIELD_CONFIG = {
-    'name': {'type': str, 'required': True, 'interface': 'CRUD Products'},
-    'price': {'type': float, 'required': True, 'interface': 'CRUD Products', 'conditions': [(lambda x: x > 0, "Price must be a positive number")]},
-    'quantity': {'type': int, 'required': True, 'interface': 'CRUD Products', 'conditions': [(lambda x: x > 0, "Quantity must be a positive number")]},
-    'category': {'type': str, 'required': True, 'interface': 'CRUD Products'},
-    'image': {'type': 'file', 'required': True, 'interface': 'CRUD Products','validator': ALLOWED_EXTENSIONS},
-    'staff': {'type': str, 'required': True, 'interface': 'Staff roles'},
-
-    'role': {'type': str, 'required': True, 'interface': 'Staff roles'},
+    'name': {'type': str, 'required': True, 'interface': 'CRUD Products', 'method': ['create', 'edit']},
+    'price': {'type': float, 'required': True, 'interface': 'CRUD Products', 'method': ['create', 'edit'],'conditions': [(lambda x: x > 0, "Price must be a positive number")]},
+    'quantity': {'type': int, 'required': True, 'interface': 'CRUD Products', 'method': ['create', 'edit'],'conditions': [(lambda x: x > 0, "Quantity must be a positive number")]},
+    'category': {'type': str, 'required': True, 'interface': 'CRUD Products', 'method': ['create', 'edit']},
+    'image': {'type': 'file', 'required': True, 'interface': 'CRUD Products', 'method': ['create'], 'validator': ALLOWED_EXTENSIONS},
+    'staff_id': {'type': str, 'required': True, 'interface': 'Staff roles', 'method': ['create']},
+    'role_id': {'type': str, 'required': True, 'interface': 'Staff roles', 'method': ['create']},
     # TODO: hash name
-    'name': {'type': str, 'required': True, 'interface': 'Staff roles'},
+    # '_name': {'type': str, 'required': True, 'interface': 'Staff roles'},
 }
 
-def get_field_config(interface):
-    # data_to_return = {}
-    data_to_return = {row for row in FIELD_CONFIG if row['interface'] == interface}
+special_field_handlers = {
+    'image': lambda field_data: handle_image_field(field_data)
+}
+
+def handle_image_field(image_data):
+    utils.AssertUser(image_data.filename.split('.')[-1] in FIELD_CONFIG['image']['validator'], "Invalid image file extension (must be one of jpg, jpeg, png)")
+    filename = secure_filename(image_data.filename)
+    image_data = validate_image_size(image_data.stream)
+    return image_data
+
+def get_field_config(interface, method):
+    data_to_return = {}
+    for key, value in FIELD_CONFIG.items():
+        if value['interface'] == interface and method in value['method']:
+            data_to_return[key] = value
     return data_to_return
 
-def validate_field(field_name, value, config, interface):
-    if config['required'] and not value:
-        raise ValueError(f"You must add information in every field: {field_name}")
+def validate_field(field_name, value, config):
+    utils.AssertUser(config['required'] and value, f"You must add information in every field: {field_name}")
 
-    # Check the type and conditions if necessary
     if 'type' in config and config['type'] in [float, int]:
         try:
             value = config['type'](value)
@@ -110,37 +119,42 @@ def validate_field(field_name, value, config, interface):
 
     if 'conditions' in config:
         for condition, message in config['conditions']:
-            if not condition(value):
-                raise ValueError(message)
+            utils.AssertUser(condition(value), message)
 
     return value
 
-def process_form(conn, cur, interface):
-    # Getting the fields we need for our interface
-    # field_config = get_field_config(interface)
-    # TODO: without if 
-    # data_to_return = {row for row in FIELD_CONFIG if row['interface'] == interface}
-    # Collect data from form and files
+def process_form(interface, method):
+    field_config = get_field_config(interface, method)
+    # TODO(Done): without if 
+    # data_to_return = {row for row in field_config if row['interface'] == interface}
+
     form_data = {}
-    for field, config in FIELD_CONFIG.items():
-        # TODO: if ne na edin red
-        value = request.form.get(field) if config['type'] != 'file' else request.files.get(field)
-        form_data[field] = validate_field(field, value, config, interface)
+    for field, config in field_config.items():
+        # TODO(DOne): if ne na edin red
+        value = None
+        if config['type'] != 'file':
+            value = request.form.get(field) 
+        else:
+            value = request.files.get(field)
+        # value = request.form.get(field) if config['type'] != 'file' else request.files.get(field)
+        form_data[field] = validate_field(field, value, config)
 
-    # Special handling for file field - > * hook
-    if 'image' in form_data and form_data['image'].filename.split('.')[1] in FIELD_CONFIG['image']['validator']:
-        filename = secure_filename(form_data['image'].filename)
-        form_data['image'] = validate_image_size(form_data['image'].stream)
-    else:
-        raise ValueError("Invalid image file extension (must be jpeg) or size (must be under 5 MB)")
+        if field in special_field_handlers:
+            form_data[field] = special_field_handlers[field](value)
+    # TODO(Done): Special handling for file field - > * hook 
+    # if 'image' in form_data and form_data['image'].filename.split('.')[1] in FIELD_CONFIG['image']['validator']:
+    #     filename = secure_filename(form_data['image'].filename)
+    #     form_data['image'] = validate_image_size(form_data['image'].stream)
+    # else:
+    #     raise ValueError("Invalid image file extension (must be jpeg) or size (must be under 5 MB)")
 
-     # Insert into database
-    fields = ', '.join(form_data.keys())
-    placeholders = ', '.join(['%s'] * len(form_data))
-    values = tuple(form_data.values())
+    dict_to_return = {}
+    dict_to_return['fields'] = ', '.join(form_data.keys())
+    dict_to_return['placeholders'] = ', '.join(['%s'] * len(form_data))
+    dict_to_return['values'] = tuple(form_data.values())
     
-    # TODO Tuple -> DIc
-    return fields, placeholders, values
+    # TODO(Done): Tuple -> DIc
+    return dict_to_return
 
 def registration(conn, cur):
     user_ip = request.remote_addr
@@ -1533,44 +1547,24 @@ def back_office_manager(conn, cur, *params):
 
             if request.path.split('/')[3] == 'add_product':
                 utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'create'), "You don't have permission to this resource")
-                # TODO: ref
+                # TODO(Done): ref
                 if request.method == 'GET':
                     cur.execute("SELECT DISTINCT(category) FROM products")
                     categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
                     return render_template('add_product_staff.html', categories=categories, current_role=current_role)
-                # assertDev
-                else:
-                    data = process_form(conn, cur, 'CRUD Products')
-                    cur.execute(f"INSERT INTO products ({ data[0] }) VALUES ({ data[1] })", data[2])
+                elif request.method == 'POST':
+                    data = process_form('CRUD Products', 'create')
+                    
+                    cur.execute(f"INSERT INTO products ({ data['fields'] }) VALUES ({ data['placeholders'] })", data['values'])
                     conn.commit()
                     session['crud_message'] = "Item was added successfully"
                     return redirect(f'/{current_role}/crud_products')
-        
-                # name = request.form['name']
-                # price = request.form['price']
-                # quantity = request.form['quantity']
-                # category = request.form['category']
-                # image = request.files['image']
-
-                # utils.AssertUser(name and price and quantity and category and image, "You must add information in every field.")
-                # utils.AssertUser(isinstance(float(price), float), "Price is not a number")
-                # utils.AssertUser(isinstance(int(quantity), int), "Quantity is not a number")
-                # utils.AssertUser(float(price) > 0, "Price must be possitive number")
-                # utils.AssertUser(int(quantity) > 0, "Quantity must be possitive")
-                
-                # if image and allowed_file(image.filename):
-                #     filename = secure_filename(image.filename)
-                #     image_data = image.stream
-                #     image_ = validate_image_size(image_data)
-
-                # cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image_))
-                # conn.commit()
-                # session['crud_message'] = "Item was added successful"
-                # return redirect(f'/{current_role}/crud_products')
+                else:
+                    utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
             
             if request.path.split('/')[3] == 'add_role_staff':
                 utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create'), "You don't have permission to this resource")
-                 # TODO: ref
+                 # TODO(Done): ref
                 if request.method == 'GET':
                     cur.execute("SELECT id, username FROM staff")
                     staff = cur.fetchall()
@@ -1579,23 +1573,22 @@ def back_office_manager(conn, cur, *params):
                     roles = cur.fetchall()
 
                     return render_template('add_staff_role.html', staff=staff, roles=roles, current_role=current_role)
+                elif request.method == 'POST':
+                    data = process_form('Staff roles', 'create')
 
-                # staff_name = request.form['staff']
-                # staff_role = request.form['role']
+                    cur.execute("SELECT id FROM staff WHERE username = %s", (data['values'][0],))
+                    staff_id = cur.fetchone()[0]
 
-                # cur.execute("SELECT id FROM staff WHERE username = %s", (staff_name,))
-                # staff_id = cur.fetchone()[0]
+                    cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (data['values'][1],))
+                    role_id = cur.fetchone()[0]
 
-                # cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (staff_role,))
-                # role_id = cur.fetchone()[0]
+                    cur.execute(f"INSERT INTO staff_roles ({data['fields']}) VALUES ({data['placeholders']})", (staff_id, role_id))
+                    conn.commit()
 
-                data = process_form(conn, cur, 'Staff roles')
-
-                cur.execute('INSERT INTO staff_roles (staff_id, role_id) VALUES (%s, %s)', (staff_id, role_id))
-                conn.commit()
-
-                session['staff_message'] = "You successful gave a role: " + staff_role + " to user: " + staff_name
-                return redirect('/staff_portal')
+                    session['staff_message'] = "You successful gave a role: " + str(data['values'][0]) + " to user: " + str(data['values'][1])
+                    return redirect('/staff_portal')
+                else:
+                    utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
 
         if request.path.split('/')[3] == 'edit_product':
             utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'update'), "You don't have permission to this resource")
@@ -1606,24 +1599,17 @@ def back_office_manager(conn, cur, *params):
                 product = cur.fetchone()
                 utils.AssertUser(product, "Invalid product")
                 return render_template('edit_product.html', product=product, product_id=product_id, current_role=current_role)
-    
-            name = request.form['name']
-            price_ = request.form['price']
-            quantity_ = request.form['quantity']
-            category = request.form['category']
 
-            utils.AssertUser(name and price_ and quantity_ and category, "All fields must be filled")
+            elif request.method == 'POST':
+                data = process_form('CRUD Products', 'edit')
 
-            price = float(price_)
-            utils.AssertUser(price > 0, "Price must be possitive")
-            quantity = int(quantity_)
-            utils.AssertUser(quantity >= 0, "Quantity must be possitive")
+                cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s WHERE id = %s", (data['values'], product_id))
+                conn.commit()
+                session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
+                return redirect(f'/{current_role}/crud_products')
+            else:
+                utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
 
-            cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s WHERE id = %s", (name, price, quantity, category, product_id))
-            conn.commit()
-            session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
-            return redirect(f'/{current_role}/crud_products')
-        # Izlishni if-ove ne trqbva da ima
         if request.path.split('/')[3] == 'delete_product' or request.path.split('/')[3] == 'delete_role':
             if request.path.split('/')[3] == 'delete_product':
                 # TODO: ref
@@ -1634,8 +1620,7 @@ def back_office_manager(conn, cur, *params):
                 conn.commit()
                 session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
                 return redirect(f'/{current_role}/crud_products')
-            
-            if request.path.split('/')[3] == 'delete_role':
+            elif request.path.split('/')[3] == 'delete_role':
                 utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'delete'), "You don't have permission to this resource")
 
                 staff_id = request.path.split('/')[4]
@@ -1645,9 +1630,11 @@ def back_office_manager(conn, cur, *params):
 
                 session['staff_message'] = "You successful deleted a role"
                 return redirect(f'/{current_role}/staff_portal')
+            else:
+                utils.AssertUser(False, "Invalid url")
 
 @app.route('/favicon.ico')
-def favicon():#
+def favicon():
     return app.send_static_file('favicon.ico')
 
 url_to_function_map = [
