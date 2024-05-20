@@ -12,6 +12,7 @@ import io
 import bcrypt
 import datetime, random, calendar
 from datetime import timedelta, datetime
+import logging
 # import os
 from project import config, exception
 from flask_session_captcha import FlaskSessionCaptcha
@@ -60,6 +61,9 @@ CURRENT_URL = ""
 app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
 app.add_url_rule("/<role>/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
+
+logging.basicConfig(filename='app.log', level=logging.INFO, 
+                            format='%(asctime)s %(message)s', datefmt='%d/%b/%Y %H:%M:%S')
 
 def assertIsProvidedMethodsTrue(*args):
     if len(args) == 2:
@@ -1720,6 +1724,8 @@ def handle_request(role=None, path=''):
 
         utils.AssertUser(funtion_to_call is not None, "Invalid URL")
         utils.AssertDev(callable(funtion_to_call), "You are trying to invoke something that is not a function")
+
+        logging.info(f'{request.remote_addr} - {request.method} {request.path}')
 
         if match:
             return funtion_to_call(conn, cur, *match.groups())
