@@ -789,13 +789,18 @@ def add_to_cart_meth(conn, cur):
     if 'user_email' not in session:
         return redirect('/login')
     user_email = session.get('user_email')
+
     cur.execute("SELECT id FROM users WHERE email = %s", (user_email,))
     user_id = cur.fetchone()[0]
+
     product_id = request.form['product_id']
     quantity = request.form.get('quantity', 1)
+
     response = add_to_cart(conn, cur, user_id, product_id, quantity)
-    session['home_message'] = response
-    return redirect(CURRENT_URL)
+
+    return jsonify({'message':response})
+    # session['home_message'] = response
+    # return redirect(CURRENT_URL)
 
 def cart(conn, cur):
     if 'user_email' not in session:

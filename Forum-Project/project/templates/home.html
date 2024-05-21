@@ -68,7 +68,7 @@
                         <p class="card-text">Цена: {{ product[2]}} лв.</p>
                         <p class="card-text">{{ 'Налично в момента' if product[3] > 0 else 'Изкупено, нямаме в наличност' }}</p>
                         <p class="card-text">Категория: {{ product[4]}}</p>
-                        <form action="/add_to_cart" method="post">
+                        <form action="/add_to_cart" method="post" onsubmit="addToCart(event, this)">
                             <input type="hidden" name="product_id" value="{{ product[0] }}">
                             <input type="number" name="quantity" value="1" min="1">
                             <button type="submit" class="btn btn-primary">Add to Cart</button>
@@ -124,6 +124,20 @@
     </div>
 </body>
 <script>
+    function addToCart(event, form) {
+    event.preventDefault();  // Stops the normal form submission process, allowing to handle it via JavaScript.
+    const formData = new FormData(form);  // Create a FormData object from the form
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            credentials: 'include'  // Ensures cookies (like session cookie) are sent with the request
+        }).then(response => response.json())
+        .then(data => {
+            alert(data.message);
+        }).catch(error => {
+            console.error('Error:', error);
+        });
+    }
     window.onload = function() {
         setTimeout(function() {
             let homeAlert = document.getElementById('homeAlert');
