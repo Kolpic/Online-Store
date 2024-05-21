@@ -12,17 +12,17 @@
             <div class="form-row">
                 <div class="col">
                     <label for="date_from">From:</label>
-                    <input type="date" class="form-control" id="date_from" name="date_from" value="{{ request.form.date_from if request.form.date_from else '' }}" required>
+                    <input type="date" class="form-control" id="date_from" name="date_from" value="{{ default_from_date }}">
                 </div>
                 <div class="col">
                     <label for="date_to">To:</label>
-                    <input type="date" class="form-control" id="date_to" name="date_to" value="{{ request.form.date_to if request.form.date_to else '' }}" required>
+                    <input type="date" class="form-control" id="date_to" name="date_to" value="{{ default_to_date }}">
                 </div>
             </div>
             
             <div class="form-row">
                 <div class="col-md-4">
-                    <label for="group_by">Group by:</label>
+                    <label for="group_by">Group by time:</label>
                     <select id="group_by" class="form-control" name="group_by">
                         <option value="">All</option>
                         <option value="day" {{ 'selected' if request.form.group_by == 'day' else '' }}>Day</option>
@@ -31,7 +31,7 @@
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label for="status">Status:</label>
+                    <label for="status">Group by status:</label>
                     <select id="status" class="form-control" name="status">
                         <option value="">All</option>
                         <option value="Ready for Paying" {{ 'selected' if request.form.status == 'Ready for Paying' else '' }}>Ready for Paying</option>
@@ -68,7 +68,7 @@
                         <td>{{ "-" if row[1]|length > 2 else row[1]|join(', ') }}</td>
                         <td>{{ "-" if row[2]|length > 2 else row[2]|join(', ') }}</td>
                         <td class="text-right">{{ row[3] }} {{'лв.'}}</td>
-                        <td class="text-right">{{ row[4][0] }}</td>
+                        <td class="text-right">{{ "-" if row[4]|length > 2 else row[4]|join(', ') }}</td>
                     </tr>
                     {% endfor %}
                     <tr>

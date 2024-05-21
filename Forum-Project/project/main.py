@@ -62,8 +62,8 @@ app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=[
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
 app.add_url_rule("/<role>/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 
-logging.basicConfig(filename='app.log', level=logging.INFO, 
-                            format='%(asctime)s %(message)s', datefmt='%d/%b/%Y %H:%M:%S')
+# logging.basicConfig(filename='app.log', level=logging.INFO, 
+#                             format='%(asctime)s %(message)s', datefmt='%d/%b/%Y %H:%M:%S')
 
 def assertIsProvidedMethodsTrue(*args):
     if len(args) == 2:
@@ -1340,97 +1340,130 @@ def back_office_manager(conn, cur, *params):
     if request.path.split('/')[2] == 'report_sales':
         utils.AssertUser(utils.has_permission(cur, request, 'Report sales', 'read'), "You don't have permission to this resource")
 
+        default_to_date = datetime.now()
+        dafault_from_date = default_to_date - timedelta(days=90)
+
+        default_to_date_str = default_to_date.strftime('%Y-%m-%d')
+        default_from_date_str = dafault_from_date.strftime('%Y-%m-%d')
+
         if request.method == 'GET':
-            return render_template('report.html', current_role=current_role)
-    
-        date_from = request.form.get('date_from')
-        date_to = request.form.get('date_to')
-        group_by = request.form.get('group_by')
-        status = request.form.get('status')
-        order_id = 0
-        if len(request.path.split('/')) > 3:
-            order_id = request.path.split('/')[3]
-            utils.AssertUser(isinstance(int(order_id), int), 'You must enter a number')
 
-        if order_id != 0:
-            cur.execute("""
-                SELECT
-                    o.order_date,
-                    array_agg(o.order_id),
-                    array_agg(u.first_name || ' ' || u.last_name) AS buyer_name,
-                    oi.quantity * oi.price AS item_total,
-                    array_agg(o.status)
-                FROM
-                    orders o
-                JOIN
-                    users u ON o.user_id = u.id
-                JOIN
-                    order_items oi ON o.order_id = oi.order_id
-                WHERE
-                    o.order_id = %s
-                GROUP BY
-                    o.order_date, o.order_id, u.first_name, u.last_name, oi.quantity, oi.price, o.status
-                ORDER BY
-                    o.order_date, o.status;
-                        """, (order_id,))
-            # TODO: Edin sql
-            report = cur.fetchall()
-            return render_template('report.html', report=report, current_role=current_role)
+            return render_template('report.html', current_role=current_role, default_to_date=default_to_date_str, default_from_date=default_from_date_str)
         
-        utils.AssertUser(date_from or date_to, "You have to select a date from, date to")
+        elif request.method == 'POST':
+            date_from = request.form.get('date_from')
+            date_to = request.form.get('date_to')
+            group_by = request.form.get('group_by')
+            status = request.form.get('status')
+            order_id = request.form.get('sale_id')
 
-        if group_by:
-            group_by_clause = f"DATE(date_trunc(%s, order_date))"
+            utils.AssertUser(date_from or date_to, "You have to select a date from, date to")
+
+            if order_id != '':
+                group_by_clause = f"""
+                SELECT
+                array_agg(order_date) as period,
+                array_agg(order_id) AS order_ids, 
+                array_agg(buyer_name) AS name_of_buyers, 
+                array_agg(order_sum) AS total_sum, 
+                array_agg(status) AS order_statuses 
+                FROM OrderSums AS o 
+                WHERE order_id = {order_id};
+                """
+            elif (group_by == 'day' or group_by == 'month' or group_by == 'year') and status == "":
+                group_by_clause = f"""
+                SELECT
+                DATE(date_trunc('{group_by}', order_date)) as period,
+                array_agg(order_id) AS order_ids, 
+                array_agg(buyer_name) AS name_of_buyers, 
+                SUM(order_sum) AS total_sum, 
+                array_agg(status) AS order_statuses 
+                FROM OrderSums AS o 
+                GROUP BY period;
+                """
+            elif (group_by == 'day' or group_by == 'month' or group_by == 'year') and status != "":
+                group_by_clause = f"""
+                SELECT
+                DATE(date_trunc('{group_by}', order_date)) as period,
+                array_agg(order_id) AS order_ids, 
+                array_agg(buyer_name) AS name_of_buyers, 
+                SUM(order_sum) AS total_sum, 
+                array_agg(status) AS order_statuses 
+                FROM OrderSums AS o 
+                GROUP BY period, status = '{status}';
+                """
+            elif status != "":
+                group_by_clause = f"""
+                SELECT
+                array_agg(order_date) as period,
+                array_agg(order_id) AS order_ids, 
+                array_agg(buyer_name) AS name_of_buyers, 
+                array_agg(order_sum) AS total_sum, 
+                array_agg(status) AS order_statuses 
+                FROM OrderSums AS o
+                GROUP BY order_date, status = '{status}'
+                ORDER BY order_date, status = '{status}';
+                """
+            else:
+                group_by_clause = f"""
+                SELECT
+                array_agg(order_date) as period,
+                array_agg(order_id) AS order_ids, 
+                array_agg(buyer_name) AS name_of_buyers, 
+                array_agg(order_sum) AS total_sum, 
+                array_agg(status) AS order_statuses 
+                FROM OrderSums AS o 
+                GROUP BY order_date 
+                ORDER BY order_date;
+                """
+
+            # TODO(Done): BETWEEN %s AND %s da se mahne -> < >
+            query = f"""
+            WITH OrderSums AS (
+                SELECT 
+                o.order_id, 
+                DATE(o.order_date) AS order_date, 
+                u.first_name || ' ' || u.last_name AS buyer_name, 
+                o.status, SUM(oi.quantity * oi.price) AS order_sum 
+                FROM orders AS o 
+                JOIN users AS u ON o.user_id = u.id 
+                JOIN order_items AS oi ON o.order_id = oi.order_id 
+                WHERE o.order_date >= %s AND o.order_date <= %s 
+                GROUP BY o.order_id, order_date, buyer_name
+                                ) 
+                {group_by_clause}
+            """
+            params = [date_from, date_to]
+        
+            cur.execute(query, tuple(params))
+            report = cur.fetchall()
+            d = report[0][0]
+            s = report[0][1]
+            utils.AssertUser(report[0][0] != None and report[0][1] != None and report[0][2] != None and report[0][3] != None, "No result with this filter")
+            total_price = 0
+            flag = False
+            if group_by not in ['day', 'month', 'year']: # Here we have one row with only aggregated values, (without group by) and we have to deaggregate in order to make the report 
+                deaggregated_report = []
+
+                for row in report:
+                    periods, order_ids, names_of_buyers, total_sum, order_statuses = row
+                    
+                    # Use zip to iterate over all aggregated lists simultaneously
+                    for period, order_id, name_of_buyer, product_price, order_status in zip(periods, order_ids, names_of_buyers, total_sum, order_statuses):
+                        # Append the deaggregated data as a new row
+                        total_price += product_price
+                        deaggregated_report.append((period, [order_id], [name_of_buyer], product_price, [order_status]))
+                
+                flag = True
+                report = deaggregated_report
+
+            total_records = len(report)
+            if not flag:
+                total_price = sum(row[3] for row in report)
+            report_json = utils.serialize_report(report)
+            return render_template('report.html', report=report, current_role=current_role, total_records=total_records, total_price=total_price, report_json=report_json, default_to_date=default_to_date_str, default_from_date=default_from_date_str)
         else:
-            group_by_clause = "o.order_id"
-
-        status_filter = ""
-        if status:
-            status_filter = "AND o.status = %s"
-
-        # BETWEEN %s AND %s da se mahne -> < >
-        query = f"""
-        WITH OrderSums AS (
-            SELECT
-                o.order_id,
-                DATE(o.order_date) AS order_date,
-                u.first_name || ' ' || u.last_name AS buyer_name,
-                o.status,
-                SUM(oi.quantity * oi.price) AS order_sum
-            FROM orders o
-            JOIN users u        ON o.user_id = u.id
-            JOIN order_items oi ON o.order_id = oi.order_id
-            WHERE
-                o.order_date BETWEEN %s AND %s
-                {status_filter}
-            GROUP BY o.order_id, o.order_date, buyer_name, o.status
-        )
-        SELECT
-            {group_by_clause} AS period,
-            array_agg(order_id) AS order_ids,
-            array_agg(buyer_name) AS names_of_buyers,
-            SUM(order_sum) AS total_sum,
-            array_agg(status) AS order_statuses,
-            status
-        FROM
-            OrderSums as o
-        GROUP BY
-            period, status
-        ORDER BY
-            period, status;
-        """
-        params = [date_from, date_to]
-        if status:
-            params.append(status)
-        if group_by:
-            params.append(group_by)
-
-        cur.execute(query, tuple(params))
-        report = cur.fetchall()
-        total_records = len(report)
-        total_price = sum(row[3] for row in report)
-        report_json = utils.serialize_report(report)
-        return render_template('report.html', report=report, current_role=current_role, total_records=total_records, total_price=total_price, report_json=report_json)
+            utils.AssertUser(False, "Invalid url")
 
     if request.path == f'/{current_role}/download_report':
         # TODO abstraktno
@@ -1725,7 +1758,7 @@ def handle_request(role=None, path=''):
         utils.AssertUser(funtion_to_call is not None, "Invalid URL")
         utils.AssertDev(callable(funtion_to_call), "You are trying to invoke something that is not a function")
 
-        logging.info(f'{request.remote_addr} - {request.method} {request.path}')
+        # logging.info(f'{request.remote_addr} - {request.method} {request.path}')
 
         if match:
             return funtion_to_call(conn, cur, *match.groups())
