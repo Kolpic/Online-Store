@@ -13,6 +13,8 @@ import bcrypt
 import datetime, random, calendar
 from datetime import timedelta, datetime
 import logging
+from openpyxl import Workbook
+from io import BytesIO
 # import os
 from project import config, exception
 from flask_session_captcha import FlaskSessionCaptcha
@@ -1442,8 +1444,6 @@ def back_office_manager(conn, cur, *params):
         
             cur.execute(query, tuple(params))
             report = cur.fetchall()
-            d = report[0][0]
-            s = report[0][1]
             utils.AssertUser(report[0][0] != None and report[0][1] != None and report[0][2] != None and report[0][3] != None, "No result with this filter")
             total_price = 0
             flag = False
@@ -1471,36 +1471,89 @@ def back_office_manager(conn, cur, *params):
             utils.AssertUser(False, "Invalid url")
 
     if request.path == f'/{current_role}/download_report':
-        # TODO abstraktno
-        # for loop and 1 if
-        date_from = request.form['date_from']
-        date_to = request.form['date_to']
-        group_by = request.form['group_by']
-        status = request.form['status']
-        total_records = request.form['total_records']
-        total_price = request.form['total_price']
-        report_data = request.form['report_data']
+        # TODO(Done) abstraktno - for loop and 1 if
+        keys = ['date_from', 'date_to', 'group_by', 'status', 'total_records', 'total_price', 'report_data', 'format']
+        form_data = {key: request.form.get(key, '') for key in keys}
+        # date_from = request.form['date_from']
+        # date_to = request.form['date_to']
+        # group_by = request.form['group_by']
+        # status = request.form['status']
+        # total_records = request.form['total_records']
+        # total_price = request.form['total_price']
+        # report_data = request.form['report_data']
+
+        headers = ['Date', 'Order ID\'s', 'Name of Buyers', 'Total Price', 'Order Status']
+        report_data = json.loads(form_data['report_data'])
 
         # TODO: Streaming ib Flask download
-        si = io.StringIO()
-        cw = csv.writer(si)
-        cw.writerow(['Date', 'Order ID\'s', 'Name of Buyers', 'Total Price', 'Order Status'])
-        for row in json.loads(report_data):
-            cw.writerow(row)
-        cw.writerow(['Total Records: ', total_records, 'Total: ', total_price])
+        if form_data['format'] == 'csv':
+            si = io.StringIO()
+            cw = csv.writer(si)
 
-        cw.writerow(['Filters'])
-        cw.writerow(['Date From:', date_from])
-        cw.writerow(['Date To:', date_to])
-        cw.writerow(['Group By:', group_by])
-        cw.writerow(['Status:', status])
+            # headers = ['Date', 'Order ID\'s', 'Name of Buyers', 'Total Price', 'Order Status']
+            cw.writerow(headers)
+            # cw.writerow(['Date', 'Order ID\'s', 'Name of Buyers', 'Total Price', 'Order Status'])
+            
+            # report_data = json.loads(form_data['report_data'])
+            for row in report_data:
+                cw.writerow(row)
 
-        output = si.getvalue()
-        si.close()
+            cw.writerow(['Total Records:', form_data['total_records'], 'Total:', form_data['total_price']])
+            # for row in json.loads(report_data):
+            #     cw.writerow(row)
+            # cw.writerow(['Total Records: ', total_records, 'Total: ', total_price])
 
-        response = Response(output, mimetype= 'text/csv')
-        response.headers['Content-Disposition'] = 'attachment; filename=report.csv'
-        return response
+            # cw.writerow(['Filters'])
+            # cw.writerow(['Date From:', date_from])
+            # cw.writerow(['Date To:', date_to])
+            # cw.writerow(['Group By:', group_by])
+            # cw.writerow(['Status:', status])
+
+            cw.writerow(['Filters:'])
+            filter_keys = ['Date From', 'Date To', 'Group By', 'Status']
+            for key in filter_keys:
+                cw.writerow([f'{key}:', form_data[key.lower().replace(' ', '_')]])
+
+            output = si.getvalue()
+            si.close()
+
+            response = Response(output, mimetype= 'text/csv')
+            response.headers['Content-Disposition'] = 'attachment; filename=report.csv'
+            return response
+        elif form_data['format'] == 'excel':
+            wb = Workbook()
+            ws = wb.active
+
+            # headers = ['Date', 'Order IDs', 'Name of Buyers', 'Total Price', 'Order Status']
+            ws.append(headers)
+
+            # report_data = json.loads(form_data['report_data'])
+            for row in report_data:
+                if isinstance(row[1], list) and len(row[1]) == 1:
+                    row[1] = float(row[1][0])
+                    row[2] = str(row[2][0])
+                    row[4] = str(row[4][0])
+                else:
+                    row[1] = "-"
+                    row[2] = "-"
+                    row[4] = "-"
+                ws.append(row)
+
+            ws.append(['Total Records:', form_data['total_records'], 'Total:', form_data['total_price']])
+            ws.append(['Filters:'])
+            filter_keys = ['Date From', 'Date To', 'Group By', 'Status']
+            for key in filter_keys:
+                ws.append([f'{key}:', form_data[key.lower().replace(' ', '_')]])
+
+            excel_bf = BytesIO()
+            wb.save(excel_bf)
+            excel_bf.seek(0)
+
+            response = Response(excel_bf.getvalue(), mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            response.headers['Content-Disposition'] = 'attachment; filename=report.xlsx'
+            return response
+        else:
+            utils.AssertDev(False, "Invalid download format")
 
     if request.path == f'/{current_role}/role_permissions':
         utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read'), "You don't have permission to this resource")

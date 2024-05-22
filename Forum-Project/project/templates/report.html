@@ -88,7 +88,13 @@
             <input type="hidden" name="total_records" value="{{ total_records }}">
             <input type="hidden" name="total_price" value="{{ total_price }}">
             <input type="hidden" name="report_data" value="{{ report_json }}">
-            <button type="submit" class="btn btn-secondary">Download as CSV</button>
+
+            <select name="format" class="form-control">
+                <option value="csv">CSV</option>
+                <option value="excel">Excel</option>
+            </select>
+            <br>
+            <button type="submit" class="btn btn-secondary">Download Report</button>
         </form>
         {% else %}
         <br>
