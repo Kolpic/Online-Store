@@ -62,7 +62,7 @@ CURRENT_URL = ""
 
 app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
-app.add_url_rule("/<role>/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
+app.add_url_rule("/<username>/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 
 # logging.basicConfig(filename='app.log', level=logging.INFO, 
 #                             format='%(asctime)s %(message)s', datefmt='%d/%b/%Y %H:%M:%S')
@@ -1290,9 +1290,10 @@ def back_office_manager(conn, cur, *params):
     if 'staff_username' not in session:
         return redirect('/staff_login')
 
-    current_role = request.path.split('/')[1]
+    username = request.path.split('/')[1]
+    # username = request.path.split('/')[1]
 
-    if request.path == f'/{current_role}/error_logs':     
+    if request.path == f'/{username}/error_logs':     
         utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read'), "You don't have permission to this resource")
 
         sort_by = request.args.get('sort','time')
@@ -1315,12 +1316,12 @@ def back_office_manager(conn, cur, *params):
 
         return render_template('logs.html', log_exceptions = log_exceptions, sort_by=sort_by, sort_order=sort_order)
     
-    if request.path == f'/{current_role}/update_captcha_settings':
+    if request.path == f'/{username}/update_captcha_settings':
         utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'read'), "You don't have permission to this resource")
 
         if request.method == 'GET':
             current_settings = utils.get_current_settings(cur)
-            return render_template('captcha_settings.html', current_role=current_role, **current_settings)
+            return render_template('captcha_settings.html', username=username, **current_settings)
 
         utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update'), "You don't have permission to this resource")
         new_max_attempts = request.form['max_captcha_attempts']
@@ -1342,7 +1343,7 @@ def back_office_manager(conn, cur, *params):
     
         if str_message != "":
             session['staff_message'] = str_message
-        return redirect(f'/{current_role}/staff_portal')
+        return redirect(f'/{username}/staff_portal')
 
     if request.path.split('/')[2] == 'report_sales':
         utils.AssertUser(utils.has_permission(cur, request, 'Report sales', 'read'), "You don't have permission to this resource")
@@ -1355,7 +1356,7 @@ def back_office_manager(conn, cur, *params):
 
         if request.method == 'GET':
 
-            return render_template('report.html', current_role=current_role, default_to_date=default_to_date_str, default_from_date=default_from_date_str)
+            return render_template('report.html', username=username, default_to_date=default_to_date_str, default_from_date=default_from_date_str)
         
         elif request.method == 'POST':
             date_from = request.form.get('date_from')
@@ -1466,11 +1467,11 @@ def back_office_manager(conn, cur, *params):
             if not flag:
                 total_price = sum(row[3] for row in report)
             report_json = utils.serialize_report(report)
-            return render_template('report.html', report=report, current_role=current_role, total_records=total_records, total_price=total_price, report_json=report_json, default_to_date=default_to_date_str, default_from_date=default_from_date_str)
+            return render_template('report.html', report=report, username=username, total_records=total_records, total_price=total_price, report_json=report_json, default_to_date=default_to_date_str, default_from_date=default_from_date_str)
         else:
             utils.AssertUser(False, "Invalid url")
 
-    if request.path == f'/{current_role}/download_report':
+    if request.path == f'/{username}/download_report':
         # TODO(Done) abstraktno - for loop and 1 if
         keys = ['date_from', 'date_to', 'group_by', 'status', 'total_records', 'total_price', 'report_data', 'format']
         form_data = {key: request.form.get(key, '') for key in keys}
@@ -1555,7 +1556,7 @@ def back_office_manager(conn, cur, *params):
         else:
             utils.AssertDev(False, "Invalid download format")
 
-    if request.path == f'/{current_role}/role_permissions':
+    if request.path == f'/{username}/role_permissions':
         utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read'), "You don't have permission to this resource")
         interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles',]
 
@@ -1591,10 +1592,10 @@ def back_office_manager(conn, cur, *params):
                     cur.execute('INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)', 
                                 (role_id, permission_id))
         conn.commit()
-        session['role_permission_message'] = f'You successfull updated permissions for role: {current_role}'
-        return redirect(f'/{current_role}/role_permissions?role=' + role_id)
+        session['role_permission_message'] = f'You successfull updated permissions for role: {username}'
+        return redirect(f'/{username}/role_permissions?role=' + role_id)
 
-    if request.path.split('_')[0] == f'/{current_role}/crud':
+    if request.path.split('_')[0] == f'/{username}/crud':
         if request.path.split('_')[1] == 'products' or request.path.split('_')[1] == 'staff':
             if request.path.split('_')[1] == 'products':
                 utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read'), "You don't have permission to this resource")
@@ -1636,7 +1637,7 @@ def back_office_manager(conn, cur, *params):
 
                 cur.execute("SELECT s.username, r.role_name, sr.staff_id, sr.role_id FROM staff_roles sr JOIN staff s ON s.id = sr.staff_id JOIN roles r ON r.role_id = sr.role_id")
                 relations = cur.fetchall()
-                return render_template('staff_role_assignment.html', relations=relations, current_role=current_role)
+                return render_template('staff_role_assignment.html', relations=relations, username=username)
         
         if request.path.split('/')[3] == 'add_product' or request.path.split('/')[3] == 'add_role_staff':
 
@@ -1646,14 +1647,14 @@ def back_office_manager(conn, cur, *params):
                 if request.method == 'GET':
                     cur.execute("SELECT DISTINCT(category) FROM products")
                     categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
-                    return render_template('add_product_staff.html', categories=categories, current_role=current_role)
+                    return render_template('add_product_staff.html', categories=categories, username=username)
                 elif request.method == 'POST':
                     data = process_form('CRUD Products', 'create')
                     
                     cur.execute(f"INSERT INTO products ({ data['fields'] }) VALUES ({ data['placeholders'] })", data['values'])
                     conn.commit()
                     session['crud_message'] = "Item was added successfully"
-                    return redirect(f'/{current_role}/crud_products')
+                    return redirect(f'/{username}/crud_products')
                 else:
                     utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
             
@@ -1667,7 +1668,7 @@ def back_office_manager(conn, cur, *params):
                     cur.execute("SELECT role_id, role_name FROM roles")
                     roles = cur.fetchall()
 
-                    return render_template('add_staff_role.html', staff=staff, roles=roles, current_role=current_role)
+                    return render_template('add_staff_role.html', staff=staff, roles=roles, username=username)
                 elif request.method == 'POST':
                     data = process_form('Staff roles', 'create')
 
@@ -1693,15 +1694,15 @@ def back_office_manager(conn, cur, *params):
                 cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
                 product = cur.fetchone()
                 utils.AssertUser(product, "Invalid product")
-                return render_template('edit_product.html', product=product, product_id=product_id, current_role=current_role)
+                return render_template('edit_product.html', product=product, product_id=product_id, username=username)
 
             elif request.method == 'POST':
                 data = process_form('CRUD Products', 'edit')
 
-                cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s WHERE id = %s", (data['values'], product_id))
+                cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s WHERE id = %s", (data['values'][0], data['values'][1], data['values'][2], data['values'][3],product_id))
                 conn.commit()
                 session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
-                return redirect(f'/{current_role}/crud_products')
+                return redirect(f'/{username}/crud_products')
             else:
                 utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
 
@@ -1714,7 +1715,7 @@ def back_office_manager(conn, cur, *params):
                 cur.execute("UPDATE products SET quantity = 0 WHERE id = %s", (product_id,))
                 conn.commit()
                 session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
-                return redirect(f'/{current_role}/crud_products')
+                return redirect(f'/{username}/crud_products')
             elif request.path.split('/')[3] == 'delete_role':
                 utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'delete'), "You don't have permission to this resource")
 
@@ -1724,7 +1725,7 @@ def back_office_manager(conn, cur, *params):
                 conn.commit()
 
                 session['staff_message'] = "You successful deleted a role"
-                return redirect(f'/{current_role}/staff_portal')
+                return redirect(f'/{username}/staff_portal')
             else:
                 utils.AssertUser(False, "Invalid url")
 
@@ -1738,14 +1739,14 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/verify', verify),
     (r'(?:/[A-z]+)?/login', login),
     (r'(?:/[A-z]+)?/home(?:/(\d+))?', home),
-    (r'(?:/[A-z]+)?/logout', logout),
+    (r'/logout', logout),
     (r'(?:/[A-z]+)?/profile', profile),
     (r'(?:/[A-z]+)?/update_profile', update_profile),
     (r'(?:/[A-z]+)?/delete_account', delete_account),
     (r'(?:/[A-z]+)?/recover_password', recover_password),
     (r'(?:/[A-z]+)?/resend_verf_code', resend_verf_code),
     (r'(?:/[A-z]+)?/send_login_link', send_login_link),
-    (r'(?:/[A-z]+)?/log', login_with_token),
+    (r'/log', login_with_token),
     (r'(?:/[A-z]+)?/image/(\d+)', serve_image),
     (r'(?:/[A-z]+)?/add_to_cart', add_to_cart_meth),
     (r'(?:/[A-z]+)?/cart', cart),
@@ -1786,23 +1787,22 @@ url_to_function_map = [
 
 
 @app.endpoint("handle_request")
-def handle_request(role=None, path=''):
+def handle_request(username=None, path=''):
     conn = None
     cur = None
-    roles = None
     try:
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor()
         staff_username = user_email = session.get('staff_username')
 
-        if staff_username is not None:
-            cur.execute("SELECT role_name FROM roles AS r JOIN staff_roles AS sr ON r.role_id=sr.role_id JOIN staff AS s ON sr.staff_id = s.id WHERE s.username = %s", (staff_username,))
-            roles = cur.fetchone()[0]
+        # if staff_username is not None:
+        #     cur.execute("SELECT role_name FROM roles AS r JOIN staff_roles AS sr ON r.role_id=sr.role_id JOIN staff AS s ON sr.staff_id = s.id WHERE s.username = %s", (staff_username,))
+        #     roles = cur.fetchone()[0]
         
-        if roles:
-            if role is None:
+        if staff_username is not None:
+           if username is None:
                 # Redirect to the URL with the role included
-                return redirect(url_for('handle_request', role=roles, path=path))
+                return redirect(url_for('handle_request', username=staff_username, path=path))
 
         funtion_to_call = None
         match = None

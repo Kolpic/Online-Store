@@ -8,7 +8,7 @@
 <body>
     <div class="container mt-5">
         <h2>Generate Sales Report</h2>
-        <form id="reportForm" action="/{{ current_role }}/report_sales" method="post">
+        <form id="reportForm" action="/{{ username }}/report_sales" method="post">
             <div class="form-row">
                 <div class="col">
                     <label for="date_from">From:</label>
@@ -80,7 +80,7 @@
                 </tbody>
             </table>
         </div>
-        <form action="/{{ current_role }}/download_report" method="post">
+        <form action="/{{ username }}/download_report" method="post">
             <input type="hidden" name="date_from" value="{{ request.form['date_from'] }}">
             <input type="hidden" name="date_to" value="{{ request.form['date_to'] }}">
             <input type="hidden" name="group_by" value="{{ request.form['group_by'] }}">

@@ -40,7 +40,7 @@
             </div>
         </div>
         <h2>Update Application Settings</h2>
-        <form action="/{{ current_role }}/update_captcha_settings" method="post">
+        <form action="/{{ username }}/update_captcha_settings" method="post">
             <div class="form-group">
                 <label for="max_captcha_attempts">Maximum CAPTCHA Attempts</label>
                 <input type="number" class="form-control" id="max_captcha_attempts" name="max_captcha_attempts" value="{{ max_captcha_attempts }}">

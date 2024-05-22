@@ -45,13 +45,14 @@ def AssertDev(boolean, str):
 def AssertUser(boolean, str):
     if not boolean: raise exception.WrongUserInputException(str)
 
-def has_permission(cur, request,interface, permission_needed):
-    role = request.path.split('/')[1]
-    cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (role,))
-    role_id = cur.fetchone()[0]
-    cur.execute("SELECT permission_name FROM permissions AS p JOIN role_permissions AS rp ON p.permission_id=rp.permission_id JOIN roles AS r ON rp.role_id=r.role_id WHERE r.role_id = %s and p.interface = %s", (role_id, interface))
-    permissions = cur.fetchall()
-    return any(permission_needed in permission for permission in permissions)
+def has_permission(cur, request, interface, permission_needed):
+    username = request.path.split('/')[1]
+    cur.execute("select permission_name, interface from permissions as p join role_permissions as rp on p.permission_id = rp.permission_id join roles as r on rp.role_id = r.role_id join staff_roles as sr on r.role_id = sr.role_id join staff as s on sr.staff_id = s.id where s.username = %s", (username,))
+    permission_interface = cur.fetchall()
+    for perm_interf in permission_interface:
+        if permission_needed == perm_interf[0] and interface == perm_interf[1]:
+            return True
+    return False
 
 def serialize_report(report):
     json_ready_report = []
