@@ -313,21 +313,32 @@ def login(conn, cur):
     # TODO: Izpolzvam tova navsqkude
     cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
-    cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-    utils.AssertUser(not cur.rowcount == 0, "There is no registration with this email")
-    # TODO: ASSERDEV assert 1
-    # SELECT 1 put vmesto 3
+    cur.execute("""
+                SELECT email, verification_status, password
+                FROM users
+                WHERE email = %s
+                """, (email,))
+    user_data = cur.fetchone()
 
-    cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
-    is_the_email_verified = cur.fetchone()['verification_status']
+    utils.AssertUser(user_data, "There is no registration with this email")
+    utils.AssertUser(utils.verify_password(password_, user_data['password']), "Invalid email or password")
+    utils.AssertUser(user_data['verification_status'], "Your account is not verified or has been deleted")
 
-    cur.execute("SELECT password FROM users WHERE email = %s", (email,))
-    hashed_password = cur.fetchone()['password']
+    # cur.execute("SELECT email FROM users WHERE email = %s", (email,))
+    # utils.AssertUser(not cur.rowcount == 0, "There is no registration with this email")
+    # # TODO: ASSERDEV assert 1
+    # # SELECT 1 put vmesto 3
 
-    are_passwords_same = bool(utils.verify_password(password_, hashed_password))
+    # cur.execute("SELECT verification_status, password FROM users WHERE email = %s", (email,))
+    # is_the_email_verified = cur.cur.fetchone()['verification_status']
 
-    utils.AssertUser(are_passwords_same, "Invalid email or password")
-    utils.AssertUser(is_the_email_verified, "Your account is not verified or has been deleted")
+    # cur.execute("SELECT password FROM users WHERE email = %s", (email,))
+    # hashed_password = cur.fetchone()['password']
+
+    # are_passwords_same = bool(utils.verify_password(password_, hashed_password))
+
+    # utils.AssertUser(are_passwords_same, "Invalid email or password")
+    # utils.AssertUser(is_the_email_verified, "Your account is not verified or has been deleted")
 
     session['user_email'] = email   
     return redirect("/home")
