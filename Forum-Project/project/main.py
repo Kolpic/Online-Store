@@ -520,7 +520,7 @@ def recover_password(conn, cur):
     cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-    is_email_valid = cur.fetchone()['email']
+    utils.AssertUser(not cur.rowcount == 0, "You entered non existent email")
 
     hashed_password = utils.hash_password(new_password)
 
@@ -1603,7 +1603,9 @@ def back_office_manager(conn, cur, *params):
                     cur.execute('INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)', 
                                 (role_id, permission_id))
         conn.commit()
-        session['role_permission_message'] = f'You successfull updated permissions for role: {username}'
+        cur.execute("SELECT role_name FROM roles WHERE role_id = %s", (role_id,))
+        role_name = cur.fetchone()[0]
+        session['role_permission_message'] = f'You successfully updated permissions for role: {role_name}'
         return redirect(f'/{username}/role_permissions?role=' + role_id)
 
     if request.path.split('_')[0] == f'/{username}/crud':
