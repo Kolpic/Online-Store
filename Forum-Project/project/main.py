@@ -131,7 +131,7 @@ def validate_field(field_name, value, config):
 
 def process_form(interface, method):
     field_config = get_field_config(interface, method)
-    # TODO(Done): without if 
+    # TODO: without if 
     # data_to_return = {row for row in field_config if row['interface'] == interface}
 
     form_data = {}
@@ -1374,6 +1374,8 @@ def back_office_manager(conn, cur, *params):
             date_to = request.form.get('date_to')
             group_by = request.form.get('group_by')
             status = request.form.get('status')
+            utils.AssertDev(0)
+            filter = request.form.get('filter')
             order_id = request.form.get('sale_id')
 
             utils.AssertUser(date_from or date_to, "You have to select a date from, date to")
@@ -1400,7 +1402,7 @@ def back_office_manager(conn, cur, *params):
                 FROM OrderSums AS o 
                 GROUP BY period;
                 """
-            elif (group_by == 'day' or group_by == 'month' or group_by == 'year') and status != "":
+            elif (group_by == 'day' or group_by == 'month' or group_by == 'year') and status != "": # tova
                 group_by_clause = f"""
                 SELECT
                 DATE(date_trunc('{group_by}', order_date)) as period,
@@ -1409,9 +1411,9 @@ def back_office_manager(conn, cur, *params):
                 SUM(order_sum) AS total_sum, 
                 array_agg(status) AS order_statuses 
                 FROM OrderSums AS o 
-                GROUP BY period, status = '{status}';
+                GROUP BY period, status;
                 """
-            elif status != "":
+            elif status != "": # tova
                 group_by_clause = f"""
                 SELECT
                 array_agg(order_date) as period,
@@ -1420,8 +1422,7 @@ def back_office_manager(conn, cur, *params):
                 array_agg(order_sum) AS total_sum, 
                 array_agg(status) AS order_statuses 
                 FROM OrderSums AS o
-                GROUP BY order_date, status = '{status}'
-                ORDER BY order_date, status = '{status}';
+                GROUP BY status;
                 """
             else:
                 group_by_clause = f"""
@@ -1438,18 +1439,18 @@ def back_office_manager(conn, cur, *params):
 
             # TODO(Done): BETWEEN %s AND %s da se mahne -> < >
             query = f"""
-            WITH OrderSums AS (
-                SELECT 
-                o.order_id, 
-                DATE(o.order_date) AS order_date, 
-                u.first_name || ' ' || u.last_name AS buyer_name, 
-                o.status, SUM(oi.quantity * oi.price) AS order_sum 
-                FROM orders AS o 
-                JOIN users AS u ON o.user_id = u.id 
-                JOIN order_items AS oi ON o.order_id = oi.order_id 
-                WHERE o.order_date >= %s AND o.order_date <= %s 
-                GROUP BY o.order_id, order_date, buyer_name
-                                ) 
+                WITH OrderSums AS (
+                    SELECT 
+                        o.order_id, 
+                        DATE(o.order_date) AS order_date, 
+                        u.first_name || ' ' || u.last_name AS buyer_name, 
+                        o.status, SUM(oi.quantity * oi.price) AS order_sum 
+                    FROM orders AS o 
+                    JOIN users AS u ON o.user_id = u.id 
+                    JOIN order_items AS oi ON o.order_id = oi.order_id 
+                    WHERE o.order_date >= %s AND o.order_date <= %s 
+                    GROUP BY o.order_id, order_date, buyer_name
+                ) 
                 {group_by_clause}
             """
             params = [date_from, date_to]
@@ -1502,6 +1503,11 @@ def back_office_manager(conn, cur, *params):
             si = io.StringIO()
             cw = csv.writer(si)
 
+            cw.writerow(['Filters:'])
+            filter_keys = ['Date From', 'Date To', 'Group By', 'Status']
+            for key in filter_keys:
+                cw.writerow([f'{key}:', form_data[key.lower().replace(' ', '_')]])
+
             # headers = ['Date', 'Order ID\'s', 'Name of Buyers', 'Total Price', 'Order Status']
             cw.writerow(headers)
             # cw.writerow(['Date', 'Order ID\'s', 'Name of Buyers', 'Total Price', 'Order Status'])
@@ -1521,11 +1527,6 @@ def back_office_manager(conn, cur, *params):
             # cw.writerow(['Group By:', group_by])
             # cw.writerow(['Status:', status])
 
-            cw.writerow(['Filters:'])
-            filter_keys = ['Date From', 'Date To', 'Group By', 'Status']
-            for key in filter_keys:
-                cw.writerow([f'{key}:', form_data[key.lower().replace(' ', '_')]])
-
             output = si.getvalue()
             si.close()
 
@@ -1535,6 +1536,10 @@ def back_office_manager(conn, cur, *params):
         elif form_data['format'] == 'excel':
             wb = Workbook()
             ws = wb.active
+
+            filter_keys = ['Date From', 'Date To', 'Group By', 'Status']
+            for key in filter_keys:
+                ws.append([f'{key}:', form_data[key.lower().replace(' ', '_')]])
 
             # headers = ['Date', 'Order IDs', 'Name of Buyers', 'Total Price', 'Order Status']
             ws.append(headers)
@@ -1553,9 +1558,6 @@ def back_office_manager(conn, cur, *params):
 
             ws.append(['Total Records:', form_data['total_records'], 'Total:', form_data['total_price']])
             ws.append(['Filters:'])
-            filter_keys = ['Date From', 'Date To', 'Group By', 'Status']
-            for key in filter_keys:
-                ws.append([f'{key}:', form_data[key.lower().replace(' ', '_')]])
 
             excel_bf = BytesIO()
             wb.save(excel_bf)

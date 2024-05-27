@@ -18,9 +18,6 @@
                     <label for="date_to">To:</label>
                     <input type="date" class="form-control" id="date_to" name="date_to" value="{{ default_to_date }}">
                 </div>
-            </div>
-            
-            <div class="form-row">
                 <div class="col-md-4">
                     <label for="group_by">Group by time:</label>
                     <select id="group_by" class="form-control" name="group_by">
@@ -30,18 +27,29 @@
                         <option value="year" {{ 'selected' if request.form.group_by == 'year' else '' }}>Year</option>
                     </select>
                 </div>
+            </div>
+            
+            <div class="form-row mt-3">
                 <div class="col-md-4">
                     <label for="status">Group by status:</label>
                     <select id="status" class="form-control" name="status">
-                        <option value="">All</option>
+                        <option value="">Hide</option>
+                        <option value="Ready for Paying" {{ 'selected' if request.form.status == 'Ready for Paying' else '' }}>Order by status</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="filter">Filter by status:</label>
+                    <select id="filter" class="form-control" name="filter">
+                        <option value="">Hide</option>
                         <option value="Ready for Paying" {{ 'selected' if request.form.status == 'Ready for Paying' else '' }}>Ready for Paying</option>
                         <option value="Paid" {{ 'selected' if request.form.status == 'Paid' else '' }}>Paid</option>
                     </select>
                 </div>
-                <div class="col-md-4">
-                    <label for="sale_id">Find sale by ID:</label>
-                    <input type="number" class="form-control" id="sale_id" name="sale_id">
-                </div>
+            </div>
+
+            <div class="col-md-5">
+                <label for="sale_id">Find sale by ID:</label>
+                <input type="number" class="form-control" id="sale_id" name="sale_id">
             </div>
 
             <br>
