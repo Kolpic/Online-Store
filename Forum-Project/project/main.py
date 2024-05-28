@@ -83,15 +83,27 @@ def refresh_captcha(conn, cur):
 
 # Configuration for each field
 FIELD_CONFIG = {
-    'name': {'type': str, 'required': True, 'interface': 'CRUD Products', 'method': ['create', 'edit']},
-    'price': {'type': float, 'required': True, 'interface': 'CRUD Products', 'method': ['create', 'edit'],'conditions': [(lambda x: x > 0, "Price must be a positive number")]},
-    'quantity': {'type': int, 'required': True, 'interface': 'CRUD Products', 'method': ['create', 'edit'],'conditions': [(lambda x: x > 0, "Quantity must be a positive number")]},
-    'category': {'type': str, 'required': True, 'interface': 'CRUD Products', 'method': ['create', 'edit']},
-    'image': {'type': 'file', 'required': True, 'interface': 'CRUD Products', 'method': ['create'], 'validator': ALLOWED_EXTENSIONS},
-    'staff_id': {'type': str, 'required': True, 'interface': 'Staff roles', 'method': ['create']},
-    'role_id': {'type': str, 'required': True, 'interface': 'Staff roles', 'method': ['create']},
-    # TODO: hash name
-    # '_name': {'type': str, 'required': True, 'interface': 'Staff roles'},
+    'CRUD Products': {
+        'create': {
+            'name': {'type': str, 'required': True},
+            'price': {'type': float, 'required': True, 'conditions': [(lambda x: x > 0, "Price must be a positive number")]},
+            'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "Quantity must be a positive number")]},
+            'category': {'type': str, 'required': True},
+            'image': {'type': 'file', 'required': True, 'validator': ALLOWED_EXTENSIONS},
+        },
+        'edit': {
+            'name': {'type': str, 'required': True},
+            'price': {'type': float, 'required': True, 'conditions': [(lambda x: x > 0, "Price must be a positive number")]},
+            'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x >= 0, "Quantity must not be negative")]},
+            'category': {'type': str, 'required': True},
+        }
+    },
+    'Staff roles': {
+        'create': {
+            'staff_id': {'type': str, 'required': True},
+            'role_id': {'type': str, 'required': True}
+        }
+    },
 }
 
 special_field_handlers = {
@@ -99,17 +111,13 @@ special_field_handlers = {
 }
 
 def handle_image_field(image_data):
-    utils.AssertUser(image_data.filename.split('.')[-1] in FIELD_CONFIG['image']['validator'], "Invalid image file extension (must be one of jpg, jpeg, png)")
+    utils.AssertUser(image_data.filename.split('.')[-1] in FIELD_CONFIG['CRUD Products']['create']['image']['validator'], "Invalid image file extension (must be one of jpg, jpeg, png)")
     filename = secure_filename(image_data.filename)
     image_data = validate_image_size(image_data.stream)
     return image_data
 
 def get_field_config(interface, method):
-    data_to_return = {}
-    for key, value in FIELD_CONFIG.items():
-        if value['interface'] == interface and method in value['method']:
-            data_to_return[key] = value
-    return data_to_return
+    return FIELD_CONFIG.get(interface, {}).get(method, {}) # return the right fields for the interface with the metod we provided
 
 def validate_field(field_name, value, config):
     utils.AssertUser(config['required'] and value, f"You must add information in every field: {field_name}")
@@ -127,28 +135,30 @@ def validate_field(field_name, value, config):
     return value
 
 def process_form(interface, method):
-    field_config = get_field_config(interface, method)
-    # TODO: without if 
-    # data_to_return = {row for row in field_config if row['interface'] == interface}
-
     form_data = {}
-    for field, config in field_config.items():
+
+    field_config = get_field_config(interface, method) # {'name': {'type': <class 'str'>, 'required': True}, 'price': {
+
+    for field, config in field_config.items(): # ([('name', {'type': <class 'str'>, 'required': True}), ('price', { print("", flush=True)
+        # field - name, config {'type': <class 'str'>, 'required': True}
+
         value = None
 
         if config['type'] != 'file':
-            value = request.form.get(field) 
+            value = request.form.get(field)
         else:
             value = request.files.get(field)
 
-        form_data[field] = validate_field(field, value, config)
-
         if field in special_field_handlers:
             form_data[field] = special_field_handlers[field](value)
+        else:
+            form_data[field] = validate_field(field, value, config)
 
-    dict_to_return = {}
-    dict_to_return['fields'] = ', '.join(form_data.keys())
-    dict_to_return['placeholders'] = ', '.join(['%s'] * len(form_data))
-    dict_to_return['values'] = tuple(form_data.values())
+    dict_to_return = {
+        'fields': ', '.join(form_data.keys()),
+        'placeholders': ', '.join(['%s'] * len(form_data)),
+        'values': tuple(form_data.values())
+    }
     
     return dict_to_return
 
