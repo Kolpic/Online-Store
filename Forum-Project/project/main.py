@@ -1792,10 +1792,6 @@ def handle_request(username=None, path=''):
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor()
         staff_username = user_email = session.get('staff_username')
-
-        # if staff_username is not None:
-        #     cur.execute("SELECT role_name FROM roles AS r JOIN staff_roles AS sr ON r.role_id=sr.role_id JOIN staff AS s ON sr.staff_id = s.id WHERE s.username = %s", (staff_username,))
-        #     roles = cur.fetchone()[0]
         
         if staff_username is not None:
            if username is None:
