@@ -64,9 +64,6 @@ app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=[
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
 app.add_url_rule("/<username>/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 
-# logging.basicConfig(filename='app.log', level=logging.INFO, 
-#                             format='%(asctime)s %(message)s', datefmt='%d/%b/%Y %H:%M:%S')
-
 def assertIsProvidedMethodsTrue(*args):
     if len(args) == 2:
         if not request.method == 'GET' and not request.method == 'POST': raise exception.MethodNotAllowed("You tried to asscess resources, you don't have permission for")
@@ -136,30 +133,23 @@ def process_form(interface, method):
 
     form_data = {}
     for field, config in field_config.items():
-        # TODO(DOne): if ne na edin red
         value = None
+
         if config['type'] != 'file':
             value = request.form.get(field) 
         else:
             value = request.files.get(field)
-        # value = request.form.get(field) if config['type'] != 'file' else request.files.get(field)
+
         form_data[field] = validate_field(field, value, config)
 
         if field in special_field_handlers:
             form_data[field] = special_field_handlers[field](value)
-    # TODO(Done): Special handling for file field - > * hook 
-    # if 'image' in form_data and form_data['image'].filename.split('.')[1] in FIELD_CONFIG['image']['validator']:
-    #     filename = secure_filename(form_data['image'].filename)
-    #     form_data['image'] = validate_image_size(form_data['image'].stream)
-    # else:
-    #     raise ValueError("Invalid image file extension (must be jpeg) or size (must be under 5 MB)")
 
     dict_to_return = {}
     dict_to_return['fields'] = ', '.join(form_data.keys())
     dict_to_return['placeholders'] = ', '.join(['%s'] * len(form_data))
     dict_to_return['values'] = tuple(form_data.values())
     
-    # TODO(Done): Tuple -> DIc
     return dict_to_return
 
 def registration(conn, cur):
@@ -323,22 +313,6 @@ def login(conn, cur):
     utils.AssertUser(user_data, "There is no registration with this email")
     utils.AssertUser(utils.verify_password(password_, user_data['password']), "Invalid email or password")
     utils.AssertUser(user_data['verification_status'], "Your account is not verified or has been deleted")
-
-    # cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-    # utils.AssertUser(not cur.rowcount == 0, "There is no registration with this email")
-    # # TODO: ASSERDEV assert 1
-    # # SELECT 1 put vmesto 3
-
-    # cur.execute("SELECT verification_status, password FROM users WHERE email = %s", (email,))
-    # is_the_email_verified = cur.cur.fetchone()['verification_status']
-
-    # cur.execute("SELECT password FROM users WHERE email = %s", (email,))
-    # hashed_password = cur.fetchone()['password']
-
-    # are_passwords_same = bool(utils.verify_password(password_, hashed_password))
-
-    # utils.AssertUser(are_passwords_same, "Invalid email or password")
-    # utils.AssertUser(is_the_email_verified, "Your account is not verified or has been deleted")
 
     session['user_email'] = email   
     return redirect("/home")
@@ -1374,7 +1348,6 @@ def back_office_manager(conn, cur, *params):
             date_to = request.form.get('date_to')
             group_by = request.form.get('group_by')
             status = request.form.get('status')
-            utils.AssertDev(0)
             filter = request.form.get('filter')
             order_id = request.form.get('sale_id')
 
