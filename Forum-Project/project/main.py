@@ -89,6 +89,7 @@ FIELD_CONFIG = {
             'price': {'type': float, 'required': True, 'conditions': [(lambda x: x > 0, "Price must be a positive number")]},
             'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "Quantity must be a positive number")]},
             'category': {'type': str, 'required': True},
+            # TODO: validator -> conditions
             'image': {'type': 'file', 'required': True, 'validator': ALLOWED_EXTENSIONS},
         },
         'edit': {
@@ -137,10 +138,9 @@ def validate_field(field_name, value, config):
 def process_form(interface, method):
     form_data = {}
 
-    field_config = get_field_config(interface, method) # {'name': {'type': <class 'str'>, 'required': True}, 'price': {
+    field_config = get_field_config(interface, method) 
 
-    for field, config in field_config.items(): # ([('name', {'type': <class 'str'>, 'required': True}), ('price', { print("", flush=True)
-        # field - name, config {'type': <class 'str'>, 'required': True}
+    for field, config in field_config.items():
 
         value = None
 
@@ -154,6 +154,7 @@ def process_form(interface, method):
         else:
             form_data[field] = validate_field(field, value, config)
 
+    # TODO: to_retutn ->>
     dict_to_return = {
         'fields': ', '.join(form_data.keys()),
         'placeholders': ', '.join(['%s'] * len(form_data)),
@@ -1530,6 +1531,7 @@ def back_office_manager(conn, cur, *params):
             # report_data = json.loads(form_data['report_data'])
             for row in report_data:
                 if isinstance(row[1], list) and len(row[1]) == 1:
+                    #TODO: row[1][0] -> PROMENLIVA S IME
                     row[1] = float(row[1][0])
                     row[2] = str(row[2][0])
                     row[4] = str(row[4][0])
@@ -1593,98 +1595,78 @@ def back_office_manager(conn, cur, *params):
         session['role_permission_message'] = f'You successfully updated permissions for role: {role_name}'
         return redirect(f'/{username}/role_permissions?role=' + role_id)
 
-    if request.path.split('_')[0] == f'/{username}/crud':
-        if request.path.split('_')[1] == 'products' or request.path.split('_')[1] == 'staff':
-            if request.path.split('_')[1] == 'products':
-                utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read'), "You don't have permission to this resource")
+    print("request.path.split('/')[0]", flush=True)
+    print(request.path.split('/')[0], flush=True)
+    print("request.path.split('/')[1]", flush=True)
+    print(request.path.split('/')[1], flush=True)
+    print("request.path.split('/')[2]", flush=True)
+    print(request.path.split('/')[2], flush=True)
+    print("len(request.path.split('/'))", flush=True)
+    print(len(request.path.split('/')), flush=True)
+    print("request.path", flush=True)
+    print(request.path, flush=True)
+    print("request.path.split('_')[0]", flush=True)
+    print(request.path.split('_')[0], flush=True)
+    print("request.path.split('_')[1]", flush=True)
+    print(request.path.split('_')[1], flush=True)
 
-                sort_by = request.args.get('sort', 'id')
-                sort_order = request.args.get('order', 'asc')
-                price_min = request.args.get('price_min', None, type=float)
-                price_max = request.args.get('price_max', None, type=float)
+    if f'/{username}/crud_products' in request.path:
+        if len(request.path.split('/')) == 3:
+            print("Enterd crud_products read successfully", flush=True)
+            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read'), "You don't have permission to this resource")
 
-                valid_sort_columns = {'id', 'name', 'price', 'quantity', 'category'}
-                valid_sort_orders = {'asc', 'desc'}
+            sort_by = request.args.get('sort', 'id')
+            sort_order = request.args.get('order', 'asc')
+            price_min = request.args.get('price_min', None, type=float)
+            price_max = request.args.get('price_max', None, type=float)
 
-                if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
-                    sort_by = 'id'
-                    sort_order = 'asc'
-                
-                base_query = sql.SQL("SELECT * FROM products")
-                conditions = []
-                query_params = []
+            valid_sort_columns = {'id', 'name', 'price', 'quantity', 'category'}
+            valid_sort_orders = {'asc', 'desc'}
 
-                if price_min is not None and price_max is not None:
-                    conditions.append(sql.SQL("price BETWEEN %s AND %s"))
-                    query_params.extend([price_min, price_max])
-                
-                if conditions:
-                    base_query = base_query + sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
-                
-                base_query = base_query + sql.SQL(" ORDER BY ") + sql.Identifier(sort_by) + sql.SQL(f" {sort_order}")
-                
-                base_query = base_query + sql.SQL(" LIMIT 100")
-
-                cur.execute(base_query.as_string(conn), query_params)
-                products = cur.fetchall()
-
-                return render_template('crud.html', products=products, sort_by=sort_by, sort_order=sort_order, price_min=price_min or '', price_max=price_max or '')
+            if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
+                sort_by = 'id'
+                sort_order = 'asc'
             
-            if request.path.split('_')[1] == 'staff':
-                utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read'), "You don't have permission to this resource")
+            base_query = sql.SQL("SELECT * FROM products")
+            conditions = []
+            query_params = []
 
-                cur.execute("SELECT s.username, r.role_name, sr.staff_id, sr.role_id FROM staff_roles sr JOIN staff s ON s.id = sr.staff_id JOIN roles r ON r.role_id = sr.role_id")
-                relations = cur.fetchall()
-                return render_template('staff_role_assignment.html', relations=relations, username=username)
-        
-        if request.path.split('/')[3] == 'add_product' or request.path.split('/')[3] == 'add_role_staff':
-
-            if request.path.split('/')[3] == 'add_product':
-                utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'create'), "You don't have permission to this resource")
-                # TODO(Done): ref
-                if request.method == 'GET':
-                    cur.execute("SELECT DISTINCT(category) FROM products")
-                    categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
-                    return render_template('add_product_staff.html', categories=categories, username=username)
-                elif request.method == 'POST':
-                    data = process_form('CRUD Products', 'create')
-                    
-                    cur.execute(f"INSERT INTO products ({ data['fields'] }) VALUES ({ data['placeholders'] })", data['values'])
-                    conn.commit()
-                    session['crud_message'] = "Item was added successfully"
-                    return redirect(f'/{username}/crud_products')
-                else:
-                    utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
+            if price_min is not None and price_max is not None:
+                conditions.append(sql.SQL("price BETWEEN %s AND %s"))
+                query_params.extend([price_min, price_max])
             
-            if request.path.split('/')[3] == 'add_role_staff':
-                utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create'), "You don't have permission to this resource")
-                 # TODO(Done): ref
-                if request.method == 'GET':
-                    cur.execute("SELECT id, username FROM staff")
-                    staff = cur.fetchall()
+            if conditions:
+                base_query = base_query + sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
+            
+            base_query = base_query + sql.SQL(" ORDER BY ") + sql.Identifier(sort_by) + sql.SQL(f" {sort_order}")
+            
+            base_query = base_query + sql.SQL(" LIMIT 100")
 
-                    cur.execute("SELECT role_id, role_name FROM roles")
-                    roles = cur.fetchall()
+            cur.execute(base_query.as_string(conn), query_params)
+            products = cur.fetchall()
 
-                    return render_template('add_staff_role.html', staff=staff, roles=roles, username=username)
-                elif request.method == 'POST':
-                    data = process_form('Staff roles', 'create')
+            return render_template('crud.html', products=products, sort_by=sort_by, sort_order=sort_order, price_min=price_min or '', price_max=price_max or '')
 
-                    cur.execute("SELECT id FROM staff WHERE username = %s", (data['values'][0],))
-                    staff_id = cur.fetchone()[0]
+        elif request.path.split('/')[3] == 'add_product':
+            print("Enterd crud_products add successfully", flush=True)
+            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'create'), "You don't have permission to this resource")
+            # TODO(Done): ref
+            if request.method == 'GET':
+                cur.execute("SELECT DISTINCT(category) FROM products")
+                categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
+                return render_template('add_product_staff.html', categories=categories, username=username)
+            elif request.method == 'POST':
+                data = process_form('CRUD Products', 'create')
+                
+                cur.execute(f"INSERT INTO products ({ data['fields'] }) VALUES ({ data['placeholders'] })", data['values'])
+                conn.commit()
+                session['crud_message'] = "Item was added successfully"
+                return redirect(f'/{username}/crud_products')
+            else:
+                utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
 
-                    cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (data['values'][1],))
-                    role_id = cur.fetchone()[0]
-
-                    cur.execute(f"INSERT INTO staff_roles ({data['fields']}) VALUES ({data['placeholders']})", (staff_id, role_id))
-                    conn.commit()
-
-                    session['staff_message'] = "You successful gave a role: " + str(data['values'][0]) + " to user: " + str(data['values'][1])
-                    return redirect('/staff_portal')
-                else:
-                    utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
-
-        if request.path.split('/')[3] == 'edit_product':
+        elif request.path.split('/')[3] == 'edit_product':
+            print("Enterd crud_products edit successfully", flush=True)
             utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'update'), "You don't have permission to this resource")
             # TODO: ref
             product_id = request.path.split('/')[4]
@@ -1704,28 +1686,74 @@ def back_office_manager(conn, cur, *params):
             else:
                 utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
 
-        if request.path.split('/')[3] == 'delete_product' or request.path.split('/')[3] == 'delete_role':
-            if request.path.split('/')[3] == 'delete_product':
-                # TODO: ref
-                utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'delete'), "You don't have permission to this resource")
+        elif request.path.split('/')[3] == 'delete_product':
+            print("Enterd crud_products delete successfully", flush=True)
+            # TODO: ref
+            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'delete'), "You don't have permission to this resource")
 
-                product_id = request.path.split('/')[4]
-                cur.execute("UPDATE products SET quantity = 0 WHERE id = %s", (product_id,))
+            product_id = request.path.split('/')[4]
+            cur.execute("UPDATE products SET quantity = 0 WHERE id = %s", (product_id,))
+            conn.commit()
+            session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
+            return redirect(f'/{username}/crud_products')
+
+    elif f'/{username}/crud_staff' in request.path:
+
+        if len(request.path.split('/')) == 3:
+            print("Enterd crud_staff read successfully", flush=True)
+            utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read'), "You don't have permission to this resource")
+
+            cur.execute("SELECT s.username, r.role_name, sr.staff_id, sr.role_id FROM staff_roles sr JOIN staff s ON s.id = sr.staff_id JOIN roles r ON r.role_id = sr.role_id")
+            relations = cur.fetchall()
+            return render_template('staff_role_assignment.html', relations=relations, username=username)
+
+        elif request.path.split('/')[3] == 'add_role_staff':
+            print("Enterd crud_staff add successfully", flush=True)
+            utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create'), "You don't have permission to this resource")
+             # TODO(Done): ref
+            if request.method == 'GET':
+                cur.execute("SELECT id, username FROM staff")
+                staff = cur.fetchall()
+
+                cur.execute("SELECT role_id, role_name FROM roles")
+                roles = cur.fetchall()
+
+                return render_template('add_staff_role.html', staff=staff, roles=roles, username=username)
+            elif request.method == 'POST':
+                data = process_form('Staff roles', 'create')
+
+                cur.execute("SELECT id FROM staff WHERE username = %s", (data['values'][0],))
+                staff_id = cur.fetchone()[0]
+
+                cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (data['values'][1],))
+                role_id = cur.fetchone()[0]
+
+                cur.execute(f"INSERT INTO staff_roles ({data['fields']}) VALUES ({data['placeholders']})", (staff_id, role_id))
                 conn.commit()
-                session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
-                return redirect(f'/{username}/crud_products')
-            elif request.path.split('/')[3] == 'delete_role':
-                utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'delete'), "You don't have permission to this resource")
 
-                staff_id = request.path.split('/')[4]
-                role_id = request.path.split('/')[5]
-                cur.execute('DELETE FROM staff_roles WHERE staff_id = %s AND role_id = %s', (staff_id, role_id))
-                conn.commit()
-
-                session['staff_message'] = "You successful deleted a role"
-                return redirect(f'/{username}/staff_portal')
+                session['staff_message'] = "You successful gave a role: " + str(data['values'][0]) + " to user: " + str(data['values'][1])
+                return redirect('/staff_portal')
             else:
-                utils.AssertUser(False, "Invalid url")
+                utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
+
+        elif request.path.split('/')[3] == 'delete_role':
+            print("Enterd crud_staff delete successfully", flush=True)
+            utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'delete'), "You don't have permission to this resource")
+
+            staff_id = request.path.split('/')[4]
+            role_id = request.path.split('/')[5]
+            cur.execute('DELETE FROM staff_roles WHERE staff_id = %s AND role_id = %s', (staff_id, role_id))
+            conn.commit()
+
+            session['staff_message'] = "You successful deleted a role"
+            return redirect(f'/{username}/staff_portal')
+
+    elif request.path == f'/{username}/crud_user':
+        if len(request.path.split('/')) == 3:
+            print("Enterd crud_user successful", flush=True)
+
+
+
 
 @app.route('/favicon.ico')
 def favicon():
@@ -1756,31 +1784,6 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/logout_staff', logout_staff),
     (r'(/[A-z]+)/logout_staff', logout_staff),
     (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report)(?:/[\w\d\-_/]*)?', back_office_manager),
-
-    # # (r'(?:/[A-z]+)?/error_logs', view_logs),
-    # (r'(?:/[A-z]+)?/error_logs', back_office_manager),
-    # # (r'(?:/[A-z]+)?/update_captcha_settings', update_captcha_settings),
-    # (r'(?:/[A-z]+)?/update_captcha_settings', back_office_manager),
-    # # (r'(?:/[A-z]+)?/crud', crud_inf),
-    # (r'(?:/[A-z]+)?/crud_products', back_office_manager),
-    # # (r'(?:/[A-z]+)?/add_product', add_product),
-    # (r'(?:/[A-z]+)?/crud_products/add_product', back_office_manager),
-    # # (r'(?:/[A-z]+)?/edit_product/(\d+)', edit_product),
-    # (r'(?:/[A-z]+)?/crud_products/edit_product/(\d+)', back_office_manager),
-    # # (r'(?:/[A-z]+)?/delete_product/(\d+)', delete_product),
-    # (r'(?:/[A-z]+)?/crud_products/delete_product/(\d+)', back_office_manager),
-    # (r'(?:/[A-z]+)?/add_products_from_file/(.+)', add_products_from_file),
-    # # (r'(?:/[A-z]+)?/reports', report),
-    # (r'(?:/[A-z]+)?/report_sales', back_office_manager),
-    # # (r'(?:/[A-z]+)?/staff_role', staff_role),
-    # # (r'(?:/[A-z]+)?/staff_role_add', staff_role_add),
-    # # (r'(?:/[A-z]+)?/delete_role/(\d+)/(\d+)', delete_role),
-    # (r'(?:/[A-z]+)?/crud_staff', back_office_manager),
-    # # (r'(?:/[A-z]+)?/crud_staff/add_staff', back_office_manager),
-    # (r'(?:/[A-z]+)?/crud_staff/add_role_staff', back_office_manager),
-    # (r'(?:/[A-z]+)?/crud_staff/delete_role/(\d+)/(\d+)', back_office_manager),
-    # # (r'(?:/[A-z]+)?/role_permissions(?:\?role=\d+)?', role_permissions),
-    # (r'(?:/[A-z]+)?/role_permissions(?:\?role=\d+)?', back_office_manager),
 ]
 
 
@@ -1807,10 +1810,9 @@ def handle_request(username=None, path=''):
                 funtion_to_call = function
                 break
 
+        # TODO: for next code rev
         utils.AssertUser(funtion_to_call is not None, "Invalid URL")
         utils.AssertDev(callable(funtion_to_call), "You are trying to invoke something that is not a function")
-
-        # logging.info(f'{request.remote_addr} - {request.method} {request.path}')
 
         if match:
             return funtion_to_call(conn, cur, *match.groups())
