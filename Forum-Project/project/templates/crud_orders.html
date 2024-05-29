@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Order Management</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<body>
+    {% if 'crud_error' in session %}
+        <div class="alert alert-danger" id="homeAlert">
+            {{ session.pop('crud_error') }}
+        </div>
+    {% endif %}
+    {% if 'crud_message' in session %}
+        <div class="alert alert-success" id="homeAlert">
+            {{ session.pop('crud_message') }}
+        </div>
+    {% endif %}
+    <div class="container mt-3">
+        <h2>Order Management</h2>
+        <div class="mb-2">
+            <button onclick="navigateTo('add_order')" class="btn btn-primary">Add New Order</button>
+        </div>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Order ID</th>
+                    <th>User ID</th>
+                    <th>Status</th>
+                    <th>Order Date</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td>{{ order[0] }}</td>
+                    <td>{{ order[1] }}</td>
+                    <td>{{ order[2] }}</td>
+                    <td>{{ order[3] }}</td>
+                    <td>
+                        <button onclick="navigateTo('edit_order/{{ order[0] }}')" class="btn btn-secondary">Edit</button>
+                        <button onclick="if(confirm('Are you sure?')) navigateTo('delete_order/{{ order[0] }}')" class="btn btn-danger" class="btn btn-danger">Delete</button>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+<script>
+    function navigateTo(path) {
+            const baseURL = window.location.href.split('?')[0]; 
+            window.location.href = baseURL + '/' + path;
+    }
+
+    window.onload = function() {
+        setTimeout(function() {
+            let homeAlert = document.getElementById('homeAlert');
+            if (homeAlert) {
+                homeAlert.style.display = 'none';
+            }
+        }, 3000);
+    };
+</script>
+</html>

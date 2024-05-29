@@ -105,6 +105,17 @@ FIELD_CONFIG = {
             'role_id': {'type': str, 'required': True}
         }
     },
+    'CRUD Orders': {
+        'create': {
+            'user_id': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "User id must be possitive")]},
+            'status': {'type': str, 'required': True},
+            'order_date': {'type': datetime, 'required': True},
+        },
+        'edit': {
+            'status': {'type': str, 'required': True},
+            'order_date': {'type': datetime, 'required': True},
+        }
+    }
 }
 
 special_field_handlers = {
@@ -154,14 +165,13 @@ def process_form(interface, method):
         else:
             form_data[field] = validate_field(field, value, config)
 
-    # TODO: to_retutn ->>
-    dict_to_return = {
+    values_to_insert_db = {
         'fields': ', '.join(form_data.keys()),
         'placeholders': ', '.join(['%s'] * len(form_data)),
         'values': tuple(form_data.values())
     }
     
-    return dict_to_return
+    return values_to_insert_db
 
 def registration(conn, cur):
     user_ip = request.remote_addr
@@ -1556,7 +1566,7 @@ def back_office_manager(conn, cur, *params):
 
     if request.path == f'/{username}/role_permissions':
         utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read'), "You don't have permission to this resource")
-        interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles',]
+        interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles', 'CRUD Products']
 
         if request.method == 'GET':
             role = request.path.split('/')[1]
@@ -1595,20 +1605,20 @@ def back_office_manager(conn, cur, *params):
         session['role_permission_message'] = f'You successfully updated permissions for role: {role_name}'
         return redirect(f'/{username}/role_permissions?role=' + role_id)
 
-    print("request.path.split('/')[0]", flush=True)
-    print(request.path.split('/')[0], flush=True)
-    print("request.path.split('/')[1]", flush=True)
-    print(request.path.split('/')[1], flush=True)
-    print("request.path.split('/')[2]", flush=True)
-    print(request.path.split('/')[2], flush=True)
-    print("len(request.path.split('/'))", flush=True)
-    print(len(request.path.split('/')), flush=True)
-    print("request.path", flush=True)
-    print(request.path, flush=True)
-    print("request.path.split('_')[0]", flush=True)
-    print(request.path.split('_')[0], flush=True)
-    print("request.path.split('_')[1]", flush=True)
-    print(request.path.split('_')[1], flush=True)
+    # print("request.path.split('/')[0]", flush=True)
+    # print(request.path.split('/')[0], flush=True)
+    # print("request.path.split('/')[1]", flush=True)
+    # print(request.path.split('/')[1], flush=True)
+    # print("request.path.split('/')[2]", flush=True)
+    # print(request.path.split('/')[2], flush=True)
+    # print("len(request.path.split('/'))", flush=True)
+    # print(len(request.path.split('/')), flush=True)
+    # print("request.path", flush=True)
+    # print(request.path, flush=True)
+    # print("request.path.split('_')[0]", flush=True)
+    # print(request.path.split('_')[0], flush=True)
+    # print("request.path.split('_')[1]", flush=True)
+    # print(request.path.split('_')[1], flush=True)
 
     if f'/{username}/crud_products' in request.path:
         if len(request.path.split('/')) == 3:
@@ -1697,6 +1707,9 @@ def back_office_manager(conn, cur, *params):
             session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
             return redirect(f'/{username}/crud_products')
 
+        else:
+            utils.AssertUser(False, "Invalid url")
+
     elif f'/{username}/crud_staff' in request.path:
 
         if len(request.path.split('/')) == 3:
@@ -1748,12 +1761,79 @@ def back_office_manager(conn, cur, *params):
             session['staff_message'] = "You successful deleted a role"
             return redirect(f'/{username}/staff_portal')
 
-    elif request.path == f'/{username}/crud_user':
+        else:
+            utils.AssertUser(False, "Invalid url")
+
+    elif f'/{username}/crud_orders' in request.path:
+        #TODO: debug role_permissions has a bug 
         if len(request.path.split('/')) == 3:
-            print("Enterd crud_user successful", flush=True)
+            print("Enterd crud_orders read successful", flush=True)
+            # utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read'), "You don't have permission for this resource")
+            cur.execute("SELECT * FROM orders")
+            orders = cur.fetchall()
+            return render_template('crud_orders.html', orders=orders)
 
+        elif request.path.split('/')[3] == 'add_order':
+            print("Enterd crud_orders add successful", flush=True)
+            # utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'create'), "You don't have permission for this resource")
 
+            if request.method == 'GET':
+                cur.execute("SELECT DISTINCT status FROM orders")
+                statuses = cur.fetchall()
+                return render_template('add_order.html', statuses=statuses, username=username)
 
+            elif request.method == 'POST':
+                print("Enterd crud_orders add POST successful", flush=True)
+                data = process_form('CRUD Orders', 'create')
+
+                cur.execute(f"INSERT INTO orders ({ data['fields'] }) VALUES ({ data['placeholders'] })", data['values'])
+                conn.commit()
+                session['crud_message'] = "Order was added successfully"
+                return redirect(f'/{username}/crud_orders')
+            else:
+                utils.AssertUser(False, "Invalid operation")
+
+        elif request.path.split('/')[3] == 'edit_order':
+            print("Enterd crud_orders edit successful", flush=True)
+            # utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'update'), "You don't have permission for this resource")
+            order_id = request.path.split('/')[4]
+
+            if request.method == 'GET':
+
+                order_id = request.path.split('/')[4]
+                cur.execute("SELECT DISTINCT status FROM orders")
+                statuses = cur.fetchall()
+
+                return render_template('edit_order.html', order_id=order_id, username=username, statuses=statuses)
+
+            elif request.method == 'POST':
+                print("Enterd crud_orders edit POST successful", flush=True)
+                data = process_form('CRUD Orders', 'edit')
+
+                cur.execute("UPDATE orders SET status = %s, order_date = %s WHERE order_id = %s", (data['values'][0], data['values'][1],order_id))
+                conn.commit()
+                session['crud_message'] = "Order was updated successfully with id = " + str(order_id)
+                return redirect(f'/{username}/crud_orders')
+
+            else:
+                utils.AssertUser(False, "Invalid operation")
+
+        elif request.path.split('/')[3] == 'delete_order':
+            print("Enterd crud_orders delete successful", flush=True)
+            # utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'delete'), "You don't have permission to this resource")
+
+            order_id = request.path.split('/')[4]
+
+            cur.execute('DELETE FROM shipping_details WHERE order_id = %s', (order_id,))
+            cur.execute('DELETE FROM orders WHERE order_id = %s', (order_id,))
+
+            conn.commit()
+
+            session['crud_message'] = "You successful deleted a order with id: " + str(order_id)
+            return redirect(f'/{username}/crud_orders')
+
+        else:
+            utils.AssertUser(False, "Invalid url") 
 
 @app.route('/favicon.ico')
 def favicon():
@@ -1783,7 +1863,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/staff_portal', staff_portal),
     (r'(?:/[A-z]+)?/logout_staff', logout_staff),
     (r'(/[A-z]+)/logout_staff', logout_staff),
-    (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report)(?:/[\w\d\-_/]*)?', back_office_manager),
+    (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 
 
