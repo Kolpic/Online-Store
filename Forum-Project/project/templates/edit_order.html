@@ -7,8 +7,8 @@
 </head>
 <body>
     <div class="container mt-3">
-        <h2>Edit Order  -  {{ order_id }}</h2>
-        <form method="POST" action="/{{ username }}/crud_orders/edit_order/{{ order_id }}">
+        <h2>Edit Order with order id: {{ order_id }} and product id: {{ product_id }}</h2>
+        <form method="POST" action="/{{ username }}/crud_orders/edit_order/{{ order_id }}/{{ product_id }}">
             <div class="form-group">
                 <label for="status">Status</label>
                 <select class="form-control" id="status" name="status">
@@ -19,7 +19,15 @@
             </div>
             <div class="form-group">
                 <label for="order_date">Order Date</label>
-                <input type="date" class="form-control" id="order_date" name="order_date">
+                <input type="date" class="form-control" id="order_date" name="order_date" value="{{ order_date }}" >
+            </div>
+            <div class="form-group">
+                <label for="price">Price</label>
+                <input type="text" class="form-control" id="price" name="price" value="{{ price }}" required>
+            </div>
+            <div class="form-group">
+                <label for="quantity">Quantity</label>
+                <input type="text" class="form-control" id="quantity" name="quantity" value="{{ quantity }}"required>
             </div>
             <button type="submit" class="btn btn-primary">Save Changes</button>
         </form>

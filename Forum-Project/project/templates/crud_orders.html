@@ -24,23 +24,29 @@
         <table class="table">
             <thead>
                 <tr>
-                    <th>Order ID</th>
-                    <th>User ID</th>
-                    <th>Status</th>
-                    <th>Order Date</th>
-                    <th>Actions</th>
+                    <th><a href="?sort=id&order={{ 'desc' if request.args.get('sort') == 'id' and request.args.get('order') == 'asc' else 'asc' }}">Order ID</a></th>
+                    <th><a href="?sort=date&order={{ 'desc' if request.args.get('sort') == 'date' and request.args.get('order') == 'asc' else 'asc' }}">Order date</a></th>
+                    <th>User</th>
+                    <th>Product name</th>
+                    <th class="text-right">Product price</th>
+                    <th class="text-right">Product quantity</th>
+                    <th class="text-right">Order status</th>
                 </tr>
             </thead>
             <tbody>
                 {% for order in orders %}
                 <tr>
                     <td>{{ order[0] }}</td>
+                    <td>{{ order[6] }}</td>
                     <td>{{ order[1] }}</td>
                     <td>{{ order[2] }}</td>
-                    <td>{{ order[3] }}</td>
+                    <td class="text-right">{{ order[3] }} {{"лв."}}</td>
+                    <td class="text-right">{{ order[4] }}</td>
+                    <td class="text-right">{{ order[5] }}</td>
                     <td>
-                        <button onclick="navigateTo('edit_order/{{ order[0] }}')" class="btn btn-secondary">Edit</button>
-                        <button onclick="if(confirm('Are you sure?')) navigateTo('delete_order/{{ order[0] }}')" class="btn btn-danger" class="btn btn-danger">Delete</button>
+                        <button onclick="navigateTo('edit_order/{{ order[0] }}/{{ order[7] }}')" class="btn btn-secondary">Edit</button>
+                        <button onclick="if(confirm('Are you sure?')) navigateTo('delete_order/{{ order[0] }}/{{ order[7] }}')" class="btn btn-danger" class="btn btn-danger">Delete Product From Order</button>
+                        <button onclick="if(confirm('Are you sure?')) navigateTo('delete_order/{{ order[0] }}')" class="btn btn-danger" class="btn btn-danger">Delete Order</button>
                     </td>
                 </tr>
                 {% endfor %}
