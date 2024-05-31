@@ -4,6 +4,26 @@
     <meta charset="UTF-8">
     <title>Order Management</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: auto;
+        }
+        .table {
+            width: 100%;
+            margin-top: 20px;
+        }
+        .btn-group-horizontal {
+            display: flex; 
+            flex-wrap: nowrap; 
+        }
+        .btn-group-horizontal .btn {
+            margin-right: 5px; 
+        }
+        .btn-group-horizontal .btn:last-child {
+            margin-right: 0; 
+        }
+    </style>
 </head>
 <body>
     {% if 'crud_error' in session %}
@@ -31,6 +51,7 @@
                     <th class="text-right">Product price</th>
                     <th class="text-right">Product quantity</th>
                     <th class="text-right">Order status</th>
+                    <th class="text-center">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -40,13 +61,15 @@
                     <td>{{ order[6] }}</td>
                     <td>{{ order[1] }}</td>
                     <td>{{ order[2] }}</td>
-                    <td class="text-right">{{ order[3] }} {{"лв."}}</td>
+                    <td class="text-right">{{ order[3] }} лв.</td>
                     <td class="text-right">{{ order[4] }}</td>
                     <td class="text-right">{{ order[5] }}</td>
                     <td>
-                        <button onclick="navigateTo('edit_order/{{ order[0] }}/{{ order[7] }}')" class="btn btn-secondary">Edit</button>
-                        <button onclick="if(confirm('Are you sure?')) navigateTo('delete_order/{{ order[0] }}/{{ order[7] }}')" class="btn btn-danger" class="btn btn-danger">Delete Product From Order</button>
-                        <button onclick="if(confirm('Are you sure?')) navigateTo('delete_order/{{ order[0] }}')" class="btn btn-danger" class="btn btn-danger">Delete Order</button>
+                        <div class="btn-group-horizontal">
+                            <button onclick="navigateTo('edit_order/{{ order[0] }}/{{ order[7] }}')" class="btn btn-secondary">Edit</button>
+                            <button onclick="if(confirm('Are you sure?')) navigateTo('delete_order/{{ order[7] }}/{{ order[0] }}')" class="btn btn-danger">Delete Product From Order</button>
+                            <button onclick="if(confirm('Are you sure?')) navigateTo('delete_order/{{ order[7] }}/{{ order[0] }}/{{ order[1] }}')" class="btn btn-danger">Delete Order</button>
+                        </div>
                     </td>
                 </tr>
                 {% endfor %}
@@ -56,10 +79,9 @@
 </body>
 <script>
     function navigateTo(path) {
-            const baseURL = window.location.href.split('?')[0]; 
-            window.location.href = baseURL + '/' + path;
+        const baseURL = window.location.href.split('?')[0]; 
+        window.location.href = baseURL + '/' + path;
     }
-
     window.onload = function() {
         setTimeout(function() {
             let homeAlert = document.getElementById('homeAlert');

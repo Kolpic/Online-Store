@@ -119,10 +119,14 @@ FIELD_CONFIG = {
             }
         },
         'edit': {
-            'status': {'type': str, 'required': True},
-            'order_date': {'type': datetime, 'required': True},
-            'price': {'type': float, 'required': True, 'conditions': [(lambda x: x > 0, "Price must be possitive")]},
-            'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "Quantity must be possitive")]},
+            'orders': {
+                'status': {'type': str, 'required': True},
+                'order_date': {'type': datetime, 'required': True},
+            },
+            'order_items': {
+                'price': {'type': float, 'required': True, 'conditions': [(lambda x: x > 0, "Price must be possitive")]},
+                'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "Quantity must be possitive")]},
+            }
         }
     }
 }
@@ -157,41 +161,54 @@ def validate_field(field_name, value, config):
 
 def process_form(interface, method):
     form_data = {}
+    nested_data = {}
 
     field_config = get_field_config(interface, method)
 
-    print("field_config", flush=True)
-    print(field_config, flush=True)
+    for section, config_dict in field_config.items():
+        nested_data[section] = {}
 
-    for field, config in field_config.items():
+        for field, config in config_dict.items():
 
-        print("field_config.items()", flush=True)
-        print(field_config.items(), flush=True)
-        print("field", flush=True)
-        print(field, flush=True)
-        print("config", flush=True)
-        print(config, flush=True)
+            value = None
 
-        value = None
+            if config['type'] == 'file':
+                value = request.files.get(field)
+                value = special_field_handlers['image'](value) if field == 'image' else value
+            else:
+                value = request.form.get(field)
 
-        if config['type'] != 'file':
-            value = request.form.get(field)
-        else:
-            value = request.files.get(field)
+            validated_value = validate_field(field, value, config)
+            nested_data[section][field] = validated_value
 
-        if field in special_field_handlers:
-            form_data[field] = special_field_handlers[field](value)
-        else:
-            form_data[field] = validate_field(field, value, config)
+        form_data.update(nested_data)
 
-    values_to_insert_db = {
-        'fields': ', '.join(form_data.keys()),
-        'placeholders': ', '.join(['%s'] * len(form_data)),
-        'values': tuple(form_data.values())
-    }
+    values_to_insert_db = {}
+
+    if len(form_data) == 1:
+        values_to_insert_db = {
+            'fields': ', '.join(form_data.keys()),
+            'placeholders': ', '.join(['%s'] * len(form_data)),
+            'values': tuple(form_data.values())
+        }
+    else:
+        for table_name, fields_data in form_data.items():
+
+            fields = ', '.join(fields_data.keys())
+            placeholders = ', '.join(['%s'] * len(fields_data))
+            values = tuple(fields_data.values())
+
+            table_data = {
+                'fields': fields,
+                'placeholders': placeholders,
+                'values': values
+            }
+
+            values_to_insert_db[table_name] = table_data
+
+            print("values_to_insert_db", flush=True)
+            print(values_to_insert_db, flush=True)
     
-    print("values_to_insert_db", flush=True)
-    print(values_to_insert_db, flush=True)
     return values_to_insert_db
 
 def registration(conn, cur):
@@ -1832,35 +1849,22 @@ def back_office_manager(conn, cur, *params):
                 print("Enterd crud_orders add POST successful", flush=True)
                 data = process_form('CRUD Orders', 'create')        
 
-                keys = list(data['fields'].split(', '))
-                values = list(data['values'])
-
-                #TODO: da se mahnat indeksi i dict da se dobavqt poleta 
-                first_three_keys = keys[:3]
-                first_three_values = values[:3]
-
-                rest_keys = keys[3:]
-                rest_values = values[3:]
-
-                first_three_keys_sql = ', '.join(first_three_keys)
-                first_three_placeholders_sql = ', '.join(['%s'] * len(first_three_keys))
-
-                rest_keys_sql = ', '.join(rest_keys)
-                rest_placeholders_sql = ', '.join(['%s'] * len(rest_keys))
-
-                utils.AssertDev(0)
-
-                #TODO: Tranzakcii v sql(tetradka)
+                order_data = data['orders']
+                item_data = data['order_items']
                 try:
+
                     #TODO: Kude trqbva da se namira tova neshto (conn.autocommit) v koda  Start transaction
                     conn.autocommit = False  # Ensure autocommit is disabled
 
                     #TODO: Insert da bude v otdelna fukciq i da se podavat parametrite, koito trqbva da se insertnat
-                    cur.execute(f"INSERT INTO orders ({ first_three_keys_sql }) VALUES ({ first_three_placeholders_sql }) RETURNING order_id", first_three_values)
+
+                    query_one = f"INSERT INTO orders ({ order_data['fields'] }) VALUES ({ order_data['placeholders'] }) RETURNING order_id"
+                    cur.execute(query_one, order_data['values'])
                     order_id = cur.fetchone()[0]
 
-                    rest_values = (order_id,) + tuple(rest_values)
-                    cur.execute(f"INSERT INTO order_items ( order_id, { rest_keys_sql }) VALUES (%s, { rest_placeholders_sql })", rest_values)
+                    order_item_values = (order_id,) + item_data['values']
+                    query_two = f"INSERT INTO order_items (order_id, {item_data['fields']}) VALUES (%s, {item_data['placeholders']})"
+                    cur.execute(query_two, order_item_values)
 
                     conn.commit()
 
@@ -1906,12 +1910,18 @@ def back_office_manager(conn, cur, *params):
             elif request.method == 'POST':
                 print("Enterd crud_orders edit POST successful", flush=True)
                 data = process_form('CRUD Orders', 'edit')
+
+                order_data = data['orders']
+                item_data = data['order_items']
+
                 print("data", flush=True)
                 print(data, flush=True)
 
-                cur.execute("UPDATE orders SET status = %s, order_date = %s WHERE order_id = %s", (data['values'][0], data['values'][1], order_id))
-                cur.execute("UPDATE order_items SET price = %s, quantity = %s WHERE order_id = %s AND product_id = %s", (data['values'][2], data['values'][3], order_id, product_id))
+                cur.execute("UPDATE orders SET status = %s, order_date = %s WHERE order_id = %s", (order_data['values'][0], order_data['values'][1], order_id))
+                cur.execute("UPDATE order_items SET price = %s, quantity = %s WHERE order_id = %s AND product_id = %s", (item_data['values'][0], item_data['values'][1], order_id, product_id))
+                
                 conn.commit()
+                
                 session['crud_message'] = "Order was updated successfully with id = " + str(order_id)
                 return redirect(f'/{username}/crud_orders')
 
@@ -1922,22 +1932,22 @@ def back_office_manager(conn, cur, *params):
             print("Enterd crud_orders delete successful", flush=True)
             # utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'delete'), "You don't have permission to this resource")
 
-            order_id = request.path.split('/')[4]
-            product_id = request.path.split('/')[5]
+            product_id = request.path.split('/')[4]
+            order_id = request.path.split('/')[5]
 
-            cur.execute('DELETE FROM shipping_details WHERE order_id = %s', (order_id,))
-            cur.execute("DELETE FROM order_items WHERE order_id = %s", (order_id,))
-            cur.execute('DELETE FROM orders WHERE order_id = %s', (order_id,))
-
-            if len(request.path.split('/')) == 5:
-                order_id = request.path.split('/')[4]
-            elif len(request.path.split('/')) == 6:
-                order_id = request.path.split('/')[4]
-                product_id = request.path.split('/')[5]
+            if len(request.path.split('/')) == 6:
+                cur.execute("DELETE FROM order_items WHERE product_id = %s AND order_id = %s", (product_id, order_id))
+                session['crud_message'] = "You successful deleted a product from order order with id: " + str(order_id) + " and product id: " + str(product_id)
+            elif len(request.path.split('/')) == 7:
+                cur.execute('DELETE FROM shipping_details WHERE order_id = %s', (order_id,))
+                cur.execute("DELETE FROM order_items WHERE order_id = %s", (order_id,))
+                cur.execute('DELETE FROM orders WHERE order_id = %s', (order_id,))
+                session['crud_message'] = "You successful deleted a  order with id: " + str(order_id)
             else:
-                conn.commit()
+                utils.AssertUser(False, "Invalid url") 
+            
+            conn.commit()
 
-            session['crud_message'] = "You successful deleted a order with id: " + str(order_id)
             return redirect(f'/{username}/crud_orders')
 
         else:
