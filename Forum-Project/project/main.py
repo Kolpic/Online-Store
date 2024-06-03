@@ -380,32 +380,31 @@ def home(conn, cur, page = 1):
     if not utils.is_authenticated():
         return redirect('/login')
 
+    page = request.args.get('page', 1, type=int)
+
     cur.execute("SELECT DISTINCT(category) FROM products")
     categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
 
     first_name, last_name, email__ = utils.getUserNamesAndEmail(conn, cur)
 
-    prodcuts_user_wants = request.args.get('products_per_page', 50)
+    prodcuts_user_wants = request.args.get('products_per_page', 10)
     if prodcuts_user_wants == '':
-        prodcuts_user_wants = 50
-    # utils.AssertUser(isinstance(prodcuts_user_wants, int), "You must enter a number in the \'Products per page\' form ")
+        prodcuts_user_wants = 10
+
     products_per_page = int(prodcuts_user_wants)
     offset = 0
     if page == None:
         page = 1
-        offset = 50
+        offset = 10
     else:
         offset = (page - 1) * products_per_page
-
-    global CURRENT_URL
-    CURRENT_URL = request.url
     
     sort_by = request.args.get('sort','id')
     sort_order = request.args.get('order', 'asc')
     product_name = request.args.get('product_name', '')
     product_category = request.args.get('product_category', '')
     price_min = request.args.get('price_min', '')
-    pric_max = request.args.get('price_max', '')
+    price_max = request.args.get('price_max', '')
 
     valid_sort_columns = {'price':'price', 'category':'category', 'name':'name'}
     sort_column = valid_sort_columns.get(sort_by, 'id')
@@ -421,9 +420,9 @@ def home(conn, cur, page = 1):
     if product_category:
         query_params.append(f"%{product_category}%")
 
-    if price_min.isdigit() and pric_max.isdigit():
+    if price_min.isdigit() and price_max.isdigit():
         price_filter = " AND price BETWEEN %s AND %s"
-        query_params.extend([price_min, pric_max])
+        query_params.extend([price_min, price_max])
 
     query = f"SELECT * FROM products WHERE TRUE{name_filter}{category_filter}{price_filter} ORDER BY {order_by_clause} LIMIT %s OFFSET %s"
     query_params.extend([products_per_page, offset])
@@ -843,10 +842,9 @@ def add_to_cart_meth(conn, cur):
     quantity = request.form.get('quantity', 1)
 
     response = add_to_cart(conn, cur, user_id, product_id, quantity)
+    newCartCount = get_cart_items_count(conn, cur, user_id)
 
-    return jsonify({'message':response})
-    # session['home_message'] = response
-    # return redirect(CURRENT_URL)
+    return jsonify({'message':response, 'newCartCount': newCartCount})
 
 def cart(conn, cur):
     if 'user_email' not in session:
@@ -1958,7 +1956,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/refresh_captcha', refresh_captcha),
     (r'(?:/[A-z]+)?/verify', verify),
     (r'/login', login),
-    (r'(?:/[A-z]+)?/home(?:/(\d+))?', home),
+    (r'/home(?:\?page=([1-9]+)\?[A-z,\=,\&]+)?', home),
     (r'/logout', logout),
     (r'(?:/[A-z]+)?/profile', profile),
     (r'(?:/[A-z]+)?/update_profile', update_profile),

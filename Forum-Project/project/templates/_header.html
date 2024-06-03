@@ -1,14 +1,14 @@
 <div class="float-right">
     <a href="/profile"><i class="bi bi-gear" style="font-size: 2rem; color: black;"></i></a>
     <a href="/cart" class="position-relative" style="margin-right: 15px;">
-        <i class="bi bi-cart3" style="font-size: 2rem; color: black;"></i>
-        {% if cart_count > 0 %}
-        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success">
-            {{ cart_count }}
-            <span class="visually-hidden">items in cart</span>
-        </span>
-        {% endif %}
-    </a>
+    <i class="bi bi-cart3" style="font-size: 2rem; color: black;"></i>
+    {% if cart_count > 0 %}
+    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success cart-badge">
+        {{ cart_count }}
+        <span class="visually-hidden">items in cart</span>
+    </span>
+    {% endif %}
+</a>
 </div>
 <div class="user-info-header">
     <p>Welcome, {{ first_name }} {{ last_name }}!</p>

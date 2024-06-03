@@ -100,7 +100,7 @@
         
                 {% for i in range(start_page, end_page + 1) %}
                 <li class="page-item {% if i == page %}active{% endif %}">
-                    <a class="page-link" href="/home/{{i}}?sort={{ sort_by }}&order={{ sort_order }}">{{ i }}</a>
+                    <a class="page-link" href="/home?page={{i}}&sort={{ sort_by }}&order={{ sort_order }}">{{ i }}</a>
                 </li>
                 {% endfor %}
                 
@@ -120,8 +120,6 @@
                 </li>
             </ul>
         </nav>
-        
-    </div>
 </body>
 <script>
     function addToCart(event, form) {
@@ -134,9 +132,18 @@
         }).then(response => response.json())
         .then(data => {
             alert(data.message);
+            if(data.newCartCount !== undefined) {
+                updateCartCount(data.newCartCount);
+            }
         }).catch(error => {
             console.error('Error:', error);
         });
+    }
+    function updateCartCount(newCount) {
+        let cartBadge = document.querySelector('.cart-badge');
+        if (cartBadge) {
+            cartBadge.textContent = newCount + " items in cart";
+        }
     }
     window.onload = function() {
         setTimeout(function() {
