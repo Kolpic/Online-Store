@@ -680,60 +680,60 @@ def login_with_token(conn, cur):
     session['user_email'] = email   
     return redirect('/home')
 
-def update_captcha_settings(conn, cur):
-    if 'staff_username' not in session:
-        return redirect('/login_staff')
+# def update_captcha_settings(conn, cur):
+#     if 'staff_username' not in session:
+#         return redirect('/login_staff')
 
-    if request.method == 'GET':
-        current_settings = utils.get_current_settings(cur)
-        return render_template('captcha_settings.html', **current_settings)
+#     if request.method == 'GET':
+#         current_settings = utils.get_current_settings(cur)
+#         return render_template('captcha_settings.html', **current_settings)
 
-    new_max_attempts = request.form['max_captcha_attempts']
-    new_timeout_minutes = request.form['captcha_timeout_minutes']
+#     new_max_attempts = request.form['max_captcha_attempts']
+#     new_timeout_minutes = request.form['captcha_timeout_minutes']
 
-    utils.AssertUser(not(new_max_attempts and int(new_max_attempts)) <= 0, "Captcha attempts must be possitive number")
-    utils.AssertUser(not(new_timeout_minutes and int(new_timeout_minutes)) <= 0, "Timeout minutes must be possitive number")
+#     utils.AssertUser(not(new_max_attempts and int(new_max_attempts)) <= 0, "Captcha attempts must be possitive number")
+#     utils.AssertUser(not(new_timeout_minutes and int(new_timeout_minutes)) <= 0, "Timeout minutes must be possitive number")
 
-    str_message = ""
+#     str_message = ""
 
-    if new_max_attempts:
-        cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'max_captcha_attempts'", (new_max_attempts,))
-        str_message += 'You updated captcha attempts. '
-    if new_timeout_minutes:
-          cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'captcha_timeout_minutes'", (new_timeout_minutes,))
-          str_message += 'You updated timeout minutes.'
+#     if new_max_attempts:
+#         cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'max_captcha_attempts'", (new_max_attempts,))
+#         str_message += 'You updated captcha attempts. '
+#     if new_timeout_minutes:
+#           cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'captcha_timeout_minutes'", (new_timeout_minutes,))
+#           str_message += 'You updated timeout minutes.'
     
-    conn.commit()
+#     conn.commit()
  
-    if str_message != "":
-        session['home_message'] = str_message
-    return redirect('/home')
+#     if str_message != "":
+#         session['home_message'] = str_message
+#     return redirect('/home')
 
-def view_logs(conn, cur):
-    if 'staff_username' not in session:
-        return redirect('/staff_login')
+# def view_logs(conn, cur):
+#     if 'staff_username' not in session:
+#         return redirect('/staff_login')
     
-    utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read'), "You don't have permission to this resource")
+#     utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read'), "You don't have permission to this resource")
 
-    sort_by = request.args.get('sort','time')
-    sort_order = request.args.get('order','asc')
+#     sort_by = request.args.get('sort','time')
+#     sort_order = request.args.get('order','asc')
 
-    valid_sort_columns = {'time'}
-    valid_sort_orders = {'asc', 'desc'}
+#     valid_sort_columns = {'time'}
+#     valid_sort_orders = {'asc', 'desc'}
 
-    if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
-        sort_by = 'time'
-        sort_order = 'asc'
+#     if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
+#         sort_by = 'time'
+#         sort_order = 'asc'
 
-    query = "SELECT * FROM exception_logs"
+#     query = "SELECT * FROM exception_logs"
 
-    if sort_by and sort_order:
-        query += f" ORDER BY {sort_by} {sort_order}"
+#     if sort_by and sort_order:
+#         query += f" ORDER BY {sort_by} {sort_order}"
 
-    cur.execute(query)
-    log_exceptions = cur.fetchall()
+#     cur.execute(query)
+#     log_exceptions = cur.fetchall()
 
-    return render_template('logs.html', log_exceptions = log_exceptions, sort_by=sort_by, sort_order=sort_order)
+#     return render_template('logs.html', log_exceptions = log_exceptions, sort_by=sort_by, sort_order=sort_order)
 
 def log_exception(conn, cur, exception_type, message ,email = None):
 
@@ -1042,41 +1042,41 @@ def finish_payment(conn, cur):
     return redirect('/home')
 
 
-def crud_inf(conn, cur):
-    if 'staff_username' not in session:
-        return redirect('/staff_login')
+# def crud_inf(conn, cur):
+#     if 'staff_username' not in session:
+#         return redirect('/staff_login')
     
-    sort_by = request.args.get('sort', 'id')
-    sort_order = request.args.get('order', 'asc')
-    price_min = request.args.get('price_min', None, type=float)
-    price_max = request.args.get('price_max', None, type=float)
+#     sort_by = request.args.get('sort', 'id')
+#     sort_order = request.args.get('order', 'asc')
+#     price_min = request.args.get('price_min', None, type=float)
+#     price_max = request.args.get('price_max', None, type=float)
 
-    valid_sort_columns = {'id', 'name', 'price', 'quantity', 'category'}
-    valid_sort_orders = {'asc', 'desc'}
+#     valid_sort_columns = {'id', 'name', 'price', 'quantity', 'category'}
+#     valid_sort_orders = {'asc', 'desc'}
 
-    if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
-        sort_by = 'id'
-        sort_order = 'asc'
+#     if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
+#         sort_by = 'id'
+#         sort_order = 'asc'
     
-    base_query = sql.SQL("SELECT * FROM products")
-    conditions = []
-    query_params = []
+#     base_query = sql.SQL("SELECT * FROM products")
+#     conditions = []
+#     query_params = []
 
-    if price_min is not None and price_max is not None:
-        conditions.append(sql.SQL("price BETWEEN %s AND %s"))
-        query_params.extend([price_min, price_max])
+#     if price_min is not None and price_max is not None:
+#         conditions.append(sql.SQL("price BETWEEN %s AND %s"))
+#         query_params.extend([price_min, price_max])
     
-    if conditions:
-        base_query = base_query + sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
+#     if conditions:
+#         base_query = base_query + sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
     
-    base_query = base_query + sql.SQL(" ORDER BY ") + sql.Identifier(sort_by) + sql.SQL(f" {sort_order}")
+#     base_query = base_query + sql.SQL(" ORDER BY ") + sql.Identifier(sort_by) + sql.SQL(f" {sort_order}")
     
-    base_query = base_query + sql.SQL(" LIMIT 100")
+#     base_query = base_query + sql.SQL(" LIMIT 100")
 
-    cur.execute(base_query.as_string(conn), query_params)
-    products = cur.fetchall()
+#     cur.execute(base_query.as_string(conn), query_params)
+#     products = cur.fetchall()
 
-    return render_template('crud.html', products=products, sort_by=sort_by, sort_order=sort_order, price_min=price_min or '', price_max=price_max or '')
+#     return render_template('crud.html', products=products, sort_by=sort_by, sort_order=sort_order, price_min=price_min or '', price_max=price_max or '')
 
 
 def staff_login(conn, cur):
@@ -1103,41 +1103,41 @@ def logout_staff(conn, cur):
     session.pop('staff_username', None) 
     return redirect('/staff_login')
 
-def edit_product(conn, cur, product_id):
-    if 'staff_username' not in session:
-        return redirect('/staff_login')
+# def edit_product(conn, cur, product_id):
+#     if 'staff_username' not in session:
+#         return redirect('/staff_login')
     
-    if request.method == 'GET':
-        cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
-        product = cur.fetchone()
-        utils.AssertUser(product, "Invalid product")
-        return render_template('edit_product.html', product=product, product_id=product_id)
+#     if request.method == 'GET':
+#         cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
+#         product = cur.fetchone()
+#         utils.AssertUser(product, "Invalid product")
+#         return render_template('edit_product.html', product=product, product_id=product_id)
     
-    name = request.form['name']
-    price_ = request.form['price']
-    quantity_ = request.form['quantity']
-    category = request.form['category']
+#     name = request.form['name']
+#     price_ = request.form['price']
+#     quantity_ = request.form['quantity']
+#     category = request.form['category']
 
-    utils.AssertUser(name and price_ and quantity_ and category, "All fields must be filled")
+#     utils.AssertUser(name and price_ and quantity_ and category, "All fields must be filled")
 
-    price = float(price_)
-    utils.AssertUser(price > 0, "Price must be possitive")
-    quantity = int(quantity_)
-    utils.AssertUser(quantity >= 0, "Quantity must be possitive")
+#     price = float(price_)
+#     utils.AssertUser(price > 0, "Price must be possitive")
+#     quantity = int(quantity_)
+#     utils.AssertUser(quantity >= 0, "Quantity must be possitive")
 
-    cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s WHERE id = %s", (name, price, quantity, category, product_id))
-    conn.commit()
-    session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
-    return redirect('/crud')
+#     cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s WHERE id = %s", (name, price, quantity, category, product_id))
+#     conn.commit()
+#     session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
+#     return redirect('/crud')
 
-def delete_product(conn, cur, product_id):
-    if 'staff_username' not in session:
-        return redirect('/staff_login')
+# def delete_product(conn, cur, product_id):
+#     if 'staff_username' not in session:
+#         return redirect('/staff_login')
     
-    cur.execute("UPDATE products SET quantity = 0 WHERE id = %s", (product_id,))
-    conn.commit()
-    session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
-    return redirect('/crud')
+#     cur.execute("UPDATE products SET quantity = 0 WHERE id = %s", (product_id,))
+#     conn.commit()
+#     session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
+#     return redirect('/crud')
 
 def add_products_from_file(conn, cur, string_path):
     with open(string_path, mode='r', encoding='utf-8') as file:
@@ -1159,73 +1159,73 @@ def add_products_from_file(conn, cur, string_path):
             conn.commit()
         return "Imprted"
         
-def report(conn, cur):
-    if 'staff_username' not in session:
-        return redirect('/staff_login')
+# def report(conn, cur):
+#     if 'staff_username' not in session:
+#         return redirect('/staff_login')
     
-    if request.method == 'GET':
-        return render_template('report.html')
+#     if request.method == 'GET':
+#         return render_template('report.html')
     
-    date_from = request.form.get('date_from')
-    date_to = request.form.get('date_to')
-    group_by = request.form.get('group_by')
-    status = request.form.get('status')
+#     date_from = request.form.get('date_from')
+#     date_to = request.form.get('date_to')
+#     group_by = request.form.get('group_by')
+#     status = request.form.get('status')
 
-    utils.AssertUser(date_from or date_to, "You have to select a date from, date to")
+#     utils.AssertUser(date_from or date_to, "You have to select a date from, date to")
 
-    if group_by:
-        group_by_clause = f"DATE(date_trunc(%s, order_date))"
-    else:
-        group_by_clause = "o.order_id"
+#     if group_by:
+#         group_by_clause = f"DATE(date_trunc(%s, order_date))"
+#     else:
+#         group_by_clause = "o.order_id"
 
-    status_filter = ""
-    if status:
-        status_filter = "AND o.status = %s"
+#     status_filter = ""
+#     if status:
+#         status_filter = "AND o.status = %s"
 
-    query = f"""
-    WITH OrderSums AS (
-        SELECT
-            o.order_id,
-            DATE(o.order_date) AS order_date,
-            u.first_name || ' ' || u.last_name AS buyer_name,
-            o.status,
-            SUM(oi.quantity * oi.price) AS order_sum
-        FROM
-            orders o
-        JOIN
-            users u ON o.user_id = u.id
-        JOIN
-            order_items oi ON o.order_id = oi.order_id
-        WHERE
-            o.order_date BETWEEN %s AND %s
-            {status_filter}
-        GROUP BY
-            o.order_id, o.order_date, buyer_name, o.status
-    )
-    SELECT
-        {group_by_clause} AS period,
-        array_agg(order_id) AS order_ids,
-        array_agg(buyer_name) AS names_of_buyers,
-        SUM(order_sum) AS total_sum,
-        array_agg(status) AS order_statuses,
-        status
-    FROM
-        OrderSums as o
-    GROUP BY
-        period, status
-    ORDER BY
-        period, status;
-    """
+#     query = f"""
+#     WITH OrderSums AS (
+#         SELECT
+#             o.order_id,
+#             DATE(o.order_date) AS order_date,
+#             u.first_name || ' ' || u.last_name AS buyer_name,
+#             o.status,
+#             SUM(oi.quantity * oi.price) AS order_sum
+#         FROM
+#             orders o
+#         JOIN
+#             users u ON o.user_id = u.id
+#         JOIN
+#             order_items oi ON o.order_id = oi.order_id
+#         WHERE
+#             o.order_date BETWEEN %s AND %s
+#             {status_filter}
+#         GROUP BY
+#             o.order_id, o.order_date, buyer_name, o.status
+#     )
+#     SELECT
+#         {group_by_clause} AS period,
+#         array_agg(order_id) AS order_ids,
+#         array_agg(buyer_name) AS names_of_buyers,
+#         SUM(order_sum) AS total_sum,
+#         array_agg(status) AS order_statuses,
+#         status
+#     FROM
+#         OrderSums as o
+#     GROUP BY
+#         period, status
+#     ORDER BY
+#         period, status;
+#     """
 
-    params = [date_from, date_to]
-    if status:
-        params.append(status)
-    if group_by:
-        params.append(group_by)
+#     params = [date_from, date_to]
+#     if status:
+#         params.append(status)
+#     if group_by:
+#         params.append(group_by)
 
-    cur.execute(query, tuple(params))
-    report = cur.fetchall()
-    return render_template('report.html', report=report)  
+#     cur.execute(query, tuple(params))
+#     report = cur.fetchall()
+#     return render_template('report.html', report=report)  
  
 def update_cart_quantity(conn, cur):
     item_id = request.form['item_id']
@@ -1245,92 +1245,92 @@ def update_cart_quantity(conn, cur):
 
     return jsonify(success=True, new_total=new_total)
 
-def staff_role(conn, cur):
-    if 'staff_username' not in session:
-        return redirect('/staff_login')
+# def staff_role(conn, cur):
+#     if 'staff_username' not in session:
+#         return redirect('/staff_login')
     
-    if request.method == 'GET':
-        cur.execute("SELECT s.username, r.role_name, sr.staff_id, sr.role_id FROM staff_roles sr JOIN staff s ON s.id = sr.staff_id JOIN roles r ON r.role_id = sr.role_id")
-        relations = cur.fetchall()
-        return render_template('staff_role_assignment.html', relations=relations)
+#     if request.method == 'GET':
+#         cur.execute("SELECT s.username, r.role_name, sr.staff_id, sr.role_id FROM staff_roles sr JOIN staff s ON s.id = sr.staff_id JOIN roles r ON r.role_id = sr.role_id")
+#         relations = cur.fetchall()
+#         return render_template('staff_role_assignment.html', relations=relations)
 
-def staff_role_add(conn, cur):
-    if 'staff_username' not in session:
-        return redirect('/staff_login')
+# def staff_role_add(conn, cur):
+#     if 'staff_username' not in session:
+#         return redirect('/staff_login')
 
-    if request.method == 'GET':
-        cur.execute("SELECT id, username FROM staff")
-        staff = cur.fetchall()
+#     if request.method == 'GET':
+#         cur.execute("SELECT id, username FROM staff")
+#         staff = cur.fetchall()
 
-        cur.execute("SELECT role_id, role_name FROM roles")
-        roles = cur.fetchall()
+#         cur.execute("SELECT role_id, role_name FROM roles")
+#         roles = cur.fetchall()
 
-        return render_template('add_staff_role.html', staff=staff, roles=roles) 
+#         return render_template('add_staff_role.html', staff=staff, roles=roles) 
 
-    staff_name = request.form['staff']
-    staff_role = request.form['role']
+#     staff_name = request.form['staff']
+#     staff_role = request.form['role']
 
-    cur.execute("SELECT id FROM staff WHERE username = %s", (staff_name,))
-    staff_id = cur.fetchone()[0]
+#     cur.execute("SELECT id FROM staff WHERE username = %s", (staff_name,))
+#     staff_id = cur.fetchone()[0]
 
-    cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (staff_role,))
-    role_id = cur.fetchone()[0]
+#     cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (staff_role,))
+#     role_id = cur.fetchone()[0]
 
-    cur.execute('INSERT INTO staff_roles (staff_id, role_id) VALUES (%s, %s)', (staff_id, role_id))
-    conn.commit()
+#     cur.execute('INSERT INTO staff_roles (staff_id, role_id) VALUES (%s, %s)', (staff_id, role_id))
+#     conn.commit()
 
-    session['staff_message'] = "You successful gave a role: " + staff_role + "to user: " + staff_name
-    return redirect('/staff_portal')
+#     session['staff_message'] = "You successful gave a role: " + staff_role + "to user: " + staff_name
+#     return redirect('/staff_portal')
 
-def delete_role(conn, cur, staff_id, role_id):
-    cur.execute('DELETE FROM staff_roles WHERE staff_id = %s AND role_id = %s', (staff_id, role_id))
-    conn.commit()
+# def delete_role(conn, cur, staff_id, role_id):
+#     cur.execute('DELETE FROM staff_roles WHERE staff_id = %s AND role_id = %s', (staff_id, role_id))
+#     conn.commit()
 
-    session['staff_message'] = "You successful deleted a role"
-    return redirect('/staff_role')
+#     session['staff_message'] = "You successful deleted a role"
+#     return redirect('/staff_role')
 
-def role_permissions(conn, cur):
-    if 'staff_username' not in session:
-        return redirect('/staff_login')
+# def role_permissions(conn, cur):
+#     if 'staff_username' not in session:
+#         return redirect('/staff_login')
     
-    interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles']
+#     interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles']
 
-    if request.method == 'GET':
-        role = request.path.split('/')[1]
-        cur.execute('SELECT role_id, role_name FROM roles')
-        roles = cur.fetchall()
+#     if request.method == 'GET':
+#         role = request.path.split('/')[1]
+#         cur.execute('SELECT role_id, role_name FROM roles')
+#         roles = cur.fetchall()
 
-        selected_role = int(request.args.get('role', roles[0][0] if roles else None))
+#         selected_role = int(request.args.get('role', roles[0][0] if roles else None))
 
-        cur.execute('SELECT role_id, role_name FROM roles WHERE role_id = %s', (selected_role,))
-        role_to_display = cur.fetchall()
+#         cur.execute('SELECT role_id, role_name FROM roles WHERE role_id = %s', (selected_role,))
+#         role_to_display = cur.fetchall()
 
-        role_permissions = {role[0]: {interface: {'create': False, 'read': False, 'update': False, 'delete': False} for interface in interfaces} for role in role_to_display}
+#         role_permissions = {role[0]: {interface: {'create': False, 'read': False, 'update': False, 'delete': False} for interface in interfaces} for role in role_to_display}
 
-        cur.execute('SELECT rp.role_id, p.interface, p.permission_name FROM role_permissions AS rp JOIN permissions AS p ON rp.permission_id=p.permission_id')
-        permissions = cur.fetchall()
+#         cur.execute('SELECT rp.role_id, p.interface, p.permission_name FROM role_permissions AS rp JOIN permissions AS p ON rp.permission_id=p.permission_id')
+#         permissions = cur.fetchall()
 
-        for role_id, interface, permission_name in permissions:
-            if role_id in role_permissions and interface in role_permissions[role_id]:
-                role_permissions[role_id][interface][permission_name] = True
+#         for role_id, interface, permission_name in permissions:
+#             if role_id in role_permissions and interface in role_permissions[role_id]:
+#                 role_permissions[role_id][interface][permission_name] = True
 
-        return render_template('role_permissions.html', roles=roles, interfaces=interfaces, role_permissions=role_permissions, selected_role=selected_role, role_to_display=role)
+#         return render_template('role_permissions.html', roles=roles, interfaces=interfaces, role_permissions=role_permissions, selected_role=selected_role, role_to_display=role)
     
-    elif request.method == 'POST':   
-        role_id = request.form['role']
-        cur.execute('DELETE FROM role_permissions WHERE role_id = %s', (role_id,))
-        for interface in interfaces:
-            for action in ['create', 'read', 'update', 'delete']:
-                if f'{interface}_{action}' in request.form:
-                    cur.execute("SELECT permission_id FROM permissions WHERE permission_name = %s AND interface = %s", (action, interface))
-                    permission_id = cur.fetchone()[0]
-                    cur.execute('INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)', 
-                                (role_id, permission_id))
-        conn.commit()
-        return redirect('/role_permissions?role=' + role_id)
+#     elif request.method == 'POST':   
+#         role_id = request.form['role']
+#         cur.execute('DELETE FROM role_permissions WHERE role_id = %s', (role_id,))
+#         for interface in interfaces:
+#             for action in ['create', 'read', 'update', 'delete']:
+#                 if f'{interface}_{action}' in request.form:
+#                     cur.execute("SELECT permission_id FROM permissions WHERE permission_name = %s AND interface = %s", (action, interface))
+#                     permission_id = cur.fetchone()[0]
+#                     cur.execute('INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)', 
+#                                 (role_id, permission_id))
+#         conn.commit()
+#         return redirect('/role_permissions?role=' + role_id)
 
-    else:
-        utils.AssertUser(False, "Invalid method")
+#     else:
+#         utils.AssertUser(False, "Invalid method")
 
 def back_office_manager(conn, cur, *params):
     if 'staff_username' not in session:
@@ -1606,7 +1606,7 @@ def back_office_manager(conn, cur, *params):
 
     if request.path == f'/{username}/role_permissions':
         utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read'), "You don't have permission to this resource")
-        interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles', 'CRUD Products']
+        interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles', 'CRUD Orders']
 
         if request.method == 'GET':
             role = request.path.split('/')[1]
@@ -1806,10 +1806,9 @@ def back_office_manager(conn, cur, *params):
             utils.AssertUser(False, "Invalid url")
 
     elif f'/{username}/crud_orders' in request.path:
-        #TODO: debug role_permissions has a bug 
         if len(request.path.split('/')) == 3:
             print("Enterd crud_orders read successful", flush=True)
-            # utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read'), "You don't have permission for this resource")
+            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read'), "You don't have permission for this resource")
             
             valid_sort_columns = {'id', 'date'}
             valid_sort_orders = {'asc', 'desc'}
@@ -1840,7 +1839,7 @@ def back_office_manager(conn, cur, *params):
 
         elif request.path.split('/')[3] == 'add_order':
             print("Enterd crud_orders add successful", flush=True)
-            # utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'create'), "You don't have permission for this resource")
+            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'create'), "You don't have permission for this resource")
 
             if request.method == 'GET':
                 cur.execute("SELECT DISTINCT status FROM orders")
@@ -1885,7 +1884,7 @@ def back_office_manager(conn, cur, *params):
 
         elif request.path.split('/')[3] == 'edit_order':
             print("Enterd crud_orders edit successful", flush=True)
-            # utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'update'), "You don't have permission for this resource")
+            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'update'), "You don't have permission for this resource")
             order_id = request.path.split('/')[4]
             product_id = request.path.split('/')[5]
 
@@ -1928,7 +1927,7 @@ def back_office_manager(conn, cur, *params):
 
         elif request.path.split('/')[3] == 'delete_order':
             print("Enterd crud_orders delete successful", flush=True)
-            # utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'delete'), "You don't have permission to this resource")
+            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'delete'), "You don't have permission to this resource")
 
             product_id = request.path.split('/')[4]
             order_id = request.path.split('/')[5]
