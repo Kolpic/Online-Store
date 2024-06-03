@@ -1851,11 +1851,10 @@ def back_office_manager(conn, cur, *params):
 
                 order_data = data['orders']
                 item_data = data['order_items']
+
+                #TODO(Done): Kude trqbva da se namira tova neshto (conn.autocommit) v koda  Start transaction
+                conn.autocommit = False
                 try:
-
-                    #TODO: Kude trqbva da se namira tova neshto (conn.autocommit) v koda  Start transaction
-                    conn.autocommit = False  # Ensure autocommit is disabled
-
                     #TODO: Insert da bude v otdelna fukciq i da se podavat parametrite, koito trqbva da se insertnat
 
                     query_one = f"INSERT INTO orders ({ order_data['fields'] }) VALUES ({ order_data['placeholders'] }) RETURNING order_id"
@@ -1872,15 +1871,12 @@ def back_office_manager(conn, cur, *params):
                     return redirect(f'/{username}/crud_orders')
 
                 except Exception as e:
-
-                    # Rollback the transaction in case of any error
                     conn.rollback()
 
                     session['crud_error'] = "Failed to add order. Please try again."
                     return redirect(f'/{username}/crud_orders')
 
                 finally:
-                    # Ensure that the connection's autocommit is reset if changed earlier
                     conn.autocommit = True
             else:
                 utils.AssertUser(False, "Invalid operation")
@@ -1961,7 +1957,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/registration', registration),
     (r'(?:/[A-z]+)?/refresh_captcha', refresh_captcha),
     (r'(?:/[A-z]+)?/verify', verify),
-    (r'(?:/[A-z]+)?/login', login),
+    (r'/login', login),
     (r'(?:/[A-z]+)?/home(?:/(\d+))?', home),
     (r'/logout', logout),
     (r'(?:/[A-z]+)?/profile', profile),
