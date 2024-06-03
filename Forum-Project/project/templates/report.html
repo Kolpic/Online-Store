@@ -34,7 +34,7 @@
                     <label for="status">Group by status:</label>
                     <select id="status" class="form-control" name="status">
                         <option value="">Hide</option>
-                        <option value="Ready for Paying" {{ 'selected' if request.form.status == 'Ready for Paying' else '' }}>Order by status</option>
+                        <option value="Ready for Paying" {{ 'selected' if request.form.status == 'Ready for Paying' else '' }}>Group by status</option>
                     </select>
                 </div>
                 <div class="col-md-4">
@@ -48,7 +48,7 @@
             </div>
 
             <div class="col-md-5">
-                <label for="sale_id">Find sale by ID:</label>
+                <label for="sale_id">Find order by ID:</label>
                 <input type="number" class="form-control" id="sale_id" name="sale_id">
             </div>
 

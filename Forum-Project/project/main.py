@@ -1293,7 +1293,7 @@ def role_permissions(conn, cur):
     if 'staff_username' not in session:
         return redirect('/staff_login')
     
-    interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles',]
+    interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles']
 
     if request.method == 'GET':
         role = request.path.split('/')[1]
@@ -1316,17 +1316,21 @@ def role_permissions(conn, cur):
 
         return render_template('role_permissions.html', roles=roles, interfaces=interfaces, role_permissions=role_permissions, selected_role=selected_role, role_to_display=role)
     
-    role_id = request.form['role']
-    cur.execute('DELETE FROM role_permissions WHERE role_id = %s', (role_id,))
-    for interface in interfaces:
-        for action in ['create', 'read', 'update', 'delete']:
-            if f'{interface}_{action}' in request.form:
-                cur.execute("SELECT permission_id FROM permissions WHERE permission_name = %s AND interface = %s", (action, interface))
-                permission_id = cur.fetchone()[0]
-                cur.execute('INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)', 
-                            (role_id, permission_id))
-    conn.commit()
-    return redirect('/role_permissions?role=' + role_id)
+    elif request.method == 'POST':   
+        role_id = request.form['role']
+        cur.execute('DELETE FROM role_permissions WHERE role_id = %s', (role_id,))
+        for interface in interfaces:
+            for action in ['create', 'read', 'update', 'delete']:
+                if f'{interface}_{action}' in request.form:
+                    cur.execute("SELECT permission_id FROM permissions WHERE permission_name = %s AND interface = %s", (action, interface))
+                    permission_id = cur.fetchone()[0]
+                    cur.execute('INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)', 
+                                (role_id, permission_id))
+        conn.commit()
+        return redirect('/role_permissions?role=' + role_id)
+
+    else:
+        utils.AssertUser(False, "Invalid method")
 
 def back_office_manager(conn, cur, *params):
     if 'staff_username' not in session:
@@ -1509,7 +1513,7 @@ def back_office_manager(conn, cur, *params):
             if not flag:
                 total_price = sum(row[3] for row in report)
             report_json = utils.serialize_report(report)
-            return render_template('report.html', report=report, username=username, total_records=total_records, total_price=total_price, report_json=report_json, default_to_date=default_to_date_str, default_from_date=default_from_date_str)
+            return render_template('report.html', report=report, username=username, total_records=total_records, total_price=total_price, report_json=report_json, default_to_date=date_to, default_from_date=date_from)
         else:
             utils.AssertUser(False, "Invalid url")
 
