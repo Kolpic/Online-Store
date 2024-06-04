@@ -960,7 +960,7 @@ def cart(conn, cur):
     # cur.execute("INSERT INTO orders (user_id, status, product_details, order_date) VALUES (%s, %s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", json.dumps(products_json), formatted_datetime))
     # order_id = cur.fetchone()[0]
     # #
-    cur.execute("INSERT INTO orders (user_id, status, order_date) VALUES (%s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", CURRENT_TIMESTAMP)) #formatted_datetime
+    cur.execute("INSERT INTO orders (user_id, status, order_date) VALUES (%s, %s, CURRENT_TIMESTAMP) RETURNING order_id", (user_id, "Ready for Paying")) #formatted_datetime
     order_id = cur.fetchone()[0]
 
     # Insert order items into order_items table
