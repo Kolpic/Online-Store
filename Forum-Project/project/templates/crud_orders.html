@@ -41,6 +41,25 @@
         <div class="mb-2">
             <button onclick="navigateTo('add_order')" class="btn btn-primary">Add New Order</button>
         </div>
+        <form id="priceForm" method="get">
+        <div class="form-row">
+            <div class="form-group col-md-4">
+                <label for="price_min">Price from:</label>
+                <input type="text" id="price_min" name="price_min" value="{{ price_min }}" placeholder="Min Price" class="form-control">
+            </div>
+            <div class="form-group col-md-4">
+                <label for="price_max">Price to:</label>
+                <input type="text" id="price_max" name="price_max" value="{{ price_max }}" placeholder="Max Price" class="form-control" onchange="submitForm()">
+            </div>
+            <div class="col-md-4">
+                <button type="submit" class="btn btn-primary mt-4">Filter Price</button>
+            </div>
+            <div class="form-group col-md-4">
+                <label for="order_by_id">Find order by id:</label>
+                <input type="text" id="order_by_id" name="order_by_id" value="{{ order_by_id }}" class="form-control" onchange="submitForm()">
+            </div>
+        </div>
+    </form>
         <table class="table">
             <thead>
                 <tr>
@@ -48,8 +67,7 @@
                     <th><a href="?sort=date&order={{ 'desc' if request.args.get('sort') == 'date' and request.args.get('order') == 'asc' else 'asc' }}">Order date</a></th>
                     <th>User</th>
                     <th>Product name</th>
-                    <th class="text-right">Product price</th>
-                    <th class="text-right">Product quantity</th>
+                    <th class="text-right">Order price</th>
                     <th class="text-right">Order status</th>
                     <th class="text-center">Actions</th>
                 </tr>
@@ -58,17 +76,15 @@
                 {% for order in orders %}
                 <tr>
                     <td>{{ order[0] }}</td>
-                    <td>{{ order[6] }}</td>
+                    <td>{{ order[5] }}</td>
                     <td>{{ order[1] }}</td>
                     <td>{{ order[2] }}</td>
                     <td class="text-right">{{ order[3] }} лв.</td>
                     <td class="text-right">{{ order[4] }}</td>
-                    <td class="text-right">{{ order[5] }}</td>
                     <td>
                         <div class="btn-group-horizontal">
-                            <button onclick="navigateTo('edit_order/{{ order[0] }}/{{ order[7] }}')" class="btn btn-secondary">Edit</button>
-                            <button onclick="if(confirm('Are you sure?')) navigateTo('delete_order/{{ order[7] }}/{{ order[0] }}')" class="btn btn-danger">Delete Product From Order</button>
-                            <button onclick="if(confirm('Are you sure?')) navigateTo('delete_order/{{ order[7] }}/{{ order[0] }}/{{ order[1] }}')" class="btn btn-danger">Delete Order</button>
+                            <button onclick="navigateTo('edit_order/{{ order[0] }}')" class="btn btn-secondary">Edit</button>
+                            <button onclick="if(confirm('Are you sure?')) navigateTo('delete_order/{{ order[0] }}')" class="btn btn-danger">Delete Order</button>
                         </div>
                     </td>
                 </tr>
@@ -81,6 +97,9 @@
     function navigateTo(path) {
         const baseURL = window.location.href.split('?')[0]; 
         window.location.href = baseURL + '/' + path;
+    }
+    function submitForm() {
+        document.getElementById("priceForm").submit();
     }
     window.onload = function() {
         setTimeout(function() {

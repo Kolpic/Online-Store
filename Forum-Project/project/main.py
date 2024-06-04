@@ -119,14 +119,8 @@ FIELD_CONFIG = {
             }
         },
         'edit': {
-            'orders': {
-                'status': {'type': str, 'required': True},
-                'order_date': {'type': datetime, 'required': True},
-            },
-            'order_items': {
-                'price': {'type': float, 'required': True, 'conditions': [(lambda x: x > 0, "Price must be possitive")]},
-                'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "Quantity must be possitive")]},
-            }
+            'status': {'type': str, 'required': True},
+            'order_date': {'type': datetime, 'required': True},
         }
     }
 }
@@ -162,36 +156,71 @@ def validate_field(field_name, value, config):
 def process_form(interface, method):
     form_data = {}
     nested_data = {}
+    nested_flag = False
 
     field_config = get_field_config(interface, method)
+
+    print("field_config", flush=True)
+    print(field_config, flush=True)
 
     for section, config_dict in field_config.items():
         nested_data[section] = {}
 
-        for field, config in config_dict.items():
+        print("section", flush=True)
+        print(section, flush=True)
+        print("config_dict", flush=True)
+        print(config_dict, flush=True)
+        print("field_config.items()", flush=True)
+        print(field_config.items(), flush=True)
 
+        if section != 'orders' and section != 'order_items':
+            print("No nested for", flush=True)
             value = None
 
-            if config['type'] == 'file':
-                value = request.files.get(field)
-                value = special_field_handlers['image'](value) if field == 'image' else value
+            if config_dict['type'] == 'file':
+                value = request.files.get(section)
+                value = special_field_handlers['image'](value) if section == 'image' else value
             else:
-                value = request.form.get(field)
+                value = request.form.get(section)
 
-            validated_value = validate_field(field, value, config)
-            nested_data[section][field] = validated_value
+            validated_value = validate_field(section, value, config_dict)
+            form_data[section] = validated_value
+            print("form_data[section]", flush=True)
+            print(form_data[section], flush=True)
+        else:
+            print("Nested for", flush=True)
+            for field, config in config_dict.items():
 
-        form_data.update(nested_data)
+                value = None
+
+                if config['type'] == 'file':
+                    value = request.files.get(field)
+                    value = special_field_handlers['image'](value) if field == 'image' else value
+                else:
+                    value = request.form.get(field)
+
+                validated_value = validate_field(field, value, config)
+                nested_data[section][field] = validated_value
+
+            form_data.update(nested_data)
+            nested_flag = True
 
     values_to_insert_db = {}
 
-    if len(form_data) == 1:
+    print("form_data", flush=True)
+    print(form_data, flush=True)
+    print("nested_flag", flush=True)
+    print(nested_flag, flush=True)
+
+    if nested_flag == False:
+        print("YES", flush=True)
         values_to_insert_db = {
             'fields': ', '.join(form_data.keys()),
             'placeholders': ', '.join(['%s'] * len(form_data)),
             'values': tuple(form_data.values())
         }
     else:
+        print("NO", flush=True)
         for table_name, fields_data in form_data.items():
 
             fields = ', '.join(fields_data.keys())
@@ -931,7 +960,7 @@ def cart(conn, cur):
     # cur.execute("INSERT INTO orders (user_id, status, product_details, order_date) VALUES (%s, %s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", json.dumps(products_json), formatted_datetime))
     # order_id = cur.fetchone()[0]
     # #
-    cur.execute("INSERT INTO orders (user_id, status, order_date) VALUES (%s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", formatted_datetime))
+    cur.execute("INSERT INTO orders (user_id, status, order_date) VALUES (%s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", CURRENT_TIMESTAMP)) #formatted_datetime
     order_id = cur.fetchone()[0]
 
     # Insert order items into order_items table
@@ -1810,11 +1839,14 @@ def back_office_manager(conn, cur, *params):
             print("Enterd crud_orders read successful", flush=True)
             utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read'), "You don't have permission for this resource")
             
-            valid_sort_columns = {'id', 'date'}
+            valid_sort_columns = {'id', 'date', 'price'}
             valid_sort_orders = {'asc', 'desc'}
 
             sort_by = request.args.get('sort', 'asc')
             sort_order = request.args.get('order', 'asc')
+            price_min = request.args.get('price_min', None, type=float)
+            price_max = request.args.get('price_max', None, type=float)
+            order_by_id = request.args.get('order_by_id', None, type=float)
 
             if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
                 sort_by = 'id'
@@ -1824,12 +1856,20 @@ def back_office_manager(conn, cur, *params):
                 SELECT 
                     o.order_id, 
                     u.first_name || ' ' || u.last_name as user_names, 
-                    p.name, oi.price, oi.quantity, o.status, o.order_date, oi.product_id 
+                    array_agg(p.name), sum(oi.quantity * oi.price), o.status, to_char(o.order_date, 'YYYY-MM-DD HH:MI:SS') AS formatted_order_date
                 FROM orders AS o 
                 JOIN users AS u ON o.user_id=u.id 
                 JOIN order_items AS oi ON o.order_id=oi.order_id 
                 JOIN products AS p ON oi.product_id=p.id
             """
+            if order_by_id != None:
+                query += f" WHERE o.order_id = {order_by_id} "
+
+            query += " GROUP BY o.order_id, user_names "
+
+            if price_min is not None and price_max is not None:
+                query += f" HAVING sum(oi.quantity * oi.price) >= {price_min} AND sum(oi.quantity * oi.price) <= {price_max}"
+
             query += f" ORDER BY o.order_{sort_by} {sort_order}"
 
             cur.execute(query)
@@ -1853,45 +1893,65 @@ def back_office_manager(conn, cur, *params):
                 order_data = data['orders']
                 item_data = data['order_items']
 
+                print("order_data",flush=True)
+                print("item_data",flush=True)
+                print(order_data,flush=True)
+                print(item_data,flush=True)
+
                 #TODO(Done): Kude trqbva da se namira tova neshto (conn.autocommit) v koda  Start transaction
+                conn.commit()
                 conn.autocommit = False
                 try:
                     #TODO: Insert da bude v otdelna fukciq i da se podavat parametrite, koito trqbva da se insertnat
+                    # conn.autocommit = False
 
                     query_one = f"INSERT INTO orders ({ order_data['fields'] }) VALUES ({ order_data['placeholders'] }) RETURNING order_id"
+
+                    print(query_one,flush=True)
+
                     cur.execute(query_one, order_data['values'])
                     order_id = cur.fetchone()[0]
 
+                    print(order_id,flush=True)
+
                     order_item_values = (order_id,) + item_data['values']
+
+                    print(order_item_values,flush=True)
+
                     query_two = f"INSERT INTO order_items (order_id, {item_data['fields']}) VALUES (%s, {item_data['placeholders']})"
                     cur.execute(query_two, order_item_values)
 
+                    print(query_two,flush=True)
+
                     conn.commit()
 
-                    session['crud_message'] = "Order was added successfully"
+                    session['crud_message'] = "Successfully added new order with id: " + str(order_id)
                     return redirect(f'/{username}/crud_orders')
 
                 except Exception as e:
                     conn.rollback()
 
+                    print(e, flush=True)
+
                     session['crud_error'] = "Failed to add order. Please try again."
                     return redirect(f'/{username}/crud_orders')
 
                 finally:
+
                     conn.autocommit = True
+
             else:
                 utils.AssertUser(False, "Invalid operation")
 
         elif request.path.split('/')[3] == 'edit_order':
             print("Enterd crud_orders edit successful", flush=True)
             utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'update'), "You don't have permission for this resource")
+
             order_id = request.path.split('/')[4]
-            product_id = request.path.split('/')[5]
 
             if request.method == 'GET':
 
                 order_id = request.path.split('/')[4]
-                product_id = request.path.split('/')[5]
 
                 cur.execute("SELECT DISTINCT status FROM orders")
                 statuses = cur.fetchall()
@@ -1899,23 +1959,22 @@ def back_office_manager(conn, cur, *params):
                 cur.execute("SELECT order_date FROM orders")
                 order_date = cur.fetchone()[0]
 
-                cur.execute("SELECT price, quantity FROM order_items WHERE order_id = %s AND product_id = %s", (order_id,product_id))
-                price_and_quantity = cur.fetchone()
+                cur.execute("SELECT p.name, oi.quantity, oi.price FROM order_items AS oi JOIN products AS p ON oi.product_id = p.id WHERE order_id = %s", (order_id,))
+                products_from_order = cur.fetchall()
 
-                return render_template('edit_order.html', order_id=order_id, username=username, statuses=statuses, product_id=product_id, price = price_and_quantity[0], quantity = price_and_quantity[1], order_date = order_date)
+                return render_template('edit_order.html', order_id=order_id, username=username, statuses=statuses, order_date = order_date, products_from_order=products_from_order)
 
             elif request.method == 'POST':
                 print("Enterd crud_orders edit POST successful", flush=True)
                 data = process_form('CRUD Orders', 'edit')
 
-                order_data = data['orders']
-                item_data = data['order_items']
-
-                print("data", flush=True)
                 print(data, flush=True)
 
-                cur.execute("UPDATE orders SET status = %s, order_date = %s WHERE order_id = %s", (order_data['values'][0], order_data['values'][1], order_id))
-                cur.execute("UPDATE order_items SET price = %s, quantity = %s WHERE order_id = %s AND product_id = %s", (item_data['values'][0], item_data['values'][1], order_id, product_id))
+                # order_data = data['orders']
+                # item_data = data['order_items']
+
+                cur.execute("UPDATE orders SET status = %s, order_date = %s WHERE order_id = %s", (data['values'][0], data['values'][1], order_id))
+                # cur.execute("UPDATE order_items SET price = %s, quantity = %s WHERE order_id = %s AND product_id = %s", (item_data['values'][0], item_data['values'][1], order_id, product_id))
                 
                 conn.commit()
                 
@@ -1929,19 +1988,12 @@ def back_office_manager(conn, cur, *params):
             print("Enterd crud_orders delete successful", flush=True)
             utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'delete'), "You don't have permission to this resource")
 
-            product_id = request.path.split('/')[4]
-            order_id = request.path.split('/')[5]
+            order_id = request.path.split('/')[4]
 
-            if len(request.path.split('/')) == 6:
-                cur.execute("DELETE FROM order_items WHERE product_id = %s AND order_id = %s", (product_id, order_id))
-                session['crud_message'] = "You successful deleted a product from order order with id: " + str(order_id) + " and product id: " + str(product_id)
-            elif len(request.path.split('/')) == 7:
-                cur.execute('DELETE FROM shipping_details WHERE order_id = %s', (order_id,))
-                cur.execute("DELETE FROM order_items WHERE order_id = %s", (order_id,))
-                cur.execute('DELETE FROM orders WHERE order_id = %s', (order_id,))
-                session['crud_message'] = "You successful deleted a  order with id: " + str(order_id)
-            else:
-                utils.AssertUser(False, "Invalid url") 
+            cur.execute('DELETE FROM shipping_details WHERE order_id = %s', (order_id,))
+            cur.execute("DELETE FROM order_items WHERE order_id = %s", (order_id,))
+            cur.execute('DELETE FROM orders WHERE order_id = %s', (order_id,))
+            session['crud_message'] = "You successful deleted a  order with id: " + str(order_id)
             
             conn.commit()
 
