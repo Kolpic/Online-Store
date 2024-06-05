@@ -48,7 +48,21 @@ from .models import db
 db.init_app(app)
 migrate = Migrate(app, db)
 
+with app.app_context():
+    db.create_all()
+
 # End of database configuration migration
+
+# Config for session to store in db
+app.config['SESSION_TYPE'] = 'sqlalchemy'
+app.config['SESSION_SQLALCHEMY'] = db
+app.config['SESSION_SQLALCHEMY_TABLE'] = 'sessions'
+app.config['SESSION_PERMANENT'] = True
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
+
+# Initialize Flask-Session
+Session(app)
+
 
 # Dev database
 database = config.database
@@ -143,7 +157,7 @@ def get_field_config(interface, method):
     return FIELD_CONFIG.get(interface, {}).get(method, {}) # return the right fields for the interface with the metod we provided
 
 def validate_field(field_name, value, config):
-    
+
     print("==== Entered validate_field method ======",flush=True)
     print(isinstance(value, str), flush=True)
 
@@ -425,7 +439,8 @@ def login(conn, cur):
     utils.AssertUser(utils.verify_password(password_, user_data['password']), "Invalid email or password")
     utils.AssertUser(user_data['verification_status'], "Your account is not verified or has been deleted")
 
-    session['user_email'] = email   
+    session['user_email'] = email
+
     return redirect("/home")
 
 def home(conn, cur, page = 1):
@@ -498,7 +513,8 @@ def home(conn, cur, page = 1):
     return render_template('home.html', first_name=first_name, last_name=last_name, email = email__,products=products, page=page, total_pages=total_pages, sort_by=sort_by, sort_order=sort_order, product_name=product_name, product_category=product_category, cart_count=cart_count, categories=categories)
 
 def logout(conn, cur):
-    session.pop('user_email', None) 
+    # session.pop('user_email', None)
+    session.clear()
     return redirect('/home')
 
 def profile(conn, cur):
