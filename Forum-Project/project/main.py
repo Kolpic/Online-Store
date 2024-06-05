@@ -100,9 +100,13 @@ FIELD_CONFIG = {
         }
     },
     'Staff roles': {
-        'create': {
+        'create_staff_roles': {
             'staff_id': {'type': str, 'required': True},
             'role_id': {'type': str, 'required': True}
+        },
+        'create_staff':{
+            'username': {'type': str, 'required': True, 'conditions': [(lambda x: len(x.split(' ')) == 1, "You have to type name without intervals")]},
+            'password': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) <= 20, "Password must be below 20 symbols")]}
         }
     },
     'CRUD Orders': {
@@ -139,16 +143,27 @@ def get_field_config(interface, method):
     return FIELD_CONFIG.get(interface, {}).get(method, {}) # return the right fields for the interface with the metod we provided
 
 def validate_field(field_name, value, config):
+    
+    print("==== Entered validate_field method ======",flush=True)
+    print(isinstance(value, str), flush=True)
+
     utils.AssertUser(config['required'] and value, f"You must add information in every field: {field_name}")
 
     if 'type' in config and config['type'] in [float, int]:
+        print("==== Entered type validation ======",flush=True)
         try:
             value = config['type'](value)
         except ValueError:
             raise ValueError(f"{field_name} is not a valid {config['type'].__name__}")
 
     if 'conditions' in config:
+        print("==== Entered conditions validation ======",flush=True)
         for condition, message in config['conditions']:
+            print("==== Entered conditions validation ======",flush=True)
+            print("condition", flush=True)
+            print(condition, flush=True)
+            print("value", flush=True)
+            print(value, flush=True)
             utils.AssertUser(condition(value), message)
 
     return value
@@ -183,8 +198,16 @@ def process_form(interface, method):
             else:
                 value = request.form.get(section)
 
+            print("section", flush=True)
+            print(section, flush=True)
+            print("value", flush=True)
+            print(value, flush=True)
+            print("config_dict", flush=True)
+            print(config_dict, flush=True)
+
             validated_value = validate_field(section, value, config_dict)
             form_data[section] = validated_value
+
             print("form_data[section]", flush=True)
             print(form_data[section], flush=True)
         else:
@@ -1802,7 +1825,7 @@ def back_office_manager(conn, cur, *params):
 
                 return render_template('add_staff_role.html', staff=staff, roles=roles, username=username)
             elif request.method == 'POST':
-                data = process_form('Staff roles', 'create')
+                data = process_form('Staff roles', 'create_staff_roles')
 
                 cur.execute("SELECT id FROM staff WHERE username = %s", (data['values'][0],))
                 staff_id = cur.fetchone()[0]
@@ -1826,16 +1849,14 @@ def back_office_manager(conn, cur, *params):
 
                 return render_template('add_staff.html', username=username)
             elif request.method == 'POST':
-                data = process_form('Staff roles', 'create')
+                data = process_form('Staff roles', 'create_staff')
 
                 print(data, flush=True)
 
-                utils.AssertDev(0)
-
-                cur.execute(f"INSERT INTO staff ({data['fields']}) VALUES ({data['placeholders']})", (staff_id, role_id))
+                cur.execute(f"INSERT INTO staff ({data['fields']}) VALUES ({data['placeholders']})", (data['values']))
                 conn.commit()
 
-                session['staff_message'] = "You successful made new user"
+                session['staff_message'] = "You successful made new user with name: " + str(data['values'][0]) 
                 return redirect('/staff_portal')
             else:
                 utils.AssertDev(False, "Different method")
@@ -1951,22 +1972,12 @@ def back_office_manager(conn, cur, *params):
                     # conn.autocommit = False
 
                     query_one = f"INSERT INTO orders ({ order_data['fields'] }) VALUES ({ order_data['placeholders'] }) RETURNING order_id"
-
-                    print(query_one,flush=True)
-
                     cur.execute(query_one, order_data['values'])
                     order_id = cur.fetchone()[0]
 
-                    print(order_id,flush=True)
-
                     order_item_values = (order_id,) + item_data['values']
-
-                    print(order_item_values,flush=True)
-
                     query_two = f"INSERT INTO order_items (order_id, {item_data['fields']}) VALUES (%s, {item_data['placeholders']})"
                     cur.execute(query_two, order_item_values)
-
-                    print(query_two,flush=True)
 
                     conn.commit()
 
@@ -1975,8 +1986,6 @@ def back_office_manager(conn, cur, *params):
 
                 except Exception as e:
                     conn.rollback()
-
-                    print(e, flush=True)
 
                     session['crud_error'] = "Failed to add order. Please try again."
                     return redirect(f'/{username}/crud_orders')
