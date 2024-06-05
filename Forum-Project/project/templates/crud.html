@@ -73,9 +73,9 @@
                 <tr>
                     <th><a href="?sort=id&order={{ 'asc' if sort_by != 'id' or sort_order == 'desc' else 'desc' }}&price_min={{ price_min or '' }}&price_max={{ price_max or '' }}">ID</a></th>
                     <th><a href="?sort=name&order={{ 'asc' if sort_by != 'name' or sort_order == 'desc' else 'desc' }}&price_min={{ price_min or '' }}&price_max={{ price_max or '' }}">Name</a></th>
-                    <th><a href="?sort=price&order={{ 'asc' if sort_by != 'price' or sort_order == 'desc' else 'desc' }}&price_min={{ price_min or ''}}&price_max={{ price_max or ''}}">Price</a></th>
-                    <th><a href="?sort=quantity&order={{ 'asc' if sort_by != 'quantity' or sort_order == 'desc' else 'desc' }}&price_min={{ price_min or ''}}&price_max={{ price_max or ''}}">Quantity</a></th>
-                    <th><a href="?sort=category&order={{ 'asc' if sort_by != 'category' or sort_order == 'desc' else 'desc' }}&price_min={{ price_min or ''}}&price_max={{ price_max or ''}}">Category</a></th>
+                    <th class="text-right"><a href="?sort=price&order={{ 'asc' if sort_by != 'price' or sort_order == 'desc' else 'desc' }}&price_min={{ price_min or ''}}&price_max={{ price_max or ''}}">Price</a></th>
+                    <th class="text-right"><a href="?sort=quantity&order={{ 'asc' if sort_by != 'quantity' or sort_order == 'desc' else 'desc' }}&price_min={{ price_min or ''}}&price_max={{ price_max or ''}}">Quantity</a></th>
+                    <th class="text-right"><a href="?sort=category&order={{ 'asc' if sort_by != 'category' or sort_order == 'desc' else 'desc' }}&price_min={{ price_min or ''}}&price_max={{ price_max or ''}}">Category</a></th>
                 </tr>
             </thead>
             <tbody>
@@ -83,9 +83,9 @@
                 <tr>
                     <td>{{ product[0]}}</td>
                     <td>{{ product[1]}}</td>
-                    <td>{{ product[2]}} {{"лв."}} </td>
-                    <td>{{ product[3]}}</td>
-                    <td>{{ product[4]}}</td>
+                    <td class="text-right">{{ product[2]}} {{"лв."}} </td>
+                    <td class="text-right">{{ product[3]}}</td>
+                    <td class="text-right">{{ product[4]}}</td>
                     <td>
                         <button onclick="navigateTo('edit_product/{{ product[0] }}')" class="btn btn-secondary">Edit</button>
                         <button onclick="if(confirm('Are you sure?')) navigateTo('delete_product/{{ product[0] }}')" class="btn btn-danger">Delete</button>

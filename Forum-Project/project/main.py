@@ -1842,11 +1842,20 @@ def back_office_manager(conn, cur, *params):
             valid_sort_columns = {'id', 'date', 'price'}
             valid_sort_orders = {'asc', 'desc'}
 
-            sort_by = request.args.get('sort', 'asc')
-            sort_order = request.args.get('order', 'asc')
-            price_min = request.args.get('price_min', None, type=float)
-            price_max = request.args.get('price_max', None, type=float)
-            order_by_id = request.args.get('order_by_id', None, type=float)
+            sort_by = request.args.get('sort', 'desc')
+            sort_order = request.args.get('order', 'desc')
+            price_min = request.args.get('price_min', '', type=float)
+            price_max = request.args.get('price_max', '', type=float)
+            order_by_id = request.args.get('order_by_id', '', type=float)
+            date_from = request.args.get('date_from', '')
+            date_to = request.args.get('date_to', '')
+            status = request.args.get('status', '')
+
+            print(date_from, flush=True)
+            print(date_to, flush=True)
+
+            cur.execute("SELECT DISTINCT status FROM orders")
+            statuses = cur.fetchall()
 
             if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
                 sort_by = 'id'
@@ -1856,26 +1865,40 @@ def back_office_manager(conn, cur, *params):
                 SELECT 
                     o.order_id, 
                     u.first_name || ' ' || u.last_name as user_names, 
-                    array_agg(p.name), sum(oi.quantity * oi.price), o.status, to_char(o.order_date, 'YYYY-MM-DD HH:MI:SS') AS formatted_order_date
+                    array_agg(p.name), 
+                    to_char(sum(oi.quantity * oi.price),'FM999999990.00') as order_price, 
+                    o.status, 
+                    to_char(o.order_date, 'YYYY-MM-DD HH:MI:SS') AS formatted_order_date
                 FROM orders AS o 
                 JOIN users AS u ON o.user_id=u.id 
                 JOIN order_items AS oi ON o.order_id=oi.order_id 
                 JOIN products AS p ON oi.product_id=p.id
             """
-            if order_by_id != None:
+            if order_by_id != '':
                 query += f" WHERE o.order_id = {order_by_id} "
+
+            if (date_from != '' and date_to != '') and order_by_id == '':
+                query += f" WHERE o.order_date >= '{date_from}'::date AND o.order_date <= '{date_to}'::date "
+
+            if status != '' and (date_from != '' and date_to != '') and order_by_id == '':
+                query += f" AND status = '{status}'"
+
+            elif status != '' and order_by_id == '':
+                query += f" WHERE status = '{status}'"
 
             query += " GROUP BY o.order_id, user_names "
 
-            if price_min is not None and price_max is not None:
+            if price_min != '' and price_max != '' and order_by_id == '':
                 query += f" HAVING sum(oi.quantity * oi.price) >= {price_min} AND sum(oi.quantity * oi.price) <= {price_max}"
 
             query += f" ORDER BY o.order_{sort_by} {sort_order}"
 
+            print(query, flush=True)
+            
             cur.execute(query)
             orders = cur.fetchall()
 
-            return render_template('crud_orders.html', orders=orders)
+            return render_template('crud_orders.html', orders=orders, username=username, statuses=statuses, current_status=status, price_min=price_min, price_max=price_max, order_by_id=order_by_id, date_from=date_from, date_to=date_to)
 
         elif request.path.split('/')[3] == 'add_order':
             print("Enterd crud_orders add successful", flush=True)
@@ -1897,6 +1920,12 @@ def back_office_manager(conn, cur, *params):
                 print("item_data",flush=True)
                 print(order_data,flush=True)
                 print(item_data,flush=True)
+
+                cur.execute("SELECT id FROM users WHERE id = %s", (order_data['values'][0],))
+
+                utils.AssertUser(cur.fetchone()[0], "There is no such product with id " + str(order_data['values'][0]))
+            
+                utils.AssertDev(0)
 
                 #TODO(Done): Kude trqbva da se namira tova neshto (conn.autocommit) v koda  Start transaction
                 conn.commit()
