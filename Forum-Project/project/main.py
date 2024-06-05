@@ -1793,7 +1793,6 @@ def back_office_manager(conn, cur, *params):
         elif request.path.split('/')[3] == 'add_role_staff':
             print("Enterd crud_staff add successfully", flush=True)
             utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create'), "You don't have permission to this resource")
-             # TODO(Done): ref
             if request.method == 'GET':
                 cur.execute("SELECT id, username FROM staff")
                 staff = cur.fetchall()
@@ -1818,6 +1817,28 @@ def back_office_manager(conn, cur, *params):
                 return redirect('/staff_portal')
             else:
                 utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
+
+        elif request.path.split('/')[3] == 'add_staff':
+            print("Enterd crud_staff add staff successfully", flush=True)
+            utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create'), "You don't have permission to this resource")
+
+            if request.method == 'GET':
+
+                return render_template('add_staff.html', username=username)
+            elif request.method == 'POST':
+                data = process_form('Staff roles', 'create')
+
+                print(data, flush=True)
+
+                utils.AssertDev(0)
+
+                cur.execute(f"INSERT INTO staff ({data['fields']}) VALUES ({data['placeholders']})", (staff_id, role_id))
+                conn.commit()
+
+                session['staff_message'] = "You successful made new user"
+                return redirect('/staff_portal')
+            else:
+                utils.AssertDev(False, "Different method")
 
         elif request.path.split('/')[3] == 'delete_role':
             print("Enterd crud_staff delete successfully", flush=True)
@@ -1850,9 +1871,6 @@ def back_office_manager(conn, cur, *params):
             date_from = request.args.get('date_from', '')
             date_to = request.args.get('date_to', '')
             status = request.args.get('status', '')
-
-            print(date_from, flush=True)
-            print(date_to, flush=True)
 
             cur.execute("SELECT DISTINCT status FROM orders")
             statuses = cur.fetchall()
@@ -1893,8 +1911,6 @@ def back_office_manager(conn, cur, *params):
 
             query += f" ORDER BY o.order_{sort_by} {sort_order}"
 
-            print(query, flush=True)
-            
             cur.execute(query)
             orders = cur.fetchall()
 
