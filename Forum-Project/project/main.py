@@ -123,7 +123,7 @@ FIELD_CONFIG = {
         },
         'create_staff':{
             'username': {'type': str, 'required': True, 'conditions': [(lambda x: len(x.split(' ')) == 1, "You have to type name without intervals")]},
-            'password': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) <= 20, "Password must be below 20 symbols")]}
+            'password': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) <= 20, "Password must be below 20 symbols")]},
         }
     },
     'CRUD Orders': {
@@ -1899,7 +1899,7 @@ def back_office_manager(conn, cur, *params):
                 cur.execute(f"INSERT INTO staff_roles ({data['fields']}) VALUES ({data['placeholders']})", (staff_id, role_id))
                 conn.commit()
 
-                session['staff_message'] = "You successful gave a role: " + str(data['values'][0]) + " to user: " + str(data['values'][1])
+                session['staff_message'] = "You successful gave a role: " + str(data['values'][1]) + " to user: " + str(data['values'][0])
                 return redirect('/staff_portal')
             else:
                 utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
@@ -2079,7 +2079,13 @@ def back_office_manager(conn, cur, *params):
                 cur.execute("SELECT p.name, oi.quantity, oi.price FROM order_items AS oi JOIN products AS p ON oi.product_id = p.id WHERE order_id = %s", (order_id,))
                 products_from_order = cur.fetchall()
 
-                return render_template('edit_order.html', order_id=order_id, username=username, statuses=statuses, order_date = order_date, products_from_order=products_from_order)
+                all_products_sum = 0
+                for product in products_from_order:
+                    all_products_sum += product[1] * product[2]
+
+                print(all_products_sum, flush=True)
+
+                return render_template('edit_order.html', order_id=order_id, username=username, statuses=statuses, order_date = order_date, products_from_order=products_from_order, all_products_sum=all_products_sum)
 
             elif request.method == 'POST':
                 print("Enterd crud_orders edit POST successful", flush=True)

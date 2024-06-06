@@ -3,7 +3,6 @@
 <head>
     <meta charset="UTF-8">
     <title>Add User - Back Office</title>
-    <!-- Including Bootstrap CSS for styling the form -->
     <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
     <style>
         .container {
@@ -18,20 +17,36 @@
 <body>
     <div class="container">
         <h2 class="form-title">Add User</h2>
-        <form action="/{{ username }}/crud_staff/add_staff" method="POST">
+        <form id="addUserForm" action="/{{ username }}/crud_staff/add_staff" method="POST" onsubmit="return checkPasswords();">
             <div class="form-group">
                 <label for="username">Username:</label>
-                <input type="text" class="form-control" id="username" name="username" placeholder="Enter username without spaceses" required>
+                <input type="text" class="form-control" id="username" name="username" placeholder="Enter username without spaces" required>
             </div>
             <div class="form-group">
                 <label for="password">Password:</label>
                 <input type="password" class="form-control" id="password" name="password" required>
             </div>
+            <div class="form-group">
+                <label for="confirm-password">Confirm Password:</label>
+                <input type="password" class="form-control" id="confirm-password" name="confirm_password" required>
+                <div id="passwordError" class="text-danger" style="display: none;">Passwords do not match.</div>
+            </div>
             <button type="submit" class="btn btn-primary">Submit</button>
         </form>
     </div>
 
-    <!-- Including Bootstrap JS for any Bootstrap components that require JS -->
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script>
+        function checkPasswords() {
+            let password = document.getElementById('password').value;
+            let confirmPassword = document.getElementById('confirm-password').value;
+            if (password !== confirmPassword) {
+                document.getElementById('passwordError').style.display = 'block';
+                return false;
+            }
+            document.getElementById('passwordError').style.display = 'none';
+            return true;
+        }
+    </script>
 </body>
 </html>

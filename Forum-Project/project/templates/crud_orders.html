@@ -42,45 +42,48 @@
             <button onclick="navigateTo('{{ username }}/crud_orders/add_order')" class="btn btn-primary">Add New Order</button>
         </div>
         <form id="priceForm" method="get">
-        <div class="form-row">
-            <div class="form-group col-md-4">
-                <label for="price_min">Price from:</label>
-                <input type="text" id="price_min" name="price_min" placeholder="Min Price" class="form-control" value="{{ price_min }}">
+            
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label for="price_min">Price from:</label>
+                    <input type="text" id="price_min" name="price_min" placeholder="Min Price" class="form-control" value="{{ price_min }}">
+                </div>
+                <div class="form-group col-md-4">
+                    <label for="price_max">Price to:</label>
+                    <input type="text" id="price_max" name="price_max" placeholder="Max Price" class="form-control" value="{{ price_max }}">
+                </div>
             </div>
-            <div class="form-group col-md-4">
-                <label for="price_max">Price to:</label>
-                <input type="text" id="price_max" name="price_max" placeholder="Max Price" class="form-control" value="{{ price_max }}">
+
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label for="date_from">Date from:</label>
+                    <input type="datetime-local" id="date_from" name="date_from" placeholder="Date from" class="form-control" value="{{ date_from }}">
+                </div>
+                <div class="form-group col-md-4">
+                    <label for="date_to">Date to:</label>
+                    <input type="datetime-local" id="date_to" name="date_to" placeholder="Date to" class="form-control" value="{{ date_to }}">
+                </div>
             </div>
-            <div class="col-md-4">
-                <button type="submit" class="btn btn-primary mt-4">Filter Price</button>
-        </div>
-        <div class="form-row">
-            <div class="form-group col-md-4">
-                <label for="date_from">Date from:</label>
-                <input type="datetime-local" id="date_from" name="date_from" placeholder="Date from" class="form-control" value="{{ date_from }}">
+
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label for="order_by_id">Find order by id:</label>
+                    <input type="text" id="order_by_id" name="order_by_id" placeholder="Order id" class="form-control" value="{{ order_by_id }}" onchange="submitForm()">
+                </div>
             </div>
+
             <div class="form-group col-md-4">
-                <label for="date_to">Date to:</label>
-                <input type="datetime-local" id="date_to" name="date_to" placeholder="Date to" class="form-control" value="{{ date_to }}">
-            </div>
-            <div class="col-md-4">
-                <button type="submit" class="btn btn-primary mt-4">Filter Date</button>
-        </div>
-            <div class="form-group col-md-4">
-                <label for="order_by_id">Find order by id:</label>
-                <input type="text" id="order_by_id" name="order_by_id" placeholder="Order id" class="form-control" value="{{ order_by_id }}" onchange="submitForm()">
-            </div>
-            <div class="form-group">
                 <label for="status">Status</label>
-                <select class="form-control" id="status" name="status">
-                    {% for status in statuses %}
-                    <option value="{{ status[0] }}" {% if current_status == status[0]  %} selected {% endif %} >{{ status[0] }}</option>
-                    {% endfor %}
-                </select>
+                    <select class="form-control" id="status" name="status">
+                        {% for status in statuses %}
+                        <option value="{{ status[0] }}" {% if current_status == status[0] %} selected {% endif %}>{{ status[0] }}</option>
+                        {% endfor %}
+                    </select>
             </div>
-        </div>
-        <button type="submit" class="btn btn-primary mt-4">Filter by all selected fields</button>
-    </form>
+
+            <button type="submit" class="btn btn-primary mt-4">Filter by all selected fields</button>
+
+        </form>
         <table class="table">
             <thead>
                 <tr>
@@ -114,8 +117,8 @@
 </body>
 <script>
     function navigateTo(path) {
-        event.preventDefault(); 
-        const baseURL = window.location.origin; 
+        event.preventDefault();
+        const baseURL = window.location.origin;
         window.location.href = baseURL + '/' + path;
     }
     function submitForm() {
