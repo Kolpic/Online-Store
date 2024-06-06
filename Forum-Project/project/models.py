@@ -1,5 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 import json
+from datetime import datetime
 
 db = SQLAlchemy()
 
@@ -70,6 +71,11 @@ class User(db.Model):
     token_id = db.Column(db.Integer, db.ForeignKey('tokens.id'), nullable=True)
     carts = db.relationship('Cart', backref='user', lazy=True)
     orders = db.relationship('Order', backref='user', lazy=True)
+    last_active = db.Column(db.DateTime, default=db.func.current_timestamp())
+
+    def update_last_active(self):
+        self.last_active = db.func.current_timestamp()
+        db.session.commit()
 
 class Token(db.Model):
     __tablename__ = 'tokens'

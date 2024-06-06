@@ -21,6 +21,8 @@ from flask_session_captcha import FlaskSessionCaptcha
 # from flask_sessionstore import Session
 from flask_session import Session
 from project import utils
+from .models import User
+
 # from project.error_handlers import not_found
 # from project import exception
 # import re
@@ -1400,12 +1402,23 @@ def update_cart_quantity(conn, cur):
 #     else:
 #         utils.AssertUser(False, "Invalid method")
 
+def get_active_users():
+    active_threshold = datetime.now() - timedelta(minutes=30)
+    active_users = User.query.filter(User.last_active >= active_threshold).all()
+    return active_users
+
 def back_office_manager(conn, cur, *params):
     if 'staff_username' not in session:
         return redirect('/staff_login')
 
     username = request.path.split('/')[1]
-    # username = request.path.split('/')[1]
+
+    if request.path == f'/{username}/active_users':
+
+        users = get_active_users()
+        print(users, flush=True)
+
+        return render_template('active_users.html', users=users)
 
     if request.path == f'/{username}/error_logs':     
         utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read'), "You don't have permission to this resource")
@@ -2100,9 +2113,15 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/staff_portal', staff_portal),
     (r'(?:/[A-z]+)?/logout_staff', logout_staff),
     (r'(/[A-z]+)/logout_staff', logout_staff),
-    (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders)(?:/[\w\d\-_/]*)?', back_office_manager),
+    (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 
+@app.before_request
+def before_request():
+    if 'user_email' in session:
+        user = User.query.filter_by(email=session['user_email']).first()
+        if user:
+            user.update_last_active()
 
 @app.endpoint("handle_request")
 def handle_request(username=None, path=''):
@@ -2112,6 +2131,11 @@ def handle_request(username=None, path=''):
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor()
         staff_username = user_email = session.get('staff_username')
+
+        # if 'user_email' in session:
+        #     user = User.query.filter_by(email=session['user_email']).first()
+        #     if user:
+        #         user.update_last_active()
         
         if staff_username is not None:
            if username is None:
