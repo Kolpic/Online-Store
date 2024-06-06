@@ -16,22 +16,45 @@
 <body>
     <div class="container">
         <h2>Active Users</h2>
+        <form id="priceForm" method="get">
+        <div class="form-row">
+
+            <div class="form-group col-md-4">
+                <label for="name">First Name:</label>
+                <input type="text" id="name" name="name" placeholder="Filter by name" class="form-control" value="{{ name }}">
+            </div>
+
+            <div class="form-group col-md-4">
+                <label for="email">Email:</label>
+                <input type="text" id="email" name="email" placeholder="Filter by email" class="form-control" value="{{ email }}">
+            </div>
+
+            <div class="form-group col-md-4">
+                <label for="user_by_id">Find user by id:</label>
+                <input type="text" id="user_by_id" name="user_by_id" placeholder="Order id" class="form-control" value="{{ user_by_id }}" onchange="submitForm()">
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary mt-4">Find user</button>
+
+        </form>
+
         <table class="table table-striped">
             <thead>
                 <tr>
-                    <th>Id</th>
+                    <th><a href="?sort=id&order={{ 'asc' if request.args.get('sort') == 'id' and request.args.get('order') == 'desc' else 'desc' }}">Id</th>
+                    <th><a href="?sort=last_active&order={{ 'asc' if request.args.get('sort') == 'last_active' and request.args.get('order') == 'desc' else 'desc' }}">Last Active</th>
                     <th>Name</th>
                     <th>Email</th>
-                    <th>Last Active</th>
                 </tr>
             </thead>
             <tbody>
                 {% for user in users %}
                 <tr>
                     <td>{{ user.id }}</td>
+                    <td>{{ user.last_active.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                     <td>{{ user.first_name }} {{ user.last_name }}</td>
                     <td>{{ user.email}}</td>
-                    <td>{{ user.last_active.strftime('%Y-%m-%d %H:%M:%S') }}</td>
                 </tr>
                 {% else %}
                 <tr>
@@ -45,4 +68,22 @@
     <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.2/dist/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
 </body>
+<script>
+    function navigateTo(path) {
+        event.preventDefault(); 
+        const baseURL = window.location.origin; 
+        window.location.href = baseURL + '/' + path;
+    }
+    function submitForm() {
+        document.getElementById("priceForm").submit();
+    }
+    window.onload = function() {
+        setTimeout(function() {
+            let homeAlert = document.getElementById('homeAlert');
+            if (homeAlert) {
+                homeAlert.style.display = 'none';
+            }
+        }, 3000);
+    };
+</script>
 </html>

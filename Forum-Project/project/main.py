@@ -22,6 +22,7 @@ from flask_session_captcha import FlaskSessionCaptcha
 from flask_session import Session
 from project import utils
 from .models import User
+from sqlalchemy import or_
 
 # from project.error_handlers import not_found
 # from project import exception
@@ -1402,9 +1403,30 @@ def update_cart_quantity(conn, cur):
 #     else:
 #         utils.AssertUser(False, "Invalid method")
 
-def get_active_users():
+def get_active_users(sort_by='id', sort_order='desc', name=None, email=None, user_id=None):
     active_threshold = datetime.now() - timedelta(minutes=30)
-    active_users = User.query.filter(User.last_active >= active_threshold).all()
+
+    query = User.query.filter(User.last_active >= active_threshold)
+
+
+    if name:
+        name_filter = f"%{name}"
+        query = query.filter(or_(User.first_name.ilike(name_filter), User.last_name.ilike(name_filter)))
+
+    if email:
+        email_filter = f"%{email}"
+        query = query.filter(User.email.ilike(email_filter))
+
+    if user_id:
+        query = query.filter(User.id == user_id)
+
+    if sort_by in ['id', 'last_active']:
+        order_by_clause = getattr(User, sort_by).desc() if sort_order == 'desc' else getattr(User, sort_by).asc()
+        query = query.order_by(order_by_clause)
+    else:
+        query = query.order_by(User.id.desc()) 
+
+    active_users = query.all()
     return active_users
 
 def back_office_manager(conn, cur, *params):
@@ -1415,10 +1437,22 @@ def back_office_manager(conn, cur, *params):
 
     if request.path == f'/{username}/active_users':
 
-        users = get_active_users()
-        print(users, flush=True)
+        valid_sort_columns = {'id', 'last_active'}
+        valid_sort_orders = {'asc', 'desc'}
 
-        return render_template('active_users.html', users=users)
+        sort_by = request.args.get('sort', 'desc')
+        sort_order = request.args.get('order', 'desc')
+        name = request.args.get('name', '')
+        email = request.args.get('email', '')
+        user_id = request.args.get('user_by_id','')
+
+        if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
+            sort_by = 'id'
+            sort_order = 'desc'
+
+        users = get_active_users(sort_by, sort_order, name, email, user_id)
+
+        return render_template('active_users.html', users=users, name=name, email=email, user_id=user_id)
 
     if request.path == f'/{username}/error_logs':     
         utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read'), "You don't have permission to this resource")
@@ -2116,13 +2150,6 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 
-@app.before_request
-def before_request():
-    if 'user_email' in session:
-        user = User.query.filter_by(email=session['user_email']).first()
-        if user:
-            user.update_last_active()
-
 @app.endpoint("handle_request")
 def handle_request(username=None, path=''):
     conn = None
@@ -2132,10 +2159,10 @@ def handle_request(username=None, path=''):
         cur = conn.cursor()
         staff_username = user_email = session.get('staff_username')
 
-        # if 'user_email' in session:
-        #     user = User.query.filter_by(email=session['user_email']).first()
-        #     if user:
-        #         user.update_last_active()
+        if 'user_email' in session:
+            current_user = User.query.filter_by(email=session['user_email']).first()
+            if current_user:
+                current_user.update_last_active()
         
         if staff_username is not None:
            if username is None:
