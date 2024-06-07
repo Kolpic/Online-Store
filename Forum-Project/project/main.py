@@ -1168,6 +1168,12 @@ def staff_portal(conn, cur):
     if 'staff_username' not in session:
         return redirect('/staff_login')
 
+    if 'visited' not in session:
+        session['visited'] = True
+        session['first_visit'] = True
+    else:
+        session['first_visit'] = False
+
     if request.method == 'GET':
         return render_template('staff_portal.html')
     

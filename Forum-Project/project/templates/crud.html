@@ -38,7 +38,7 @@
     {% endif %}
     <div class="container">
         <div class="header">
-            <h1 class="mb-4">Welcome, {{ session['staff_username'] }}</h1>
+            <h1 class="mb-4">{{ session['staff_username'] }}</h1>
             <div class="nav">
                 {% if 'staff_username' in session %}
                     <a href="/logout_staff" class="btn btn-danger">Logout</a>
