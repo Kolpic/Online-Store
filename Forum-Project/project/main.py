@@ -1434,7 +1434,16 @@ def back_office_manager(conn, cur, *params):
     if 'staff_username' not in session:
         return redirect('/staff_login')
 
-    username = request.path.split('/')[1]
+    username = session.get('staff_username')
+    username_from_url = request.path.split('/')[1]
+
+    if username != username_from_url:
+        requestt = request.path.split("/")
+        requestt.pop(0)
+        requestt.pop(0)
+        path = '/'.join(requestt)
+
+        return redirect(url_for('handle_request', username=username, path=path))
 
     if request.path == f'/{username}/active_users':
 
