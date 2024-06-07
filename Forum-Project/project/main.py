@@ -23,6 +23,7 @@ from flask_session import Session
 from project import utils
 from .models import User
 from sqlalchemy import or_
+import traceback
 
 # from project.error_handlers import not_found
 # from project import exception
@@ -1972,10 +1973,11 @@ def back_office_manager(conn, cur, *params):
                     o.status, 
                     to_char(o.order_date, 'YYYY-MM-DD HH:MI:SS') AS formatted_order_date
                 FROM orders AS o 
-                JOIN users AS u ON o.user_id=u.id 
-                JOIN order_items AS oi ON o.order_id=oi.order_id 
-                JOIN products AS p ON oi.product_id=p.id
+                JOIN users AS u        ON o.user_id     = u.id 
+                JOIN order_items AS oi ON o.order_id    = oi.order_id 
+                JOIN products AS p     ON oi.product_id = p.id
             """
+            # TODO: Da se slojat %s
             if order_by_id != '':
                 query += f" WHERE o.order_id = {order_by_id} "
 
@@ -2123,7 +2125,9 @@ def back_office_manager(conn, cur, *params):
             return redirect(f'/{username}/crud_orders')
 
         else:
-            utils.AssertUser(False, "Invalid url") 
+            utils.AssertUser(False, "Invalid url")
+    else:
+        utils.AssertUser(False, "Invalid url") 
 
 @app.route('/favicon.ico')
 def favicon():
@@ -2175,6 +2179,7 @@ def handle_request(username=None, path=''):
                 # Redirect to the URL with the role included
                 return redirect(url_for('handle_request', username=staff_username, path=path))
 
+
         funtion_to_call = None
         match = None
 
@@ -2194,11 +2199,15 @@ def handle_request(username=None, path=''):
             return funtion_to_call(conn, cur)
     except Exception as message:
         user_email = session.get('user_email', 'Guest')
+        traceback_details = traceback.format_exc()
         log_exception(conn, cur, message.__class__.__name__, str(message), user_email)
 
+        print(f"Day: {datetime.now()} = ERROR by = {user_email} - {traceback_details} = error class name = {message.__class__.__name__} - Dev message: {message}", flush=True)
+
         # != 'WrongUSerInputException'
-        if message.__class__.__name__ == 'DevException':
+        if message.__class__.__name__ != 'WrongUserInputException':
             message = 'Internal error'
+            print(f"User message: {message}", flush=True)
 
         # TODO: Change url for QA
         if request.url == 'http://127.0.0.1:5000/staff_login':
