@@ -1,4 +1,17 @@
-<div class="float-right">
+<div class="container">
+    <div class="row">
+        <div class="col text-right">
+            <p>Welcome, {{ first_name }} {{ last_name }}!</p>
+            <p>{{ email }}</p>
+            {% if 'user_email' in session %}
+                <a href="/logout" class="btn btn-danger">Logout</a>
+            {% else %}
+                <a href="/registration" class="btn btn-info">Register</a>
+                <a href="/login" class="btn btn-primary">Login</a>
+            {% endif %}
+        </div>
+    </div>
+    <div class="float-right">
     <a href="/profile"><i class="bi bi-gear" style="font-size: 2rem; color: black;"></i></a>
     <a href="/cart" class="position-relative" style="margin-right: 15px;">
     <i class="bi bi-cart3" style="font-size: 2rem; color: black;"></i>
@@ -10,15 +23,5 @@
     {% endif %}
 </a>
 </div>
-<div class="user-info-header">
-    <p>Welcome, {{ first_name }} {{ last_name }}!</p>
-    <p>{{ email }}</p>
 </div>
-<div class="nav">
-    {% if 'user_email' in session %}
-        <a href="/logout" class="btn btn-danger">Logout</a>
-    {% else %}
-        <a href="/registration" class="btn btn-info">Register</a>
-        <a href="/login" class="btn btn-primary">Login</a>
-    {% endif %}
-</div>
+
