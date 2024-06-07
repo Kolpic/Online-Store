@@ -100,7 +100,9 @@
         
                 {% for i in range(start_page, end_page + 1) %}
                 <li class="page-item {% if i == page %}active{% endif %}">
-                    <a class="page-link" href="/home?page={{i}}&sort={{ sort_by }}&order={{ sort_order }}">{{ i }}</a>
+                    <!-- http://10.20.3.101:5000/home?page=1&sort=price&order=asc -->
+                    <!-- http://10.20.3.101:5000/home/1?     sort=price&order=asc&product_category=Tools&price_min=&price_max=&product_name=&products_per_page= -->
+                    <a class="page-link" href="/home/{{ i }}?sort={{ sort_by }}&order={{ sort_order }}&product_category={{ request.args.get('product_category', '') }}&price_min={{ request.args.get('price_min', '') }}&price_max={{ request.args.get('price_max', '') }}&product_name={{ request.args.get('product_name', '') }}&products_per_page={{ request.args.get('products_per_page', '') }}">{{ i }}</a>
                 </li>
                 {% endfor %}
                 
