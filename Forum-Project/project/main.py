@@ -1174,6 +1174,13 @@ def add_products_from_file(conn, cur, string_path):
             cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image_data))
             conn.commit()
         return "Imprted"
+
+def generate_orders(conn, cur):
+    number_products_to_import = 100000
+    utils.create_random_orders(number_products_to_import, cur)
+    conn.commit()
+
+    return "Successfully imported products: " + str(number_products_to_import)
         
 def update_cart_quantity(conn, cur):
     item_id = request.form['item_id']
@@ -1796,7 +1803,7 @@ def back_office_manager(conn, cur, *params):
         if price_min != '' and price_max != '' and order_by_id == '':
             query += f" HAVING sum(oi.quantity * oi.price) >= {price_min} AND sum(oi.quantity * oi.price) <= {price_max}"
 
-        query += f" ORDER BY o.order_{sort_by} {sort_order}"
+        query += f" ORDER BY o.order_{sort_by} {sort_order} LIMIT 50"
 
         cur.execute(query)
         orders = cur.fetchall()
@@ -1857,7 +1864,7 @@ def back_office_manager(conn, cur, *params):
             utils.AssertUser(False, "Invalid operation")
 
     elif f'/{username}/crud_orders' in request.path and request.path.split('/')[3] == 'edit_order':
-        
+
         print("Enterd crud_orders edit successful", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'update'), "You don't have permission for this resource")
 
@@ -1939,6 +1946,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/send_login_link', send_login_link),
     (r'/log', login_with_token),
     (r'(?:/[A-z]+)?/image/(\d+)', serve_image),
+    (r'/generate_orders', generate_orders),
     (r'(?:/[A-z]+)?/add_to_cart', add_to_cart_meth),
     (r'(?:/[A-z]+)?/cart', cart),
     (r'(?:/[A-z]+)?/update_cart_quantity', update_cart_quantity),

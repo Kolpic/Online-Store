@@ -3,6 +3,9 @@ import bcrypt, json
 import psycopg2
 from project import config, exception
 from datetime import date
+import pandas as pd
+import random
+from datetime import datetime, timedelta
 
 database = config.database
 user = config.user
@@ -89,7 +92,6 @@ def update_current_user_session_data(cur, conn, new_data, session_id):
 def get_user_session_id(request):
     return request.cookies.get('session_id')
 
-
 def serialize_report(report):
     json_ready_report = []
     for row in report:
@@ -103,3 +105,47 @@ def serialize_report(report):
         ]
         json_ready_report.append(json_row)
     return json.dumps(json_ready_report)
+
+def fetch_verified_users(cur):
+    cur.execute("SELECT id FROM users WHERE verification_status = True")
+    users = cur.fetchall()
+    return [user[0] for user in users]
+
+def read_products_from_csv():
+    return pd.read_csv('/home/galin/Desktop/projects/GitHub/Forum-Project/large_products.csv')
+
+def random_datetime(start_date, end_date):
+    delta = end_date - start_date
+    int_delta = (delta.days * 24 * 60 * 60) + delta.seconds
+    random_second = random.randrange(int_delta)
+    return start_date + timedelta(seconds=random_second)
+
+def fetch_products_from_db(cur):
+    cur.execute("SELECT id, price FROM products")
+    products = cur.fetchall()
+    return [{'id': product[0], 'price': product[1]} for product in products]
+
+def create_random_orders(number_orders, cur):
+
+    verified_users = fetch_verified_users(cur)
+    start_date = datetime(2020, 1, 1)
+    end_date = datetime.now()
+    statuses = ['Ready for Paying', 'Paid']
+    products = fetch_products_from_db(cur)
+
+    for _ in range(number_orders):
+
+        user_id = random.choice(verified_users)
+        num_products = random.randint(1, 5)
+        order_date = random_datetime(start_date, end_date)
+        order_status = random.choice(statuses)
+
+        cur.execute("INSERT INTO orders (user_id, status, order_date) VALUES (%s, %s, %s) RETURNING order_id", (user_id, order_status, order_date))
+        order_id = cur.fetchone()[0]
+
+        for _ in range(num_products):
+            product = random.choice(products)
+            quantity = random.randint(1, 10)
+            price = product['price']
+
+            cur.execute("INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (%s, %s, %s, %s)", (order_id, product['id'], quantity, price))
