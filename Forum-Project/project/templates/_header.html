@@ -3,12 +3,7 @@
         <div class="col text-right">
             <p>Welcome, {{ first_name }} {{ last_name }}!</p>
             <p>{{ email }}</p>
-            {% if 'user_email' in session %}
                 <a href="/logout" class="btn btn-danger">Logout</a>
-            {% else %}
-                <a href="/registration" class="btn btn-info">Register</a>
-                <a href="/login" class="btn btn-primary">Login</a>
-            {% endif %}
         </div>
     </div>
     <div class="float-right">

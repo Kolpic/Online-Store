@@ -4,6 +4,12 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
+class CustomSession(db.Model):
+    __tablename__ = 'custom_sessions'
+    session_id = db.Column(db.String(40), primary_key=True, default=lambda:uuid.uuid4().hex)
+    data = db.Column(db.Text)
+    expires_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now() + timedelta(hours=1))
+
 class CartItem(db.Model):
     __tablename__ = 'cart_items'
     id = db.Column(db.Integer, primary_key=True)

@@ -35,8 +35,8 @@ def get_current_settings(cur):
     settings = {name: value for name, value in cur.fetchall()}
     return settings
 
-def getUserNamesAndEmail(conn, cur):
-    cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (session.get('user_email'),))
+def getUserNamesAndEmail(conn, cur, email):
+    cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (email,)) # session.get('user_email')
     return cur.fetchone()
 
 def AssertDev(boolean, str):
@@ -53,6 +53,42 @@ def has_permission(cur, request, interface, permission_needed):
         if permission_needed == perm_interf[0] and interface == perm_interf[1]:
             return True
     return False
+
+def create_session(os, datetime, timedelta, session_data, cur, conn):
+    session_id = os.urandom(20).hex()
+    expires_at = datetime.now() + timedelta(hours=1)
+    cur.execute("INSERT INTO custom_sessions (session_id, data, expires_at) VALUES (%s, %s, %s)", (session_id, session_data, expires_at))
+    conn.commit()
+    return session_id
+
+def get_current_user(request, cur):
+    session_id = request.cookies.get('session_id')
+
+    if not session_id:
+        return None
+    else:
+        return get_user_by_session(session_id, cur)
+
+def get_user_by_session(session_id, cur):
+    cur.execute("SELECT data FROM custom_sessions WHERE session_id = %s AND expires_at > NOW()", (session_id,))
+    result = cur.fetchone()
+
+    if result:
+        return result[0]
+    else:
+        return None
+
+def clear_expired_sessions(cur, conn):
+    cur.execute("DELETE FROM custom_sessions WHERE expires_at < NOW()")
+    conn.commit()
+
+def update_current_user_session_data(cur, conn, new_data, session_id):
+    cur.execute("UPDATE custom_sessions SET data = %s WHERE session_id = %s", (new_data, session_id))
+    conn.commit();
+
+def get_user_session_id(request):
+    return request.cookies.get('session_id')
+
 
 def serialize_report(report):
     json_ready_report = []

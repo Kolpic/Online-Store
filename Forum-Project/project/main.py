@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, session, abort, Response, jsonify, flash
+from flask import Flask, request, render_template, redirect, url_for, session, abort, Response, jsonify, flash, make_response, request
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
 from decimal import Decimal
@@ -52,20 +52,20 @@ from .models import db
 db.init_app(app)
 migrate = Migrate(app, db)
 
-with app.app_context():
-    db.create_all()
+# with app.app_context():
+#     db.create_all()
 
 # End of database configuration migration
 
 # Config for session to store in db
-app.config['SESSION_TYPE'] = 'sqlalchemy'
-app.config['SESSION_SQLALCHEMY'] = db
-app.config['SESSION_SQLALCHEMY_TABLE'] = 'sessions'
-app.config['SESSION_PERMANENT'] = True
-app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
+# app.config['SESSION_TYPE'] = 'sqlalchemy'
+# app.config['SESSION_SQLALCHEMY'] = db
+# app.config['SESSION_SQLALCHEMY_TABLE'] = 'sessions'
+# app.config['SESSION_PERMANENT'] = True
+# app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
 
 # Initialize Flask-Session
-Session(app)
+# Session(app)
 
 
 # Dev database
@@ -443,20 +443,30 @@ def login(conn, cur):
     utils.AssertUser(utils.verify_password(password_, user_data['password']), "Invalid email or password")
     utils.AssertUser(user_data['verification_status'], "Your account is not verified or has been deleted")
 
-    session['user_email'] = email
+    # session['user_email'] = email
 
-    return redirect("/home")
+    session_id = utils.create_session(os, datetime, timedelta, email, cur, conn)
+    response = make_response(redirect('/home'))
+    response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
+
+    return response
+
 
 def home(conn, cur, page = 1):
-    if not utils.is_authenticated():
-        return redirect('/login')
+    # if not utils.is_authenticated():
+    #     return redirect('/login')
+
+    is_auth_user =  utils.get_current_user(request, cur)
+
+    if is_auth_user == None:
+       return redirect('/login') 
 
     page = request.args.get('page', 1, type=int)
 
     cur.execute("SELECT DISTINCT(category) FROM products")
     categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
 
-    first_name, last_name, email__ = utils.getUserNamesAndEmail(conn, cur)
+    first_name, last_name, email__ = utils.getUserNamesAndEmail(conn, cur, is_auth_user)
 
     prodcuts_user_wants = request.args.get('products_per_page', 10)
     if prodcuts_user_wants == '':
@@ -509,7 +519,7 @@ def home(conn, cur, page = 1):
     # total_pages = int(total_products / products_per_page) + 1
     total_pages = (total_products // products_per_page) + (1 if total_products % products_per_page > 0 else 0)
 
-    cur.execute("SELECT id FROM users WHERE email = %s", (session.get('user_email'),))
+    cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,)) # session.get('user_email')
     user_id = cur.fetchone()[0]
 
     cart_count = get_cart_items_count(conn, cur, user_id)
@@ -517,16 +527,29 @@ def home(conn, cur, page = 1):
     return render_template('home.html', first_name=first_name, last_name=last_name, email = email__,products=products, page=page, total_pages=total_pages, sort_by=sort_by, sort_order=sort_order, product_name=product_name, product_category=product_category, cart_count=cart_count, categories=categories)
 
 def logout(conn, cur):
+    session_id = request.cookies.get('session_id')
+
+    cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (session_id,))
+    conn.commit()
+    response = make_response(redirect('/login'))
+    response.set_cookie('session_id', '', expires=0)
+    return response
+
     # session.pop('user_email', None)
-    session.clear()
-    return redirect('/home')
+    # session.clear()
+    # return redirect('/home')
 
 def profile(conn, cur):
     # TODO: sigurnost na sesiqta
-    if 'user_email' not in session:
-        return redirect('/login')
+    # if 'user_email' not in session:
+    #     return redirect('/login')
+
+    is_auth_user =  utils.get_current_user(request, cur)
+
+    if is_auth_user == None:
+       return redirect('/login') 
     
-    cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (session['user_email'],))
+    cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (is_auth_user,)) #session['user_email']
     user_details = cur.fetchone()
     conn.commit()
 
@@ -536,8 +559,12 @@ def profile(conn, cur):
     return render_template('profile.html')
 
 def update_profile(conn, cur):
-    if 'user_email' not in session:
-        return redirect('/login')
+    # if 'user_email' not in session:
+    #     return redirect('/login')
+    is_auth_user =  utils.get_current_user(request, cur)
+
+    if is_auth_user == None:
+       return redirect('/login')
 
     first_name = request.form['first-name']
     last_name = request.form['last-name']
@@ -587,7 +614,8 @@ def update_profile(conn, cur):
 
     query_string = query_string[:-2]
     query_string += " WHERE email = %s"
-    email_in_session = session['user_email']
+    # email_in_session = session['user_email']
+    email_in_session = utils.get_current_user(request, cur)
     fields_list.append(email_in_session)
 
     cur.execute(query_string, (fields_list))
@@ -596,23 +624,36 @@ def update_profile(conn, cur):
     
     # Update session email if email was changed
     if email:
-        session['user_email'] = email
+        # session['user_email'] = email
+        utils.update_current_user_session_data(cur, conn, email, utils.get_user_session_id(request))
     
     updated_fields_message = ', '.join(updated_fields)
     session['home_message'] = f"You successfully updated your {updated_fields_message}."
     return redirect('/home')
 
 def delete_account(conn, cur):
-    if 'user_email' not in session:
-        return redirect('/login')
+    # if 'user_email' not in session:
+    #     return redirect('/login')
 
-    user_email = session['user_email']
+    # user_email = session['user_email']
+    is_auth_user =  utils.get_current_user(request, cur)
 
-    cur.execute("DELETE FROM users WHERE email = %s", (user_email,))
+    if is_auth_user == None:
+       return redirect('/login')
+
+    cur.execute("DELETE FROM users WHERE email = %s", (is_auth_user,))
     conn.commit()
-    session.clear()
+
+    cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (session_id,))
+    conn.commit()
+    response = make_response(redirect('/login'))
+    response.set_cookie('session_id', '', expires=0)
     session['login_message'] = 'You successful deleted your account'
-    return redirect('/login')
+    return response
+
+    # session.clear()
+    # session['login_message'] = 'You successful deleted your account'
+    # return redirect('/login')
 
 # 
 def recover_password(conn, cur):
@@ -752,69 +793,18 @@ def login_with_token(conn, cur):
     session['user_email'] = email   
     return redirect('/home')
 
-# def update_captcha_settings(conn, cur):
-#     if 'staff_username' not in session:
-#         return redirect('/login_staff')
-
-#     if request.method == 'GET':
-#         current_settings = utils.get_current_settings(cur)
-#         return render_template('captcha_settings.html', **current_settings)
-
-#     new_max_attempts = request.form['max_captcha_attempts']
-#     new_timeout_minutes = request.form['captcha_timeout_minutes']
-
-#     utils.AssertUser(not(new_max_attempts and int(new_max_attempts)) <= 0, "Captcha attempts must be possitive number")
-#     utils.AssertUser(not(new_timeout_minutes and int(new_timeout_minutes)) <= 0, "Timeout minutes must be possitive number")
-
-#     str_message = ""
-
-#     if new_max_attempts:
-#         cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'max_captcha_attempts'", (new_max_attempts,))
-#         str_message += 'You updated captcha attempts. '
-#     if new_timeout_minutes:
-#           cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'captcha_timeout_minutes'", (new_timeout_minutes,))
-#           str_message += 'You updated timeout minutes.'
-    
-#     conn.commit()
- 
-#     if str_message != "":
-#         session['home_message'] = str_message
-#     return redirect('/home')
-
-# def view_logs(conn, cur):
-#     if 'staff_username' not in session:
-#         return redirect('/staff_login')
-    
-#     utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read'), "You don't have permission to this resource")
-
-#     sort_by = request.args.get('sort','time')
-#     sort_order = request.args.get('order','asc')
-
-#     valid_sort_columns = {'time'}
-#     valid_sort_orders = {'asc', 'desc'}
-
-#     if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
-#         sort_by = 'time'
-#         sort_order = 'asc'
-
-#     query = "SELECT * FROM exception_logs"
-
-#     if sort_by and sort_order:
-#         query += f" ORDER BY {sort_by} {sort_order}"
-
-#     cur.execute(query)
-#     log_exceptions = cur.fetchall()
-
-#     return render_template('logs.html', log_exceptions = log_exceptions, sort_by=sort_by, sort_order=sort_order)
-
 def log_exception(conn, cur, exception_type, message ,email = None):
 
     cur.execute("INSERT INTO exception_logs (user_email, exception_type, message) VALUES (%s, %s, %s)", (email, exception_type, message))
     conn.commit()
 
 def add_product(conn, cur):
-    if 'staff_username' not in session:
-        return redirect('/staff_login')
+    # if 'staff_username' not in session:
+    #     return redirect('/staff_login')
+    is_auth_user =  utils.get_current_user(request, cur)
+
+    if is_auth_user == None:
+       return redirect('/login')
 
     if request.method == 'GET':
         cur.execute("SELECT DISTINCT(category) FROM products")
@@ -903,11 +893,16 @@ def remove_from_cart(conn, cur, item_id):
     return "You successfully deleted item."
 
 def add_to_cart_meth(conn, cur):
-    if 'user_email' not in session:
-        return redirect('/login')
-    user_email = session.get('user_email')
+    # if 'user_email' not in session:
+    #     return redirect('/login')
+    is_auth_user =  utils.get_current_user(request, cur)
 
-    cur.execute("SELECT id FROM users WHERE email = %s", (user_email,))
+    if is_auth_user == None:
+       return redirect('/login')
+
+    # user_email = session.get('user_email')
+
+    cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,))
     user_id = cur.fetchone()[0]
 
     product_id = request.form['product_id']
@@ -919,15 +914,21 @@ def add_to_cart_meth(conn, cur):
     return jsonify({'message':response, 'newCartCount': newCartCount})
 
 def cart(conn, cur):
-    if 'user_email' not in session:
-        return redirect('/login')
+    # if 'user_email' not in session:
+    #     return redirect('/login')
+    is_auth_user =  utils.get_current_user(request, cur)
+
+    if is_auth_user == None:
+       return redirect('/login')
     
     if request.method == 'GET':
         form_data = session.get('form_data_stack', []).pop() if 'form_data_stack' in session and len(session['form_data_stack']) > 0 else None
+
         if form_data:
             session.modified = True
-        user_email = session.get('user_email')
-        cur.execute("SELECT id FROM users WHERE email = %s", (user_email,))
+
+        # user_email = session.get('user_email')
+        cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,))
         user_id = cur.fetchone()[0]
         items = view_cart(conn, cur, user_id)
         total_sum = sum(item[1] * item[2] for item in items)
@@ -945,7 +946,7 @@ def cart(conn, cur):
     country_code = request.form['country_code']
     phone = request.form['phone'].strip()
 
-    cur.execute("SELECT id FROM users WHERE email = %s", (session.get('user_email'),))
+    cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,)) # session.get('user_email')
     user_id = cur.fetchone()[0]
     regexx = r'^\d{7,15}$'
 
@@ -1039,16 +1040,27 @@ def cart(conn, cur):
     return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum=total_sum)
 
 def remove_from_cart_meth(conn, cur):
-    if 'user_email' not in session:
-        return redirect('/login')
+    # if 'user_email' not in session:
+    #     return redirect('/login')
+
+    is_auth_user =  utils.get_current_user(request, cur)
+
+    if is_auth_user == None:
+       return redirect('/login')
+
     item_id = request.form['item_id']
     response = remove_from_cart(conn, cur, item_id)
     session['cart_message'] = response
     return redirect('/cart')
 
 def finish_payment(conn, cur):
-    if 'user_email' not in session:
-        return redirect('/login')
+    # if 'user_email' not in session:
+    #     return redirect('/login')
+
+    is_auth_user =  utils.get_current_user(request, cur)
+
+    if is_auth_user == None:
+       return redirect('/login')
     
     if request.method == 'GET':
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
@@ -1107,49 +1119,11 @@ def finish_payment(conn, cur):
         session['order_id'] = order_id
         session['payment_error'] = "You entered amout, which is bigger than the order you have"
         return redirect('/finish_payment')
-    formatted_datetime = datetime.now().strftime('%Y-%m-%d')
-    cur.execute("UPDATE orders SET status = 'Paid', order_date = %s WHERE order_id = %s", (formatted_datetime, order_id))
+    # formatted_datetime = datetime.now().strftime('%Y-%m-%d')
+    cur.execute("UPDATE orders SET status = 'Paid' WHERE order_id = %s", (order_id,))
     conn.commit()
     session['home_message'] = "You paid the order successful"
     return redirect('/home')
-
-
-# def crud_inf(conn, cur):
-#     if 'staff_username' not in session:
-#         return redirect('/staff_login')
-    
-#     sort_by = request.args.get('sort', 'id')
-#     sort_order = request.args.get('order', 'asc')
-#     price_min = request.args.get('price_min', None, type=float)
-#     price_max = request.args.get('price_max', None, type=float)
-
-#     valid_sort_columns = {'id', 'name', 'price', 'quantity', 'category'}
-#     valid_sort_orders = {'asc', 'desc'}
-
-#     if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
-#         sort_by = 'id'
-#         sort_order = 'asc'
-    
-#     base_query = sql.SQL("SELECT * FROM products")
-#     conditions = []
-#     query_params = []
-
-#     if price_min is not None and price_max is not None:
-#         conditions.append(sql.SQL("price BETWEEN %s AND %s"))
-#         query_params.extend([price_min, price_max])
-    
-#     if conditions:
-#         base_query = base_query + sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
-    
-#     base_query = base_query + sql.SQL(" ORDER BY ") + sql.Identifier(sort_by) + sql.SQL(f" {sort_order}")
-    
-#     base_query = base_query + sql.SQL(" LIMIT 100")
-
-#     cur.execute(base_query.as_string(conn), query_params)
-#     products = cur.fetchall()
-
-#     return render_template('crud.html', products=products, sort_by=sort_by, sort_order=sort_order, price_min=price_min or '', price_max=price_max or '')
-
 
 def staff_login(conn, cur):
     if request.method == 'GET':
@@ -1181,42 +1155,6 @@ def logout_staff(conn, cur):
     session.pop('staff_username', None) 
     return redirect('/staff_login')
 
-# def edit_product(conn, cur, product_id):
-#     if 'staff_username' not in session:
-#         return redirect('/staff_login')
-    
-#     if request.method == 'GET':
-#         cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
-#         product = cur.fetchone()
-#         utils.AssertUser(product, "Invalid product")
-#         return render_template('edit_product.html', product=product, product_id=product_id)
-    
-#     name = request.form['name']
-#     price_ = request.form['price']
-#     quantity_ = request.form['quantity']
-#     category = request.form['category']
-
-#     utils.AssertUser(name and price_ and quantity_ and category, "All fields must be filled")
-
-#     price = float(price_)
-#     utils.AssertUser(price > 0, "Price must be possitive")
-#     quantity = int(quantity_)
-#     utils.AssertUser(quantity >= 0, "Quantity must be possitive")
-
-#     cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s WHERE id = %s", (name, price, quantity, category, product_id))
-#     conn.commit()
-#     session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
-#     return redirect('/crud')
-
-# def delete_product(conn, cur, product_id):
-#     if 'staff_username' not in session:
-#         return redirect('/staff_login')
-    
-#     cur.execute("UPDATE products SET quantity = 0 WHERE id = %s", (product_id,))
-#     conn.commit()
-#     session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
-#     return redirect('/crud')
-
 def add_products_from_file(conn, cur, string_path):
     with open(string_path, mode='r', encoding='utf-8') as file:
         reader = csv.DictReader(file)
@@ -1237,74 +1175,6 @@ def add_products_from_file(conn, cur, string_path):
             conn.commit()
         return "Imprted"
         
-# def report(conn, cur):
-#     if 'staff_username' not in session:
-#         return redirect('/staff_login')
-    
-#     if request.method == 'GET':
-#         return render_template('report.html')
-    
-#     date_from = request.form.get('date_from')
-#     date_to = request.form.get('date_to')
-#     group_by = request.form.get('group_by')
-#     status = request.form.get('status')
-
-#     utils.AssertUser(date_from or date_to, "You have to select a date from, date to")
-
-#     if group_by:
-#         group_by_clause = f"DATE(date_trunc(%s, order_date))"
-#     else:
-#         group_by_clause = "o.order_id"
-
-#     status_filter = ""
-#     if status:
-#         status_filter = "AND o.status = %s"
-
-#     query = f"""
-#     WITH OrderSums AS (
-#         SELECT
-#             o.order_id,
-#             DATE(o.order_date) AS order_date,
-#             u.first_name || ' ' || u.last_name AS buyer_name,
-#             o.status,
-#             SUM(oi.quantity * oi.price) AS order_sum
-#         FROM
-#             orders o
-#         JOIN
-#             users u ON o.user_id = u.id
-#         JOIN
-#             order_items oi ON o.order_id = oi.order_id
-#         WHERE
-#             o.order_date BETWEEN %s AND %s
-#             {status_filter}
-#         GROUP BY
-#             o.order_id, o.order_date, buyer_name, o.status
-#     )
-#     SELECT
-#         {group_by_clause} AS period,
-#         array_agg(order_id) AS order_ids,
-#         array_agg(buyer_name) AS names_of_buyers,
-#         SUM(order_sum) AS total_sum,
-#         array_agg(status) AS order_statuses,
-#         status
-#     FROM
-#         OrderSums as o
-#     GROUP BY
-#         period, status
-#     ORDER BY
-#         period, status;
-#     """
-
-#     params = [date_from, date_to]
-#     if status:
-#         params.append(status)
-#     if group_by:
-#         params.append(group_by)
-
-#     cur.execute(query, tuple(params))
-#     report = cur.fetchall()
-#     return render_template('report.html', report=report)  
- 
 def update_cart_quantity(conn, cur):
     item_id = request.form['item_id']
     quantity = request.form['quantity']
@@ -1322,93 +1192,6 @@ def update_cart_quantity(conn, cur):
     conn.commit()
 
     return jsonify(success=True, new_total=new_total)
-
-# def staff_role(conn, cur):
-#     if 'staff_username' not in session:
-#         return redirect('/staff_login')
-    
-#     if request.method == 'GET':
-#         cur.execute("SELECT s.username, r.role_name, sr.staff_id, sr.role_id FROM staff_roles sr JOIN staff s ON s.id = sr.staff_id JOIN roles r ON r.role_id = sr.role_id")
-#         relations = cur.fetchall()
-#         return render_template('staff_role_assignment.html', relations=relations)
-
-# def staff_role_add(conn, cur):
-#     if 'staff_username' not in session:
-#         return redirect('/staff_login')
-
-#     if request.method == 'GET':
-#         cur.execute("SELECT id, username FROM staff")
-#         staff = cur.fetchall()
-
-#         cur.execute("SELECT role_id, role_name FROM roles")
-#         roles = cur.fetchall()
-
-#         return render_template('add_staff_role.html', staff=staff, roles=roles) 
-
-#     staff_name = request.form['staff']
-#     staff_role = request.form['role']
-
-#     cur.execute("SELECT id FROM staff WHERE username = %s", (staff_name,))
-#     staff_id = cur.fetchone()[0]
-
-#     cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (staff_role,))
-#     role_id = cur.fetchone()[0]
-
-#     cur.execute('INSERT INTO staff_roles (staff_id, role_id) VALUES (%s, %s)', (staff_id, role_id))
-#     conn.commit()
-
-#     session['staff_message'] = "You successful gave a role: " + staff_role + "to user: " + staff_name
-#     return redirect('/staff_portal')
-
-# def delete_role(conn, cur, staff_id, role_id):
-#     cur.execute('DELETE FROM staff_roles WHERE staff_id = %s AND role_id = %s', (staff_id, role_id))
-#     conn.commit()
-
-#     session['staff_message'] = "You successful deleted a role"
-#     return redirect('/staff_role')
-
-# def role_permissions(conn, cur):
-#     if 'staff_username' not in session:
-#         return redirect('/staff_login')
-    
-#     interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles']
-
-#     if request.method == 'GET':
-#         role = request.path.split('/')[1]
-#         cur.execute('SELECT role_id, role_name FROM roles')
-#         roles = cur.fetchall()
-
-#         selected_role = int(request.args.get('role', roles[0][0] if roles else None))
-
-#         cur.execute('SELECT role_id, role_name FROM roles WHERE role_id = %s', (selected_role,))
-#         role_to_display = cur.fetchall()
-
-#         role_permissions = {role[0]: {interface: {'create': False, 'read': False, 'update': False, 'delete': False} for interface in interfaces} for role in role_to_display}
-
-#         cur.execute('SELECT rp.role_id, p.interface, p.permission_name FROM role_permissions AS rp JOIN permissions AS p ON rp.permission_id=p.permission_id')
-#         permissions = cur.fetchall()
-
-#         for role_id, interface, permission_name in permissions:
-#             if role_id in role_permissions and interface in role_permissions[role_id]:
-#                 role_permissions[role_id][interface][permission_name] = True
-
-#         return render_template('role_permissions.html', roles=roles, interfaces=interfaces, role_permissions=role_permissions, selected_role=selected_role, role_to_display=role)
-    
-#     elif request.method == 'POST':   
-#         role_id = request.form['role']
-#         cur.execute('DELETE FROM role_permissions WHERE role_id = %s', (role_id,))
-#         for interface in interfaces:
-#             for action in ['create', 'read', 'update', 'delete']:
-#                 if f'{interface}_{action}' in request.form:
-#                     cur.execute("SELECT permission_id FROM permissions WHERE permission_name = %s AND interface = %s", (action, interface))
-#                     permission_id = cur.fetchone()[0]
-#                     cur.execute('INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)', 
-#                                 (role_id, permission_id))
-#         conn.commit()
-#         return redirect('/role_permissions?role=' + role_id)
-
-#     else:
-#         utils.AssertUser(False, "Invalid method")
 
 def get_active_users(sort_by='id', sort_order='desc', name=None, email=None, user_id=None):
     active_threshold = datetime.now() - timedelta(minutes=30)
@@ -2042,10 +1825,8 @@ def back_office_manager(conn, cur, *params):
 
                 utils.AssertUser(cur.fetchone()[0], "There is no such product with id " + str(order_data['values'][0]))
             
-                utils.AssertDev(0)
-
                 #TODO(Done): Kude trqbva da se namira tova neshto (conn.autocommit) v koda  Start transaction
-                conn.commit()
+                # conn.commit()
                 conn.autocommit = False
                 try:
                     #TODO: Insert da bude v otdelna fukciq i da se podavat parametrite, koito trqbva da se insertnat
