@@ -1574,354 +1574,349 @@ def back_office_manager(conn, cur, *params):
     # print("request.path.split('_')[1]", flush=True)
     # print(request.path.split('_')[1], flush=True)
 
-    if f'/{username}/crud_products' in request.path:
+    if f'/{username}/crud_products' in request.path and len(request.path.split('/')) == 3:
 
-        if len(request.path.split('/')) == 3:
-            print("Enterd crud_products read successfully", flush=True)
-            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read'), "You don't have permission to this resource")
+        print("Enterd crud_products read successfully", flush=True)
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read'), "You don't have permission to this resource")
 
-            sort_by = request.args.get('sort', 'id')
-            sort_order = request.args.get('order', 'asc')
-            price_min = request.args.get('price_min', None, type=float)
-            price_max = request.args.get('price_max', None, type=float)
+        sort_by = request.args.get('sort', 'id')
+        sort_order = request.args.get('order', 'asc')
+        price_min = request.args.get('price_min', None, type=float)
+        price_max = request.args.get('price_max', None, type=float)
 
-            valid_sort_columns = {'id', 'name', 'price', 'quantity', 'category'}
-            valid_sort_orders = {'asc', 'desc'}
+        valid_sort_columns = {'id', 'name', 'price', 'quantity', 'category'}
+        valid_sort_orders = {'asc', 'desc'}
 
-            if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
-                sort_by = 'id'
-                sort_order = 'asc'
+        if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
+            sort_by = 'id'
+            sort_order = 'asc'
+        
+        base_query = sql.SQL("SELECT * FROM products")
+        conditions = []
+        query_params = []
+
+        if price_min is not None and price_max is not None:
+            conditions.append(sql.SQL("price BETWEEN %s AND %s"))
+            query_params.extend([price_min, price_max])
+        
+        if conditions:
+            base_query = base_query + sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
+        
+        base_query = base_query + sql.SQL(" ORDER BY ") + sql.Identifier(sort_by) + sql.SQL(f" {sort_order}")
+        
+        base_query = base_query + sql.SQL(" LIMIT 100")
+
+        cur.execute(base_query.as_string(conn), query_params)
+        products = cur.fetchall()
+
+        return render_template('crud.html', products=products, sort_by=sort_by, sort_order=sort_order, price_min=price_min or '', price_max=price_max or '')
+
+    elif f'/{username}/crud_products' in request.path and request.path.split('/')[3] == 'add_product':
+
+        print("Enterd crud_products add successfully", flush=True)
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'create'), "You don't have permission to this resource")
+        # TODO(Done): ref
+
+        if request.method == 'GET':
+            cur.execute("SELECT DISTINCT(category) FROM products")
+            categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
+            return render_template('add_product_staff.html', categories=categories, username=username)
+        elif request.method == 'POST':
+            data = process_form('CRUD Products', 'create')
             
-            base_query = sql.SQL("SELECT * FROM products")
-            conditions = []
-            query_params = []
-
-            if price_min is not None and price_max is not None:
-                conditions.append(sql.SQL("price BETWEEN %s AND %s"))
-                query_params.extend([price_min, price_max])
-            
-            if conditions:
-                base_query = base_query + sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
-            
-            base_query = base_query + sql.SQL(" ORDER BY ") + sql.Identifier(sort_by) + sql.SQL(f" {sort_order}")
-            
-            base_query = base_query + sql.SQL(" LIMIT 100")
-
-            cur.execute(base_query.as_string(conn), query_params)
-            products = cur.fetchall()
-
-            return render_template('crud.html', products=products, sort_by=sort_by, sort_order=sort_order, price_min=price_min or '', price_max=price_max or '')
-
-        elif request.path.split('/')[3] == 'add_product':
-            print("Enterd crud_products add successfully", flush=True)
-            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'create'), "You don't have permission to this resource")
-            # TODO(Done): ref
-            if request.method == 'GET':
-                cur.execute("SELECT DISTINCT(category) FROM products")
-                categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
-                return render_template('add_product_staff.html', categories=categories, username=username)
-            elif request.method == 'POST':
-                data = process_form('CRUD Products', 'create')
-                
-                cur.execute(f"INSERT INTO products ({ data['fields'] }) VALUES ({ data['placeholders'] })", data['values'])
-                conn.commit()
-                session['crud_message'] = "Item was added successfully"
-                return redirect(f'/{username}/crud_products')
-            else:
-                utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
-
-        elif request.path.split('/')[3] == 'edit_product':
-            print("Enterd crud_products edit successfully", flush=True)
-            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'update'), "You don't have permission to this resource")
-            # TODO: ref
-            product_id = request.path.split('/')[4]
-            if request.method == 'GET':
-                cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
-                product = cur.fetchone()
-                utils.AssertUser(product, "Invalid product")
-                return render_template('edit_product.html', product=product, product_id=product_id, username=username)
-
-            elif request.method == 'POST':
-                data = process_form('CRUD Products', 'edit')
-
-                cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s WHERE id = %s", (data['values'][0], data['values'][1], data['values'][2], data['values'][3],product_id))
-                conn.commit()
-                session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
-                return redirect(f'/{username}/crud_products')
-            else:
-                utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
-
-        elif request.path.split('/')[3] == 'delete_product':
-            print("Enterd crud_products delete successfully", flush=True)
-            # TODO: ref
-            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'delete'), "You don't have permission to this resource")
-
-            product_id = request.path.split('/')[4]
-            cur.execute("UPDATE products SET quantity = 0 WHERE id = %s", (product_id,))
+            cur.execute(f"INSERT INTO products ({ data['fields'] }) VALUES ({ data['placeholders'] })", data['values'])
             conn.commit()
-            session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
+            session['crud_message'] = "Item was added successfully"
             return redirect(f'/{username}/crud_products')
-
         else:
-            utils.AssertUser(False, "Invalid url")
+            utils.AssertDev(False, "Different method")
 
-    elif f'/{username}/crud_staff' in request.path:
+    elif f'/{username}/crud_products' in request.path and request.path.split('/')[3] == 'edit_product':
 
-        if len(request.path.split('/')) == 3:
-            print("Enterd crud_staff read successfully", flush=True)
-            utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read'), "You don't have permission to this resource")
+        print("Enterd crud_products edit successfully", flush=True)
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'update'), "You don't have permission to this resource")
+        # TODO: ref
+        product_id = request.path.split('/')[4]
 
-            cur.execute("SELECT s.username, r.role_name, sr.staff_id, sr.role_id FROM staff_roles sr JOIN staff s ON s.id = sr.staff_id JOIN roles r ON r.role_id = sr.role_id")
-            relations = cur.fetchall()
-            return render_template('staff_role_assignment.html', relations=relations, username=username)
+        if request.method == 'GET':
+            cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
+            product = cur.fetchone()
+            utils.AssertUser(product, "Invalid product")
+            return render_template('edit_product.html', product=product, product_id=product_id, username=username)
 
-        elif request.path.split('/')[3] == 'add_role_staff':
-            print("Enterd crud_staff add successfully", flush=True)
-            utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create'), "You don't have permission to this resource")
-            if request.method == 'GET':
-                cur.execute("SELECT id, username FROM staff")
-                staff = cur.fetchall()
+        elif request.method == 'POST':
+            data = process_form('CRUD Products', 'edit')
 
-                cur.execute("SELECT role_id, role_name FROM roles")
-                roles = cur.fetchall()
+            cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s WHERE id = %s", (data['values'][0], data['values'][1], data['values'][2], data['values'][3],product_id))
+            conn.commit()
+            session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
+            return redirect(f'/{username}/crud_products')
+        else:
+            utils.AssertDev(False, "Different method")
 
-                return render_template('add_staff_role.html', staff=staff, roles=roles, username=username)
-            elif request.method == 'POST':
-                data = process_form('Staff roles', 'create_staff_roles')
+    elif f'/{username}/crud_products' in request.path and request.path.split('/')[3] == 'delete_product':
 
-                cur.execute("SELECT id FROM staff WHERE username = %s", (data['values'][0],))
-                staff_id = cur.fetchone()[0]
+        print("Enterd crud_products delete successfully", flush=True)
+        # TODO: ref
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'delete'), "You don't have permission to this resource")
 
-                cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (data['values'][1],))
-                role_id = cur.fetchone()[0]
+        product_id = request.path.split('/')[4]
+        cur.execute("UPDATE products SET quantity = 0 WHERE id = %s", (product_id,))
+        conn.commit()
+        session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
 
-                cur.execute(f"INSERT INTO staff_roles ({data['fields']}) VALUES ({data['placeholders']})", (staff_id, role_id))
-                conn.commit()
+        return redirect(f'/{username}/crud_products')
 
-                session['staff_message'] = "You successful gave a role: " + str(data['values'][1]) + " to user: " + str(data['values'][0])
-                return redirect('/staff_portal')
-            else:
-                utils.AssertDev(request.method != 'POST' and request.method != 'GET', "Different method")
+    elif f'/{username}/crud_staff' in request.path and len(request.path.split('/')) == 3:
 
-        elif request.path.split('/')[3] == 'add_staff':
-            print("Enterd crud_staff add staff successfully", flush=True)
-            utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create'), "You don't have permission to this resource")
+        print("Enterd crud_staff read successfully", flush=True)
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read'), "You don't have permission to this resource")
 
-            if request.method == 'GET':
+        cur.execute("SELECT s.username, r.role_name, sr.staff_id, sr.role_id FROM staff_roles sr JOIN staff s ON s.id = sr.staff_id JOIN roles r ON r.role_id = sr.role_id")
+        relations = cur.fetchall()
+        return render_template('staff_role_assignment.html', relations=relations, username=username)
 
-                return render_template('add_staff.html', username=username)
-            elif request.method == 'POST':
-                data = process_form('Staff roles', 'create_staff')
+    elif f'/{username}/crud_staff' in request.path and request.path.split('/')[3] == 'add_role_staff':
 
-                print(data, flush=True)
+        print("Enterd crud_staff add successfully", flush=True)
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create'), "You don't have permission to this resource")
 
-                cur.execute(f"INSERT INTO staff ({data['fields']}) VALUES ({data['placeholders']})", (data['values']))
-                conn.commit()
+        if request.method == 'GET':
+            cur.execute("SELECT id, username FROM staff")
+            staff = cur.fetchall()
 
-                session['staff_message'] = "You successful made new user with name: " + str(data['values'][0]) 
-                return redirect('/staff_portal')
-            else:
-                utils.AssertDev(False, "Different method")
+            cur.execute("SELECT role_id, role_name FROM roles")
+            roles = cur.fetchall()
 
-        elif request.path.split('/')[3] == 'delete_role':
-            print("Enterd crud_staff delete successfully", flush=True)
-            utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'delete'), "You don't have permission to this resource")
+            return render_template('add_staff_role.html', staff=staff, roles=roles, username=username)
 
-            staff_id = request.path.split('/')[4]
-            role_id = request.path.split('/')[5]
-            cur.execute('DELETE FROM staff_roles WHERE staff_id = %s AND role_id = %s', (staff_id, role_id))
+        elif request.method == 'POST':
+            data = process_form('Staff roles', 'create_staff_roles')
+
+            cur.execute("SELECT id FROM staff WHERE username = %s", (data['values'][0],))
+            staff_id = cur.fetchone()[0]
+
+            cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (data['values'][1],))
+            role_id = cur.fetchone()[0]
+
+            cur.execute(f"INSERT INTO staff_roles ({data['fields']}) VALUES ({data['placeholders']})", (staff_id, role_id))
             conn.commit()
 
-            session['staff_message'] = "You successful deleted a role"
-            return redirect(f'/{username}/staff_portal')
+            session['staff_message'] = "You successful gave a role: " + str(data['values'][1]) + " to user: " + str(data['values'][0])
+            return redirect('/staff_portal')
+        else:
+            utils.AssertDev(False, "Different method")
+
+    elif f'/{username}/crud_staff' in request.path and request.path.split('/')[3] == 'add_staff':
+
+        print("Enterd crud_staff add staff successfully", flush=True)
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create'), "You don't have permission to this resource")
+
+        if request.method == 'GET':
+
+            return render_template('add_staff.html', username=username)
+        elif request.method == 'POST':
+            data = process_form('Staff roles', 'create_staff')
+
+            print(data, flush=True)
+
+            cur.execute(f"INSERT INTO staff ({data['fields']}) VALUES ({data['placeholders']})", (data['values']))
+            conn.commit()
+
+            session['staff_message'] = "You successful made new user with name: " + str(data['values'][0]) 
+            return redirect('/staff_portal')
+        else:
+            utils.AssertDev(False, "Different method")
+
+    elif f'/{username}/crud_staff' in request.path and request.path.split('/')[3] == 'delete_role':
+
+        print("Enterd crud_staff delete successfully", flush=True)
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'delete'), "You don't have permission to this resource")
+
+        staff_id = request.path.split('/')[4]
+        role_id = request.path.split('/')[5]
+        cur.execute('DELETE FROM staff_roles WHERE staff_id = %s AND role_id = %s', (staff_id, role_id))
+        conn.commit()
+
+        session['staff_message'] = "You successful deleted a role"
+        return redirect(f'/{username}/staff_portal')
+
+    elif f'/{username}/crud_orders' in request.path and len(request.path.split('/')) == 3:
+
+        print("Enterd crud_orders read successful", flush=True)
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read'), "You don't have permission for this resource")
+        
+        valid_sort_columns = {'id', 'date', 'price'}
+        valid_sort_orders = {'asc', 'desc'}
+
+        sort_by = request.args.get('sort', 'desc')
+        sort_order = request.args.get('order', 'desc')
+        price_min = request.args.get('price_min', '', type=float)
+        price_max = request.args.get('price_max', '', type=float)
+        order_by_id = request.args.get('order_by_id', '', type=float)
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+        status = request.args.get('status', '')
+
+        cur.execute("SELECT DISTINCT status FROM orders")
+        statuses = cur.fetchall()
+
+        if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
+            sort_by = 'id'
+            sort_order = 'asc'
+
+        query = """
+            SELECT 
+                o.order_id, 
+                u.first_name || ' ' || u.last_name as user_names, 
+                array_agg(p.name), 
+                to_char(sum(oi.quantity * oi.price),'FM999999990.00') as order_price, 
+                o.status, 
+                to_char(o.order_date, 'YYYY-MM-DD HH:MI:SS') AS formatted_order_date
+            FROM orders AS o 
+            JOIN users AS u        ON o.user_id     = u.id 
+            JOIN order_items AS oi ON o.order_id    = oi.order_id 
+            JOIN products AS p     ON oi.product_id = p.id
+        """
+        # TODO: Da se slojat %s
+        if order_by_id != '':
+            query += f" WHERE o.order_id = {order_by_id} "
+
+        if (date_from != '' and date_to != '') and order_by_id == '':
+            query += f" WHERE o.order_date >= '{date_from}'::date AND o.order_date <= '{date_to}'::date "
+
+        if status != '' and (date_from != '' and date_to != '') and order_by_id == '':
+            query += f" AND status = '{status}'"
+
+        elif status != '' and order_by_id == '':
+            query += f" WHERE status = '{status}'"
+
+        query += " GROUP BY o.order_id, user_names "
+
+        if price_min != '' and price_max != '' and order_by_id == '':
+            query += f" HAVING sum(oi.quantity * oi.price) >= {price_min} AND sum(oi.quantity * oi.price) <= {price_max}"
+
+        query += f" ORDER BY o.order_{sort_by} {sort_order}"
+
+        cur.execute(query)
+        orders = cur.fetchall()
+
+        return render_template('crud_orders.html', orders=orders, username=username, statuses=statuses, current_status=status, price_min=price_min, price_max=price_max, order_by_id=order_by_id, date_from=date_from, date_to=date_to)
+
+    elif f'/{username}/crud_orders' in request.path and request.path.split('/')[3] == 'add_order':
+
+        print("Enterd crud_orders add successful", flush=True)
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'create'), "You don't have permission for this resource")
+
+        if request.method == 'GET':
+            cur.execute("SELECT DISTINCT status FROM orders")
+            statuses = cur.fetchall()
+            return render_template('add_order.html', statuses=statuses, username=username)
+
+        elif request.method == 'POST':
+            print("Enterd crud_orders add POST successful", flush=True)
+            data = process_form('CRUD Orders', 'create')        
+
+            order_data = data['orders']
+            item_data = data['order_items']
+
+            cur.execute("SELECT id FROM users WHERE id = %s", (order_data['values'][0],))
+
+            utils.AssertUser(cur.fetchone()[0], "There is no such product with id " + str(order_data['values'][0]))
+        
+            #TODO(Done): Kude trqbva da se namira tova neshto (conn.autocommit) v koda  Start transaction
+            conn.commit()
+            conn.autocommit = False
+            try:
+                #TODO: Insert da bude v otdelna fukciq i da se podavat parametrite, koito trqbva da se insertnat
+
+                query_one = f"INSERT INTO orders ({ order_data['fields'] }) VALUES ({ order_data['placeholders'] }) RETURNING order_id"
+                cur.execute(query_one, order_data['values'])
+                order_id = cur.fetchone()[0]
+
+                order_item_values = (order_id,) + item_data['values']
+                query_two = f"INSERT INTO order_items (order_id, {item_data['fields']}) VALUES (%s, {item_data['placeholders']})"
+                cur.execute(query_two, order_item_values)
+
+                conn.commit()
+
+                session['crud_message'] = "Successfully added new order with id: " + str(order_id)
+                return redirect(f'/{username}/crud_orders')
+
+            except Exception as e:
+                conn.rollback()
+
+                session['crud_error'] = "Failed to add order. Please try again."
+                return redirect(f'/{username}/crud_orders')
+
+            finally:
+
+                conn.autocommit = True
 
         else:
-            utils.AssertUser(False, "Invalid url")
+            utils.AssertUser(False, "Invalid operation")
 
-    elif f'/{username}/crud_orders' in request.path:
-        if len(request.path.split('/')) == 3:
-            print("Enterd crud_orders read successful", flush=True)
-            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read'), "You don't have permission for this resource")
-            
-            valid_sort_columns = {'id', 'date', 'price'}
-            valid_sort_orders = {'asc', 'desc'}
+    elif f'/{username}/crud_orders' in request.path and request.path.split('/')[3] == 'edit_order':
+        
+        print("Enterd crud_orders edit successful", flush=True)
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'update'), "You don't have permission for this resource")
 
-            sort_by = request.args.get('sort', 'desc')
-            sort_order = request.args.get('order', 'desc')
-            price_min = request.args.get('price_min', '', type=float)
-            price_max = request.args.get('price_max', '', type=float)
-            order_by_id = request.args.get('order_by_id', '', type=float)
-            date_from = request.args.get('date_from', '')
-            date_to = request.args.get('date_to', '')
-            status = request.args.get('status', '')
+        order_id = request.path.split('/')[4]
+
+        if request.method == 'GET':
+
+            order_id = request.path.split('/')[4]
 
             cur.execute("SELECT DISTINCT status FROM orders")
             statuses = cur.fetchall()
 
-            if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
-                sort_by = 'id'
-                sort_order = 'asc'
+            cur.execute("SELECT order_date FROM orders")
+            order_date = cur.fetchone()[0]
 
-            query = """
-                SELECT 
-                    o.order_id, 
-                    u.first_name || ' ' || u.last_name as user_names, 
-                    array_agg(p.name), 
-                    to_char(sum(oi.quantity * oi.price),'FM999999990.00') as order_price, 
-                    o.status, 
-                    to_char(o.order_date, 'YYYY-MM-DD HH:MI:SS') AS formatted_order_date
-                FROM orders AS o 
-                JOIN users AS u        ON o.user_id     = u.id 
-                JOIN order_items AS oi ON o.order_id    = oi.order_id 
-                JOIN products AS p     ON oi.product_id = p.id
-            """
-            # TODO: Da se slojat %s
-            if order_by_id != '':
-                query += f" WHERE o.order_id = {order_by_id} "
+            cur.execute("SELECT p.name, oi.quantity, oi.price FROM order_items AS oi JOIN products AS p ON oi.product_id = p.id WHERE order_id = %s", (order_id,))
+            products_from_order = cur.fetchall()
 
-            if (date_from != '' and date_to != '') and order_by_id == '':
-                query += f" WHERE o.order_date >= '{date_from}'::date AND o.order_date <= '{date_to}'::date "
+            all_products_sum = 0
+            for product in products_from_order:
+                all_products_sum += product[1] * product[2]
 
-            if status != '' and (date_from != '' and date_to != '') and order_by_id == '':
-                query += f" AND status = '{status}'"
+            return render_template('edit_order.html', order_id=order_id, username=username, statuses=statuses, order_date = order_date, products_from_order=products_from_order, all_products_sum=all_products_sum)
 
-            elif status != '' and order_by_id == '':
-                query += f" WHERE status = '{status}'"
+        elif request.method == 'POST':
 
-            query += " GROUP BY o.order_id, user_names "
+            print("Enterd crud_orders edit POST successful", flush=True)
+            data = process_form('CRUD Orders', 'edit')
 
-            if price_min != '' and price_max != '' and order_by_id == '':
-                query += f" HAVING sum(oi.quantity * oi.price) >= {price_min} AND sum(oi.quantity * oi.price) <= {price_max}"
+            # order_data = data['orders']
+            # item_data = data['order_items']
 
-            query += f" ORDER BY o.order_{sort_by} {sort_order}"
-
-            cur.execute(query)
-            orders = cur.fetchall()
-
-            return render_template('crud_orders.html', orders=orders, username=username, statuses=statuses, current_status=status, price_min=price_min, price_max=price_max, order_by_id=order_by_id, date_from=date_from, date_to=date_to)
-
-        elif request.path.split('/')[3] == 'add_order':
-            print("Enterd crud_orders add successful", flush=True)
-            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'create'), "You don't have permission for this resource")
-
-            if request.method == 'GET':
-                cur.execute("SELECT DISTINCT status FROM orders")
-                statuses = cur.fetchall()
-                return render_template('add_order.html', statuses=statuses, username=username)
-
-            elif request.method == 'POST':
-                print("Enterd crud_orders add POST successful", flush=True)
-                data = process_form('CRUD Orders', 'create')        
-
-                order_data = data['orders']
-                item_data = data['order_items']
-
-                print("order_data",flush=True)
-                print("item_data",flush=True)
-                print(order_data,flush=True)
-                print(item_data,flush=True)
-
-                cur.execute("SELECT id FROM users WHERE id = %s", (order_data['values'][0],))
-
-                utils.AssertUser(cur.fetchone()[0], "There is no such product with id " + str(order_data['values'][0]))
-            
-                #TODO(Done): Kude trqbva da se namira tova neshto (conn.autocommit) v koda  Start transaction
-                # conn.commit()
-                conn.autocommit = False
-                try:
-                    #TODO: Insert da bude v otdelna fukciq i da se podavat parametrite, koito trqbva da se insertnat
-                    # conn.autocommit = False
-
-                    query_one = f"INSERT INTO orders ({ order_data['fields'] }) VALUES ({ order_data['placeholders'] }) RETURNING order_id"
-                    cur.execute(query_one, order_data['values'])
-                    order_id = cur.fetchone()[0]
-
-                    order_item_values = (order_id,) + item_data['values']
-                    query_two = f"INSERT INTO order_items (order_id, {item_data['fields']}) VALUES (%s, {item_data['placeholders']})"
-                    cur.execute(query_two, order_item_values)
-
-                    conn.commit()
-
-                    session['crud_message'] = "Successfully added new order with id: " + str(order_id)
-                    return redirect(f'/{username}/crud_orders')
-
-                except Exception as e:
-                    conn.rollback()
-
-                    session['crud_error'] = "Failed to add order. Please try again."
-                    return redirect(f'/{username}/crud_orders')
-
-                finally:
-
-                    conn.autocommit = True
-
-            else:
-                utils.AssertUser(False, "Invalid operation")
-
-        elif request.path.split('/')[3] == 'edit_order':
-            print("Enterd crud_orders edit successful", flush=True)
-            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'update'), "You don't have permission for this resource")
-
-            order_id = request.path.split('/')[4]
-
-            if request.method == 'GET':
-
-                order_id = request.path.split('/')[4]
-
-                cur.execute("SELECT DISTINCT status FROM orders")
-                statuses = cur.fetchall()
-
-                cur.execute("SELECT order_date FROM orders")
-                order_date = cur.fetchone()[0]
-
-                cur.execute("SELECT p.name, oi.quantity, oi.price FROM order_items AS oi JOIN products AS p ON oi.product_id = p.id WHERE order_id = %s", (order_id,))
-                products_from_order = cur.fetchall()
-
-                all_products_sum = 0
-                for product in products_from_order:
-                    all_products_sum += product[1] * product[2]
-
-                print(all_products_sum, flush=True)
-
-                return render_template('edit_order.html', order_id=order_id, username=username, statuses=statuses, order_date = order_date, products_from_order=products_from_order, all_products_sum=all_products_sum)
-
-            elif request.method == 'POST':
-                print("Enterd crud_orders edit POST successful", flush=True)
-                data = process_form('CRUD Orders', 'edit')
-
-                print(data, flush=True)
-
-                # order_data = data['orders']
-                # item_data = data['order_items']
-
-                cur.execute("UPDATE orders SET status = %s, order_date = %s WHERE order_id = %s", (data['values'][0], data['values'][1], order_id))
-                # cur.execute("UPDATE order_items SET price = %s, quantity = %s WHERE order_id = %s AND product_id = %s", (item_data['values'][0], item_data['values'][1], order_id, product_id))
-                
-                conn.commit()
-                
-                session['crud_message'] = "Order was updated successfully with id = " + str(order_id)
-                return redirect(f'/{username}/crud_orders')
-
-            else:
-                utils.AssertUser(False, "Invalid operation")
-
-        elif request.path.split('/')[3] == 'delete_order':
-            print("Enterd crud_orders delete successful", flush=True)
-            utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'delete'), "You don't have permission to this resource")
-
-            order_id = request.path.split('/')[4]
-
-            cur.execute('DELETE FROM shipping_details WHERE order_id = %s', (order_id,))
-            cur.execute("DELETE FROM order_items WHERE order_id = %s", (order_id,))
-            cur.execute('DELETE FROM orders WHERE order_id = %s', (order_id,))
-            session['crud_message'] = "You successful deleted a  order with id: " + str(order_id)
+            cur.execute("UPDATE orders SET status = %s, order_date = %s WHERE order_id = %s", (data['values'][0], data['values'][1], order_id))
+            # cur.execute("UPDATE order_items SET price = %s, quantity = %s WHERE order_id = %s AND product_id = %s", (item_data['values'][0], item_data['values'][1], order_id, product_id))
             
             conn.commit()
-
+            
+            session['crud_message'] = "Order was updated successfully with id = " + str(order_id)
             return redirect(f'/{username}/crud_orders')
 
         else:
-            utils.AssertUser(False, "Invalid url")
+            utils.AssertUser(False, "Invalid operation")
+
+    elif f'/{username}/crud_orders' in request.path and request.path.split('/')[3] == 'delete_order':
+
+        print("Enterd crud_orders delete successful", flush=True)
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'delete'), "You don't have permission to this resource")
+
+        order_id = request.path.split('/')[4]
+
+        cur.execute('DELETE FROM shipping_details WHERE order_id = %s', (order_id,))
+        cur.execute("DELETE FROM order_items WHERE order_id = %s", (order_id,))
+        cur.execute('DELETE FROM orders WHERE order_id = %s', (order_id,))
+        session['crud_message'] = "You successful deleted a  order with id: " + str(order_id)
+        
+        conn.commit()
+
+        return redirect(f'/{username}/crud_orders')
+
     else:
         utils.AssertUser(False, "Invalid url") 
 
