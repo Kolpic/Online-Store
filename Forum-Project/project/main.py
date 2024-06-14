@@ -1512,6 +1512,18 @@ def back_office_manager(conn, cur, *params):
                 cw.writerow(headers)
             
                 for row in report_data:
+
+                    print(row, flush=True)
+
+                    date = row[0]
+                    _id = row[1][0]
+                    name = row[2][0]
+                    price = row[3]
+                    status = row[4][0]
+
+                    row = [date, int(_id), str(name), price, str(status)]
+                    print(row, flush=True)
+
                     cw.writerow(row)
                     si.seek(0)
                     yield si.getvalue()
@@ -1800,7 +1812,7 @@ def back_office_manager(conn, cur, *params):
         sort_order = request.args.get('order', 'desc')
         price_min = request.args.get('price_min', '', type=float)
         price_max = request.args.get('price_max', '', type=float)
-        order_by_id = request.args.get('order_by_id', '', type=float)
+        order_by_id = request.args.get('order_by_id', '', type=int)
         date_from = request.args.get('date_from', '')
         date_to = request.args.get('date_to', '')
         status = request.args.get('status', '')
@@ -1819,7 +1831,7 @@ def back_office_manager(conn, cur, *params):
                 array_agg(p.name), 
                 to_char(sum(oi.quantity * oi.price),'FM999999990.00') as order_price, 
                 o.status, 
-                to_char(o.order_date, 'YYYY-MM-DD HH:MI:SS') AS formatted_order_date
+                to_char(o.order_date, 'MM-DD-YYYY HH:MI:SS') AS formatted_order_date
             FROM orders AS o 
             JOIN users AS u        ON o.user_id     = u.id 
             JOIN order_items AS oi ON o.order_id    = oi.order_id 
@@ -1847,6 +1859,9 @@ def back_office_manager(conn, cur, *params):
 
         cur.execute(query)
         orders = cur.fetchall()
+        loaded_orders = len(orders)
+
+        session['crud_message'] = "Only 50 orders are displayed based on the filters"
 
         return render_template('crud_orders.html', orders=orders, username=username, statuses=statuses, current_status=status, price_min=price_min, price_max=price_max, order_by_id=order_by_id, date_from=date_from, date_to=date_to)
 
