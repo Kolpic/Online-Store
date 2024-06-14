@@ -1935,12 +1935,12 @@ def back_office_manager(conn, cur, *params):
             cur.execute("SELECT order_date FROM orders")
             order_date = cur.fetchone()[0]
 
-            cur.execute("SELECT p.name, oi.quantity, oi.price FROM order_items AS oi JOIN products AS p ON oi.product_id = p.id WHERE order_id = %s", (order_id,))
+            cur.execute("SELECT p.id, p.name, oi.quantity, oi.price, sum(oi.quantity * oi.price) as total_price FROM order_items AS oi JOIN products AS p ON oi.product_id = p.id WHERE order_id = %s GROUP BY p.id, p.name, oi.quantity, oi.price", (order_id,))
             products_from_order = cur.fetchall()
 
             all_products_sum = 0
             for product in products_from_order:
-                all_products_sum += product[1] * product[2]
+                all_products_sum += product[2] * product[3]
 
             return render_template('edit_order.html', order_id=order_id, username=username, statuses=statuses, order_date = order_date, products_from_order=products_from_order, all_products_sum=all_products_sum)
 

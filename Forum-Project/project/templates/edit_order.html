@@ -27,20 +27,24 @@
          <table class="table">
             <thead>
                 <tr>
+                    <th>Product ID</a></th>
                     <th>Product name</a></th>
                     <th class="text-center">Product quantity</a></th>
                     <th class="text-right">Product price</th>
+                    <th class="text-right">Total product price</th>
                 </tr>
             </thead>
             <tbody>
                 {% for product in products_from_order %}
                 <tr>
                     <td>{{ product[0] }}</td>
-                    <td class="text-center">{{ product[1] }}</td>
-                    <td class="text-right">{{ product[2] }} {{"лв"}}</td>
+                    <td>{{ product[1] }}</td>
+                    <td class="text-center">{{ product[2] }}</td>
+                    <td class="text-right">{{ product[3] }} {{"лв"}}</td>
+                    <td class="text-right">{{ product[4] }} {{"лв"}}</td>
                 </tr>
                 {% endfor %}
-                <td colspan="3" class="text-right">{{ "Total price:   " }} {{ all_products_sum }} {{"лв"}}</td>
+                <td colspan="5" class="text-right">{{ "Total price:   " }} {{ all_products_sum }} {{"лв"}}</td>
             </tbody>
             </table>
     </div>
