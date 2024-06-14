@@ -107,6 +107,19 @@
         {% else %}
         <br>
         <h2>No records with these filters</h2>
+         <form action="/{{ username }}/download_report_without_generating_rows_in_the_html" method="post">
+            <input type="hidden" name="date_from" value="{{ request.form['date_from'] }}">
+            <input type="hidden" name="date_to" value="{{ request.form['date_to'] }}">
+            <input type="hidden" name="group_by" value="{{ request.form['group_by'] }}">
+            <input type="hidden" name="status" value="{{ request.form['status'] }}">
+            <input type="hidden" name="total_records" value="0">  <!-- Adjust total_records if needed -->
+            <input type="hidden" name="total_price" value="0">   <!-- Adjust total_price if needed -->
+            <select name="format" class="form-control">
+                <option value="csv">CSV</option>
+            </select>
+            <br>
+            <button type="submit" class="btn btn-secondary">Download Report</button>
+        </form>
         {% endif %}
     </div>
     <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>

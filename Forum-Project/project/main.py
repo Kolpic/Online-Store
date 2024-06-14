@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, session, abort, Response, jsonify, flash, make_response, request
+from flask import Flask, request, render_template, redirect, url_for, session, abort, Response, jsonify, flash, make_response, request, stream_with_context
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
 from decimal import Decimal
@@ -24,6 +24,7 @@ from project import utils
 from .models import User
 from sqlalchemy import or_
 import traceback
+import itertools
 
 # from project.error_handlers import not_found
 # from project import exception
@@ -1176,8 +1177,8 @@ def add_products_from_file(conn, cur, string_path):
         return "Imprted"
 
 def generate_orders(conn, cur):
-    number_products_to_import = 100000
-    utils.create_random_orders(number_products_to_import, cur)
+    number_products_to_import = 100
+    utils.create_random_orders(number_products_to_import, cur, conn)
     conn.commit()
 
     return "Successfully imported products: " + str(number_products_to_import)
@@ -1228,6 +1229,7 @@ def get_active_users(sort_by='id', sort_order='desc', name=None, email=None, use
 
 def back_office_manager(conn, cur, *params):
     if 'staff_username' not in session:
+        print(session, flush=True)
         return redirect('/staff_login')
 
     username = session.get('staff_username')
@@ -1332,6 +1334,9 @@ def back_office_manager(conn, cur, *params):
             status = request.form.get('status')
             filter = request.form.get('filter')
             order_id = request.form.get('sale_id')
+
+            page = request.args.get('page', 1, type=int)
+            per_page = 1000  
 
             utils.AssertUser(date_from or date_to, "You have to select a date from, date to")
 
@@ -1438,56 +1443,91 @@ def back_office_manager(conn, cur, *params):
         else:
             utils.AssertUser(False, "Invalid url")
 
-    if request.path == f'/{username}/download_report':
-        # TODO(Done) abstraktno - for loop and 1 if
-        keys = ['date_from', 'date_to', 'group_by', 'status', 'total_records', 'total_price', 'report_data', 'format']
-        form_data = {key: request.form.get(key, '') for key in keys}
-        # date_from = request.form['date_from']
-        # date_to = request.form['date_to']
-        # group_by = request.form['group_by']
-        # status = request.form['status']
-        # total_records = request.form['total_records']
-        # total_price = request.form['total_price']
-        # report_data = request.form['report_data']
+    if request.path == f'/{username}/download_report_without_generating_rows_in_the_html':
 
-        headers = ['Date', 'Order ID\'s', 'Name of Buyers', 'Total Price', 'Order Status']
+        form_data = {key: request.form.get(key, '') for key in ['date_from', 'date_to', 'format']}
+
+        if form_data['format'] == 'csv':
+            def generate():
+                conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+
+                si = io.StringIO()
+                cw = csv.writer(si)
+                headers = ['Date', 'Order ID', 'Customer Name', 'Total Price', 'Status']
+                cw.writerow(headers)
+                si.seek(0)
+                yield si.getvalue()
+                si.truncate(0)
+                si.seek(0)
+                
+                offset = 0
+
+                while True:
+                    rows_fetched = False
+                    batch = utils.fetch_batches(conn, form_data['date_from'], form_data['date_to'], offset)               
+
+                    for row in batch:
+                        rows_fetched = True
+
+                        for innerRow in row:
+                        
+                            cw.writerow(innerRow)
+                            si.seek(0)
+                            yield si.getvalue()
+                            si.truncate(0)
+
+                    if not rows_fetched: 
+                        break
+                    offset += 50000
+
+                si.close()
+                conn.close()
+
+            response = Response(stream_with_context(generate()), mimetype='text/csv')
+            response.headers['Content-Disposition'] = f'attachment; filename={username}_report.csv'
+            return response
+
+
+    if request.path == f'/{username}/download_report':
+
+        keys = ['date_from', 'date_to', 'group_by', 'status', 'total_records', 'total_price', 'report_data', 'format']
+
+        form_data = {key: request.form.get(key, '') for key in keys}
+
         report_data = json.loads(form_data['report_data'])
 
-        # TODO: Streaming ib Flask download
+        headers = ['Date', 'Order ID\'s', 'Name of Buyers', 'Total Price', 'Order Status']
+
         if form_data['format'] == 'csv':
-            si = io.StringIO()
-            cw = csv.writer(si)
 
-            cw.writerow(['Filters:'])
-            filter_keys = ['Date From', 'Date To', 'Group By', 'Status']
-            for key in filter_keys:
-                cw.writerow([f'{key}:', form_data[key.lower().replace(' ', '_')]])
+            def generate():
+                si = io.StringIO()
+                cw = csv.writer(si)
 
-            # headers = ['Date', 'Order ID\'s', 'Name of Buyers', 'Total Price', 'Order Status']
-            cw.writerow(headers)
-            # cw.writerow(['Date', 'Order ID\'s', 'Name of Buyers', 'Total Price', 'Order Status'])
+                cw.writerow(['Filters:'])
+                filter_keys = ['Date From', 'Date To', 'Group By', 'Status']
+                for key in filter_keys:
+                    cw.writerow([f'{key}:', form_data[key.lower().replace(' ', '_')]])
+
+                cw.writerow(headers)
             
-            # report_data = json.loads(form_data['report_data'])
-            for row in report_data:
-                cw.writerow(row)
+                for row in report_data:
+                    cw.writerow(row)
+                    si.seek(0)
+                    yield si.getvalue()
+                    si.truncate(0)
+                    si.seek(0)
 
-            cw.writerow(['Total Records:', form_data['total_records'], 'Total:', form_data['total_price']])
-            # for row in json.loads(report_data):
-            #     cw.writerow(row)
-            # cw.writerow(['Total Records: ', total_records, 'Total: ', total_price])
+                
+                cw.writerow(['Total Records:', form_data['total_records'], 'Total:', form_data['total_price']])
+                si.seek(0)
+                yield si.getvalue()
+                si.close()
 
-            # cw.writerow(['Filters'])
-            # cw.writerow(['Date From:', date_from])
-            # cw.writerow(['Date To:', date_to])
-            # cw.writerow(['Group By:', group_by])
-            # cw.writerow(['Status:', status])
-
-            output = si.getvalue()
-            si.close()
-
-            response = Response(output, mimetype= 'text/csv')
+            response = Response(stream_with_context(generate()), mimetype= 'text/csv')
             response.headers['Content-Disposition'] = 'attachment; filename=report.csv'
             return response
+
         elif form_data['format'] == 'excel':
             wb = Workbook()
             ws = wb.active
@@ -1956,7 +1996,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/staff_portal', staff_portal),
     (r'(?:/[A-z]+)?/logout_staff', logout_staff),
     (r'(/[A-z]+)/logout_staff', logout_staff),
-    (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users)(?:/[\w\d\-_/]*)?', back_office_manager),
+    (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 
 @app.endpoint("handle_request")

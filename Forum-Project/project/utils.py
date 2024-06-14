@@ -73,7 +73,11 @@ def get_current_user(request, cur):
         return get_user_by_session(session_id, cur)
 
 def get_user_by_session(session_id, cur):
+    # NOW -> now
     cur.execute("SELECT data FROM custom_sessions WHERE session_id = %s AND expires_at > NOW()", (session_id,))
+
+    # utils.AssertDev(rowcounut = 1)
+
     result = cur.fetchone()
 
     if result:
@@ -87,7 +91,7 @@ def clear_expired_sessions(cur, conn):
 
 def update_current_user_session_data(cur, conn, new_data, session_id):
     cur.execute("UPDATE custom_sessions SET data = %s WHERE session_id = %s", (new_data, session_id))
-    conn.commit();
+    conn.commit()
 
 def get_user_session_id(request):
     return request.cookies.get('session_id')
@@ -125,15 +129,22 @@ def fetch_products_from_db(cur):
     products = cur.fetchall()
     return [{'id': product[0], 'price': product[1]} for product in products]
 
-def create_random_orders(number_orders, cur):
+def create_random_orders(number_orders, cur, conn):
 
     verified_users = fetch_verified_users(cur)
-    start_date = datetime(2020, 1, 1)
+    start_date = datetime(1950, 1, 1)
     end_date = datetime.now()
     statuses = ['Ready for Paying', 'Paid']
     products = fetch_products_from_db(cur)
 
+    counter = 0
+
     for _ in range(number_orders):
+
+        if counter == 100000:
+            print("Successfully imported 100 000 products", flush=True)
+            conn.commit()
+            counter = 0
 
         user_id = random.choice(verified_users)
         num_products = random.randint(1, 5)
@@ -145,7 +156,34 @@ def create_random_orders(number_orders, cur):
 
         for _ in range(num_products):
             product = random.choice(products)
-            quantity = random.randint(1, 10)
+            quantity = random.randint(1, 3)
             price = product['price']
 
             cur.execute("INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (%s, %s, %s, %s)", (order_id, product['id'], quantity, price))
+
+        counter = counter + 1
+
+def fetch_batches(conn, date_from, date_to, offset, batch_size=50000):
+
+    print("offset", flush=True)
+    print(offset, flush=True)
+
+    with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
+
+        query = """
+            SELECT DATE(date_trunc('second',o.order_date)) as datee, o.order_id as ooid, o.status as ss, u.first_name as fn, SUM(oi.quantity * oi.price) AS total_price 
+            FROM orders AS o 
+            JOIN users AS u ON o.user_id = u.id
+            JOIN order_items AS oi ON o.order_id = oi.order_id
+            WHERE order_date >= '2024-06-01 21:00:00' and order_date <= '2024-06-02 00:00:00'
+            GROUP BY datee, o.order_id, u.first_name, u.last_name, oi.quantity, oi.price
+            ORDER BY order_date
+            LIMIT %s OFFSET %s
+        """
+        cur.execute(query, (batch_size, offset))
+        while True:
+            rows = cur.fetchmany(batch_size)
+
+            if not rows:
+                break
+            yield rows
