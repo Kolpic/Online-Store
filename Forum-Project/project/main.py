@@ -1808,7 +1808,7 @@ def back_office_manager(conn, cur, *params):
         valid_sort_columns = {'id', 'date', 'price'}
         valid_sort_orders = {'asc', 'desc'}
 
-        sort_by = request.args.get('sort', 'desc')
+        sort_by = request.args.get('sort', 'id')
         sort_order = request.args.get('order', 'desc')
         price_min = request.args.get('price_min', '', type=float)
         price_max = request.args.get('price_max', '', type=float)
@@ -1820,45 +1820,46 @@ def back_office_manager(conn, cur, *params):
         cur.execute("SELECT DISTINCT status FROM orders")
         statuses = cur.fetchall()
 
-        if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
-            sort_by = 'id'
-            sort_order = 'asc'
-
         query = """
             SELECT 
                 o.order_id, 
                 u.first_name || ' ' || u.last_name as user_names, 
-                array_agg(p.name), 
+                array_agg(p.name) as product_names,
                 to_char(sum(oi.quantity * oi.price),'FM999999990.00') as order_price, 
                 o.status, 
                 to_char(o.order_date, 'MM-DD-YYYY HH:MI:SS') AS formatted_order_date
-            FROM orders AS o 
-            JOIN users AS u        ON o.user_id     = u.id 
+            FROM orders      AS o 
+            JOIN users       AS u  ON o.user_id     = u.id 
             JOIN order_items AS oi ON o.order_id    = oi.order_id 
-            JOIN products AS p     ON oi.product_id = p.id
+            JOIN products    AS p  ON oi.product_id = p.id
+            WHERE 1=1
         """
-        # TODO: Da se slojat %s
-        if order_by_id != '':
-            query += f" WHERE o.order_id = {order_by_id} "
 
-        if (date_from != '' and date_to != '') and order_by_id == '':
-            query += f" WHERE o.order_date >= '{date_from}'::date AND o.order_date <= '{date_to}'::date "
+        params = []
+        if order_by_id:
+            query += " AND o.order_id = %s"
+            params.append(order_by_id)
 
-        if status != '' and (date_from != '' and date_to != '') and order_by_id == '':
-            query += f" AND status = '{status}'"
+        if date_from and date_to and order_by_id == '':
+            query += " AND o.order_date >= %s AND o.order_date <= %s"
+            params.extend([date_from, date_to])
 
-        elif status != '' and order_by_id == '':
-            query += f" WHERE status = '{status}'"
+        if status and order_by_id == '':
+            query += " AND o.status = %s"
+            params.append(status)
 
-        query += " GROUP BY o.order_id, user_names "
+        if price_min and price_max and order_by_id == '':
+            query += "GROUP BY o.order_id, user_names HAVING sum(oi.quantity * oi.price) >= %s AND sum(oi.quantity * oi.price) <= %s"
+            params.extend([price_min, price_max])
 
-        if price_min != '' and price_max != '' and order_by_id == '':
-            query += f" HAVING sum(oi.quantity * oi.price) >= {price_min} AND sum(oi.quantity * oi.price) <= {price_max}"
+        if price_min == '' and price_max == '':
+            query += " GROUP BY o.order_id, user_names "
 
         query += f" ORDER BY o.order_{sort_by} {sort_order} LIMIT 50"
 
-        cur.execute(query)
+        cur.execute(query, params)
         orders = cur.fetchall()
+
         loaded_orders = len(orders)
 
         session['crud_message'] = "Only 50 orders are displayed based on the filters"
