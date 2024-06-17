@@ -1429,7 +1429,7 @@ def back_office_manager(conn, cur, *params):
 
                     if not rows_fetched: 
                         break
-                    offset += 50000
+                    offset += 100
 
                 si.close()
                 conn.close()

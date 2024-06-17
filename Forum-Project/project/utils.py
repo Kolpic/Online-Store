@@ -163,7 +163,7 @@ def create_random_orders(number_orders, cur, conn):
 
         counter = counter + 1
 
-def fetch_batches(conn, date_from, date_to, offset, batch_size=50000):
+def fetch_batches(conn, date_from, date_to, offset, batch_size=100):
 
     print("offset", flush=True)
     print(offset, flush=True)
@@ -175,7 +175,7 @@ def fetch_batches(conn, date_from, date_to, offset, batch_size=50000):
             FROM orders AS o 
             JOIN users AS u ON o.user_id = u.id
             JOIN order_items AS oi ON o.order_id = oi.order_id
-            WHERE order_date >= '2015-06-01 21:00:00' and order_date <= '2024-06-02 00:00:00'
+            WHERE order_date >= '2024-01-01 21:00:00' and order_date <= '2024-03-20 00:00:00'
             GROUP BY datee, o.order_id, u.first_name, u.last_name, oi.quantity, oi.price
             ORDER BY order_date
             LIMIT %s OFFSET %s
