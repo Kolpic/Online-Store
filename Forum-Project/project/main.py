@@ -26,12 +26,6 @@ from sqlalchemy import or_
 import traceback
 import itertools
 
-# from project.error_handlers import not_found
-# from project import exception
-# import re
-# import secrets
-# import bcrypt
-
 # https://stackoverflow.com/questions/23327293/flask-raises-templatenotfound-error-even-though-template-file-exists
 app = Flask(__name__)
 # MAIL Configuration
@@ -52,22 +46,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 from .models import db
 db.init_app(app)
 migrate = Migrate(app, db)
-
-# with app.app_context():
-#     db.create_all()
-
-# End of database configuration migration
-
-# Config for session to store in db
-# app.config['SESSION_TYPE'] = 'sqlalchemy'
-# app.config['SESSION_SQLALCHEMY'] = db
-# app.config['SESSION_SQLALCHEMY_TABLE'] = 'sessions'
-# app.config['SESSION_PERMANENT'] = True
-# app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=1)
-
-# Initialize Flask-Session
-# Session(app)
-
 
 # Dev database
 database = config.database
@@ -444,19 +422,13 @@ def login(conn, cur):
     utils.AssertUser(utils.verify_password(password_, user_data['password']), "Invalid email or password")
     utils.AssertUser(user_data['verification_status'], "Your account is not verified or has been deleted")
 
-    # session['user_email'] = email
-
     session_id = utils.create_session(os, datetime, timedelta, email, cur, conn)
     response = make_response(redirect('/home'))
     response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
 
     return response
 
-
 def home(conn, cur, page = 1):
-    # if not utils.is_authenticated():
-    #     return redirect('/login')
-
     is_auth_user =  utils.get_current_user(request, cur)
 
     if is_auth_user == None:
@@ -520,7 +492,7 @@ def home(conn, cur, page = 1):
     # total_pages = int(total_products / products_per_page) + 1
     total_pages = (total_products // products_per_page) + (1 if total_products % products_per_page > 0 else 0)
 
-    cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,)) # session.get('user_email')
+    cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,))
     user_id = cur.fetchone()[0]
 
     cart_count = get_cart_items_count(conn, cur, user_id)
@@ -536,21 +508,13 @@ def logout(conn, cur):
     response.set_cookie('session_id', '', expires=0)
     return response
 
-    # session.pop('user_email', None)
-    # session.clear()
-    # return redirect('/home')
-
 def profile(conn, cur):
-    # TODO: sigurnost na sesiqta
-    # if 'user_email' not in session:
-    #     return redirect('/login')
-
     is_auth_user =  utils.get_current_user(request, cur)
 
     if is_auth_user == None:
        return redirect('/login') 
     
-    cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (is_auth_user,)) #session['user_email']
+    cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (is_auth_user,))
     user_details = cur.fetchone()
     conn.commit()
 
@@ -560,8 +524,6 @@ def profile(conn, cur):
     return render_template('profile.html')
 
 def update_profile(conn, cur):
-    # if 'user_email' not in session:
-    #     return redirect('/login')
     is_auth_user =  utils.get_current_user(request, cur)
 
     if is_auth_user == None:
@@ -615,7 +577,7 @@ def update_profile(conn, cur):
 
     query_string = query_string[:-2]
     query_string += " WHERE email = %s"
-    # email_in_session = session['user_email']
+
     email_in_session = utils.get_current_user(request, cur)
     fields_list.append(email_in_session)
 
@@ -625,7 +587,6 @@ def update_profile(conn, cur):
     
     # Update session email if email was changed
     if email:
-        # session['user_email'] = email
         utils.update_current_user_session_data(cur, conn, email, utils.get_user_session_id(request))
     
     updated_fields_message = ', '.join(updated_fields)
@@ -633,10 +594,6 @@ def update_profile(conn, cur):
     return redirect('/home')
 
 def delete_account(conn, cur):
-    # if 'user_email' not in session:
-    #     return redirect('/login')
-
-    # user_email = session['user_email']
     is_auth_user =  utils.get_current_user(request, cur)
 
     if is_auth_user == None:
@@ -651,11 +608,6 @@ def delete_account(conn, cur):
     response.set_cookie('session_id', '', expires=0)
     session['login_message'] = 'You successful deleted your account'
     return response
-
-    # session.clear()
-    # session['login_message'] = 'You successful deleted your account'
-    # return redirect('/login')
-
 # 
 def recover_password(conn, cur):
     assertIsProvidedMethodsTrue('POST')
@@ -800,8 +752,6 @@ def log_exception(conn, cur, exception_type, message ,email = None):
     conn.commit()
 
 def add_product(conn, cur):
-    # if 'staff_username' not in session:
-    #     return redirect('/staff_login')
     is_auth_user =  utils.get_current_user(request, cur)
 
     if is_auth_user == None:
@@ -894,14 +844,10 @@ def remove_from_cart(conn, cur, item_id):
     return "You successfully deleted item."
 
 def add_to_cart_meth(conn, cur):
-    # if 'user_email' not in session:
-    #     return redirect('/login')
     is_auth_user =  utils.get_current_user(request, cur)
 
     if is_auth_user == None:
        return redirect('/login')
-
-    # user_email = session.get('user_email')
 
     cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,))
     user_id = cur.fetchone()[0]
@@ -915,8 +861,6 @@ def add_to_cart_meth(conn, cur):
     return jsonify({'message':response, 'newCartCount': newCartCount})
 
 def cart(conn, cur):
-    # if 'user_email' not in session:
-    #     return redirect('/login')
     is_auth_user =  utils.get_current_user(request, cur)
 
     if is_auth_user == None:
@@ -928,7 +872,6 @@ def cart(conn, cur):
         if form_data:
             session.modified = True
 
-        # user_email = session.get('user_email')
         cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,))
         user_id = cur.fetchone()[0]
         items = view_cart(conn, cur, user_id)
@@ -947,7 +890,7 @@ def cart(conn, cur):
     country_code = request.form['country_code']
     phone = request.form['phone'].strip()
 
-    cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,)) # session.get('user_email')
+    cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,))
     user_id = cur.fetchone()[0]
     regexx = r'^\d{7,15}$'
 
@@ -1041,9 +984,6 @@ def cart(conn, cur):
     return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum=total_sum)
 
 def remove_from_cart_meth(conn, cur):
-    # if 'user_email' not in session:
-    #     return redirect('/login')
-
     is_auth_user =  utils.get_current_user(request, cur)
 
     if is_auth_user == None:
@@ -1055,9 +995,6 @@ def remove_from_cart_meth(conn, cur):
     return redirect('/cart')
 
 def finish_payment(conn, cur):
-    # if 'user_email' not in session:
-    #     return redirect('/login')
-
     is_auth_user =  utils.get_current_user(request, cur)
 
     if is_auth_user == None:
@@ -1137,11 +1074,18 @@ def staff_login(conn, cur):
     utils.AssertUser(cur.fetchone(), "There is no registration with this staff username and password")
 
     session['staff_username'] = username
-    return redirect('/staff_portal')
+
+    session_id = utils.create_session(os, datetime, timedelta, username, cur, conn)
+    response = make_response(redirect('/staff_portal'))
+    response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
+
+    return response
 
 def staff_portal(conn, cur):
-    if 'staff_username' not in session:
-        return redirect('/staff_login')
+    is_auth_user =  utils.get_current_user(request, cur)
+
+    if is_auth_user == None:
+       return redirect('/staff_login')
 
     if 'visited' not in session:
         session['visited'] = True
@@ -1153,8 +1097,13 @@ def staff_portal(conn, cur):
         return render_template('staff_portal.html')
     
 def logout_staff(conn, cur):
-    session.pop('staff_username', None) 
-    return redirect('/staff_login')
+    session_id = request.cookies.get('session_id')
+
+    cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (session_id,))
+    conn.commit()
+    response = make_response(redirect('/staff_login'))
+    response.set_cookie('session_id', '', expires=0)
+    return response
 
 def add_products_from_file(conn, cur, string_path):
     with open(string_path, mode='r', encoding='utf-8') as file:
@@ -1228,11 +1177,12 @@ def get_active_users(sort_by='id', sort_order='desc', name=None, email=None, use
     return active_users
 
 def back_office_manager(conn, cur, *params):
-    if 'staff_username' not in session:
-        print(session, flush=True)
-        return redirect('/staff_login')
+    is_auth_user =  utils.get_current_user(request, cur)
 
-    username = session.get('staff_username')
+    if is_auth_user == None:
+       return redirect('/staff_login')
+
+    username = is_auth_user
     username_from_url = request.path.split('/')[1]
 
     if username != username_from_url:
@@ -1993,7 +1943,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/verify', verify),
     (r'/login', login),
     (r'/home(?:\?page=([1-9]+)\?[A-z,\=,\&]+)?', home),
-    (r'/logout', logout),
+    (r'(?:/[A-z]+)?/logout', logout),
     (r'(?:/[A-z]+)?/profile', profile),
     (r'(?:/[A-z]+)?/update_profile', update_profile),
     (r'(?:/[A-z]+)?/delete_account', delete_account),
@@ -2022,12 +1972,22 @@ def handle_request(username=None, path=''):
     try:
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor()
-        staff_username = user_email = session.get('staff_username')
+        # staff_username = user_email = utils.get_current_user(request, cur)
+        user_email = None
+        staff_username = None
 
-        if 'user_email' in session:
-            current_user = User.query.filter_by(email=session['user_email']).first()
-            if current_user:
-                current_user.update_last_active()
+        if request.path == '/home' or '/profile' and '/staff_portal' not in request.path and '/crud' not in request.path and '/error_logs' not in request.path and '/update_captcha_settings' not in request.path and '/report_sales' not in request.path and '/report_sales' not in request.path and '/role_permissions' not in request.path and '/active_users' not in request.path:
+            staff_username = None
+            user_email = utils.get_current_user(request, cur)
+        else:
+            user_email = None
+            staff_username = utils.get_current_user(request, cur)
+
+        if user_email is not None:
+            cur.execute("SELECT last_active FROM users WHERE email = %s", (user_email,))
+            current_user_last_active = cur.fetchone()[0]
+            cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (user_email,))
+            conn.commit()
         
         if staff_username is not None:
            if username is None:
@@ -2053,7 +2013,7 @@ def handle_request(username=None, path=''):
         else:
             return funtion_to_call(conn, cur)
     except Exception as message:
-        user_email = session.get('user_email', 'Guest')
+        user_email = utils.get_current_user(request, cur)
         traceback_details = traceback.format_exc()
         log_exception(conn, cur, message.__class__.__name__, str(message), user_email)
 
