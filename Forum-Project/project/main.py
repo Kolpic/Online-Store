@@ -78,6 +78,15 @@ def refresh_captcha(conn, cur):
     session["captcha_id"] = captcha_id
     return jsonify({'first': first_captcha_number, 'second': second_captcha_number, 'captcha_id': captcha_id})
 
+def handle_image_field(image_data):
+    print("image_data.filename.split('.')[-1]", flush=True)
+    print(image_data.filename.split('.')[-1], flush=True)
+
+    utils.AssertUser(image_data.filename.split('.')[-1] in FIELD_CONFIG['CRUD Products']['create']['image']['conditions_image'], "Invalid image file extension (must be one of jpg, jpeg, png)")
+    filename = secure_filename(image_data.filename)
+    image_data = validate_image_size(image_data.stream)
+    return image_data
+
 # Configuration for each field
 FIELD_CONFIG = {
     'CRUD Products': {
@@ -87,7 +96,7 @@ FIELD_CONFIG = {
             'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "Quantity must be a positive number")]},
             'category': {'type': str, 'required': True},
             # TODO: validator -> conditions
-            'image': {'type': 'file', 'required': True, 'validator': ALLOWED_EXTENSIONS},
+            'image': {'type': 'file', 'required': True, 'conditions_image': ALLOWED_EXTENSIONS,'handler': handle_image_field},
             'currency_id': {'type': int, 'required': True},
         },
         'edit': {
@@ -128,15 +137,9 @@ FIELD_CONFIG = {
     }
 }
 
-special_field_handlers = {
-    'image': lambda field_data: handle_image_field(field_data)
-}
-
-def handle_image_field(image_data):
-    utils.AssertUser(image_data.filename.split('.')[-1] in FIELD_CONFIG['CRUD Products']['create']['image']['validator'], "Invalid image file extension (must be one of jpg, jpeg, png)")
-    filename = secure_filename(image_data.filename)
-    image_data = validate_image_size(image_data.stream)
-    return image_data
+# special_field_handlers = {
+#     'image': lambda field_data: handle_image_field(field_data)
+# }
 
 def get_field_config(interface, method):
     return FIELD_CONFIG.get(interface, {}).get(method, {}) # return the right fields for the interface with the metod we provided
@@ -193,7 +196,7 @@ def process_form(interface, method):
 
             if config_dict['type'] == 'file':
                 value = request.files.get(section)
-                value = special_field_handlers['image'](value) if section == 'image' else value
+                value = config_dict['handler'](value)
             else:
                 value = request.form.get(section)
 
@@ -2007,7 +2010,7 @@ def handle_request(username=None, path=''):
         user_email = None
         staff_username = None
 
-        if request.path == '/home' or '/profile' and '/staff_portal' not in request.path and '/crud' not in request.path and '/error_logs' not in request.path and '/update_captcha_settings' not in request.path and '/report_sales' not in request.path and '/report_sales' not in request.path and '/role_permissions' not in request.path and '/active_users' not in request.path and '/download_report_without_generating_rows_in_the_html' not in request.path:
+        if request.path == '/home' or '/profile' and '/staff_portal' not in request.path and '/crud' not in request.path and '/error_logs' not in request.path and '/update_captcha_settings' not in request.path and '/report_sales' not in request.path and '/download_report' not in request.path and '/role_permissions' not in request.path and '/active_users' not in request.path and '/download_report_without_generating_rows_in_the_html' not in request.path:
             staff_username = None
             user_email = utils.get_current_user(request, cur)
         else:
