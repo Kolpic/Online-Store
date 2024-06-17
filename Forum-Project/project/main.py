@@ -88,12 +88,14 @@ FIELD_CONFIG = {
             'category': {'type': str, 'required': True},
             # TODO: validator -> conditions
             'image': {'type': 'file', 'required': True, 'validator': ALLOWED_EXTENSIONS},
+            'currency_id': {'type': int, 'required': True},
         },
         'edit': {
             'name': {'type': str, 'required': True},
             'price': {'type': float, 'required': True, 'conditions': [(lambda x: x > 0, "Price must be a positive number")]},
             'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x >= 0, "Quantity must not be negative")]},
             'category': {'type': str, 'required': True},
+            'currency': {'type': int, 'required': True},
         }
     },
     'Staff roles': {
@@ -239,6 +241,9 @@ def process_form(interface, method):
             'placeholders': ', '.join(['%s'] * len(form_data)),
             'values': tuple(form_data.values())
         }
+
+        print("values_to_insert_db", flush=True)
+        print(values_to_insert_db, flush=True)
     else:
         print("NO", flush=True)
         for table_name, fields_data in form_data.items():
@@ -478,7 +483,7 @@ def home(conn, cur, page = 1):
         price_filter = " AND price BETWEEN %s AND %s"
         query_params.extend([price_min, price_max])
 
-    query = f"SELECT * FROM products WHERE TRUE{name_filter}{category_filter}{price_filter} ORDER BY {order_by_clause} LIMIT %s OFFSET %s"
+    query = f"SELECT p.id, p.name, p.price, p.quantity, p.category, c.symbol FROM products AS p JOIN currencies AS c ON p.currency_id=c.id WHERE TRUE{name_filter}{category_filter}{price_filter} ORDER BY {order_by_clause} LIMIT %s OFFSET %s"
     query_params.extend([products_per_page, offset])
 
     cur.execute(query,tuple(query_params))
@@ -820,9 +825,11 @@ def add_to_cart(conn, cur, user_id, product_id, quantity):
 
 def view_cart(conn, cur, user_id):
     cur.execute("""
-                SELECT p.name, p.price, ci.quantity, p.id FROM CARTS AS c 
-                JOIN cart_itmes AS ci ON c.cart_id=ci.cart_id 
-                JOIN products AS p ON ci.product_id=p.id 
+                SELECT p.name, p.price, ci.quantity, p.id, currencies.symbol
+                FROM     CARTS      AS c 
+                    JOIN cart_itmes AS ci ON c.cart_id     = ci.cart_id 
+                    JOIN products   AS p  ON ci.product_id = p.id
+                    JOIN currencies AS currencies  ON p.currency_id = currencies.id
                 WHERE c.user_id = %s
                 """, (user_id,))
     items = cur.fetchall()
@@ -875,6 +882,9 @@ def cart(conn, cur):
         cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,))
         user_id = cur.fetchone()[0]
         items = view_cart(conn, cur, user_id)
+
+        print(items, flush=True)
+
         total_sum = sum(item[1] * item[2] for item in items)
         cur.execute("SELECT * FROM country_codes")
         country_codes = cur.fetchall()
@@ -911,8 +921,10 @@ def cart(conn, cur):
     cart_id = cur.fetchone()[0]
 
     cur.execute("""
-                SELECT ci.product_id, p.name, ci.quantity, p.price FROM cart_itmes AS ci
-                JOIN products AS p ON ci.product_id = p.id
+                SELECT ci.product_id, p.name, ci.quantity, p.price, currencies.symbol 
+                FROM cart_itmes     AS ci
+                    JOIN products   AS p          ON ci.product_id = p.id
+                    JOIN currencies AS currencies ON p.currency_id = currencies.id
                 WHERE ci.cart_id = %s
                 """, (cart_id,))
     cart_items = cur.fetchall()
@@ -922,7 +934,7 @@ def cart(conn, cur):
 
     # Check and change quantity 
     for item in cart_items:
-        product_id_, name, quantity, price = item
+        product_id_, name, quantity, price, symbol = item
         if quantity > quantity_db:
             session['cart_error'] = "We don't have " + str(quantity) + " from product: " + str(name) + " in our store. You can purchase less or to remove the product from your cart"
             utils.add_form_data_in_session(session.get('form_data'))
@@ -932,7 +944,7 @@ def cart(conn, cur):
     # current_prices = {item['poroduct_id']: item['price'] for item in cart_items}
     price_mismatch = False
     for item in cart_items:
-        product_id, name, quantity, cart_price = item
+        product_id, name, quantity, cart_price, symbol = item
         cur.execute("SELECT price FROM products WHERE id = %s", (product_id,))
         current_price = cur.fetchone()[0]
         if current_price != cart_price:
@@ -1003,23 +1015,11 @@ def finish_payment(conn, cur):
     if request.method == 'GET':
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         order_id = session.get('order_id')
-        # cur.execute("SELECT * FROM orders WHERE order_id = %s", (order_id,))
-        # order = cur.fetchone()
 
-        cur.execute("SELECT oi.product_id, p.name, oi.quantity, oi.price FROM order_items AS oi JOIN products AS p ON oi.product_id=p.id WHERE order_id = %s", (order_id,))
+        cur.execute("SELECT oi.product_id, p.name, oi.quantity, oi.price, currencies.symbol FROM order_items AS oi JOIN products AS p ON oi.product_id=p.id JOIN currencies ON p.currency_id=currencies.id WHERE order_id = %s", (order_id,))
         order_products = cur.fetchall()
 
-        # order_products = order['product_details']
-        # list_products = [
-        #     [
-        #         product['product_id'],
-        #         product['name'],
-        #         int(product['quantity']),
-        #         float(product['price']),
-        #         float(product['price']) * int(product['quantity'])
-        #     ]
-        #     for product in order_products
-        # ]
+        print(order_products, flush=True)
 
         total_summ = sum(int(product[2]) * Decimal(product[3]) for product in order_products)
         total_sum = round(total_summ, 2)
@@ -1047,6 +1047,7 @@ def finish_payment(conn, cur):
     
     cur.execute("SELECT status FROM orders WHERE order_id= %s", (order_id,))
     order_status = cur.fetchone()[0]
+
     utils.AssertUser(order_status == 'Ready for Paying', "This order is not ready for payment or has already been paid")
 
     if payment_amount < total:
@@ -1600,7 +1601,7 @@ def back_office_manager(conn, cur, *params):
             sort_by = 'id'
             sort_order = 'asc'
         
-        base_query = sql.SQL("SELECT * FROM products")
+        base_query = sql.SQL("SELECT p.id, p.name, p.price, p.quantity, p.category, currencies.symbol FROM products AS p JOIN currencies ON p.currency_id = currencies.id")
         conditions = []
         query_params = []
 
@@ -1627,9 +1628,16 @@ def back_office_manager(conn, cur, *params):
         # TODO(Done): ref
 
         if request.method == 'GET':
+
+            cur.execute("SELECT symbol, id FROM currencies")
+            all_currencies = cur.fetchall()
+
+
             cur.execute("SELECT DISTINCT(category) FROM products")
             categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
-            return render_template('add_product_staff.html', categories=categories, username=username)
+
+            return render_template('add_product_staff.html', categories=categories, username=username, currencies=all_currencies)
+
         elif request.method == 'POST':
             data = process_form('CRUD Products', 'create')
             
@@ -1648,15 +1656,22 @@ def back_office_manager(conn, cur, *params):
         product_id = request.path.split('/')[4]
 
         if request.method == 'GET':
+            cur.execute("SELECT symbol, id FROM currencies")
+            all_currencies = cur.fetchall()
+
             cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
             product = cur.fetchone()
+
             utils.AssertUser(product, "Invalid product")
-            return render_template('edit_product.html', product=product, product_id=product_id, username=username)
+
+            return render_template('edit_product.html', product=product, product_id=product_id, username=username, currencies = all_currencies)
 
         elif request.method == 'POST':
             data = process_form('CRUD Products', 'edit')
 
-            cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s WHERE id = %s", (data['values'][0], data['values'][1], data['values'][2], data['values'][3],product_id))
+            print(data, flush=True)
+
+            cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s, currency_id = %s WHERE id = %s", (data['values'][0], data['values'][1], data['values'][2], data['values'][3], data['values'][4],product_id))
             conn.commit()
             session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
             return redirect(f'/{username}/crud_products')
@@ -1777,11 +1792,13 @@ def back_office_manager(conn, cur, *params):
                 array_agg(p.name) as product_names,
                 to_char(sum(oi.quantity * oi.price),'FM999999990.00') as order_price, 
                 o.status, 
-                to_char(o.order_date, 'MM-DD-YYYY HH:MI:SS') AS formatted_order_date
+                to_char(o.order_date, 'MM-DD-YYYY HH:MI:SS') AS formatted_order_date,
+                c.symbol
             FROM orders      AS o 
             JOIN users       AS u  ON o.user_id     = u.id 
             JOIN order_items AS oi ON o.order_id    = oi.order_id 
             JOIN products    AS p  ON oi.product_id = p.id
+            JOIN currencies  AS c  ON p.currency_id = c.id
             WHERE 1=1
         """
 
@@ -1799,11 +1816,11 @@ def back_office_manager(conn, cur, *params):
             params.append(status)
 
         if price_min and price_max and order_by_id == '':
-            query += "GROUP BY o.order_id, user_names HAVING sum(oi.quantity * oi.price) >= %s AND sum(oi.quantity * oi.price) <= %s"
+            query += "GROUP BY o.order_id, user_names, c.symbol HAVING sum(oi.quantity * oi.price) >= %s AND sum(oi.quantity * oi.price) <= %s"
             params.extend([price_min, price_max])
 
         if price_min == '' and price_max == '':
-            query += " GROUP BY o.order_id, user_names "
+            query += " GROUP BY o.order_id, user_names, c.symbol "
 
         query += f" ORDER BY o.order_{sort_by} {sort_order} LIMIT 50"
 
@@ -1886,7 +1903,21 @@ def back_office_manager(conn, cur, *params):
             cur.execute("SELECT order_date FROM orders")
             order_date = cur.fetchone()[0]
 
-            cur.execute("SELECT p.id, p.name, oi.quantity, oi.price, sum(oi.quantity * oi.price) as total_price FROM order_items AS oi JOIN products AS p ON oi.product_id = p.id WHERE order_id = %s GROUP BY p.id, p.name, oi.quantity, oi.price", (order_id,))
+            cur.execute("""
+                    SELECT 
+                        p.id, 
+                        p.name, 
+                        oi.quantity, 
+                        oi.price, 
+                        sum(oi.quantity * oi.price) AS total_price,
+                        c.symbol
+                    FROM order_items AS oi 
+                    JOIN products    AS p ON oi.product_id = p.id 
+                    JOIN currencies  AS c ON p.currency_id = c.id
+                    WHERE order_id = %s 
+                    GROUP BY p.id, p.name, oi.quantity, oi.price, c.symbol
+                """, (order_id,))
+
             products_from_order = cur.fetchall()
 
             all_products_sum = 0
@@ -1976,7 +2007,7 @@ def handle_request(username=None, path=''):
         user_email = None
         staff_username = None
 
-        if request.path == '/home' or '/profile' and '/staff_portal' not in request.path and '/crud' not in request.path and '/error_logs' not in request.path and '/update_captcha_settings' not in request.path and '/report_sales' not in request.path and '/report_sales' not in request.path and '/role_permissions' not in request.path and '/active_users' not in request.path:
+        if request.path == '/home' or '/profile' and '/staff_portal' not in request.path and '/crud' not in request.path and '/error_logs' not in request.path and '/update_captcha_settings' not in request.path and '/report_sales' not in request.path and '/report_sales' not in request.path and '/role_permissions' not in request.path and '/active_users' not in request.path and '/download_report_without_generating_rows_in_the_html' not in request.path:
             staff_username = None
             user_email = utils.get_current_user(request, cur)
         else:

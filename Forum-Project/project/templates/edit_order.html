@@ -40,8 +40,8 @@
                     <td>{{ product[0] }}</td>
                     <td>{{ product[1] }}</td>
                     <td class="text-center">{{ product[2] }}</td>
-                    <td class="text-right">{{ product[3] }} {{"лв"}}</td>
-                    <td class="text-right">{{ product[4] }} {{"лв"}}</td>
+                    <td class="text-right">{{ product[3] }} {{ product[5] }}</td>
+                    <td class="text-right">{{ product[4] }} {{ product[5] }}</td>
                 </tr>
                 {% endfor %}
                 <td colspan="5" class="text-right">{{ "Total price:   " }} {{ all_products_sum }} {{"лв"}}</td>

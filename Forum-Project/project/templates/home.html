@@ -65,7 +65,7 @@
                     <img class="card-img-top" src="/image/{{ product[0] }}" alt="{{ product[1] }}">
                     <div class="card-body">
                         <h5 class="card-title">{{ product[1]}}</h5>
-                        <p class="card-text">Цена: {{ product[2]}} лв.</p>
+                        <p class="card-text">Цена: {{ product[2]}} {{ product[5] }}</p>
                         <p class="card-text">{{ 'Налично в момента' if product[3] > 0 else 'Изкупено, нямаме в наличност' }}</p>
                         <p class="card-text">Категория: {{ product[4]}}</p>
                         <form action="/add_to_cart" method="post" onsubmit="addToCart(event, this)">

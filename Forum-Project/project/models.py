@@ -4,6 +4,16 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
+
+class Currency(db.Model):
+    __tablename__ = 'currencies'
+    id = db.Column(db.Integer, primary_key=True)
+    code = db.Column(db.String(10), nullable=False, unique=True)
+    name = db.Column(db.String(50), nullable=True)
+    symbol = db.Column(db.String(10), nullable=True)
+
+    products = db.relationship('Product', backref='currency', lazy=True)
+
 class CustomSession(db.Model):
     __tablename__ = 'custom_sessions'
     session_id = db.Column(db.String(40), primary_key=True, default=lambda:uuid.uuid4().hex)
@@ -34,6 +44,8 @@ class Product(db.Model):
     category = db.Column(db.String(255), nullable=False)
     image = db.Column(db.LargeBinary, nullable=True)
     cart_items = db.relationship('CartItem', backref='product', lazy=True)
+
+    currency_id = db.Column(db.Integer, db.ForeignKey('currencies.id'), nullable=False)
 
 class ShippingDetail(db.Model):
     __tablename__ = 'shipping_details'

@@ -83,8 +83,8 @@
                         <td>
                             <input type="number" min="1" class="form-control quantity" data-item-id="{{ item[3] }}" data-old-quantity="{{ item[2] }}" value="{{ item[2] }}">
                         </td>
-                        <td class="text-right" id="price-per-item-{{ item[3] }}">{{ item[1] }} {{"лв."}}</td>
-                        <td class="text-right"><span id="total-{{ item[3] }}">{{ (item[1] * item[2]) }}</span> {{"лв."}}</td>
+                        <td class="text-right" id="price-per-item-{{ item[3] }}">{{ item[1] }} {{ item[4] }}</td>
+                        <td class="text-right"><span id="total-{{ item[3] }}">{{ (item[1] * item[2]) }}</span> {{ item[4] }}</td>
                         <td>
                             <form action="/remove_from_cart" method="post" style="display:inline;">
                                 <input type="hidden" name="item_id" value="{{ item[3] }}">

@@ -32,8 +32,8 @@
                     <tr>
                         <td>{{ product[1]}}</td>
                         <td>{{ product[2] }}</td>
-                        <td class="text-right">{{ product[3] }} {{"лв."}}</td>
-                        <td class="text-right">{{ (product[3] * product[2])}} {{"лв."}}</td>
+                        <td class="text-right">{{ product[3] }} {{ product[4] }}</td>
+                        <td class="text-right">{{ (product[3] * product[2])}} {{ product[4] }}</td>
                     </tr>
                 {% endfor %}
             </tbody>
