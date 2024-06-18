@@ -25,6 +25,7 @@ from .models import User
 from sqlalchemy import or_
 import traceback
 import itertools
+import time
 
 # https://stackoverflow.com/questions/23327293/flask-raises-templatenotfound-error-even-though-template-file-exists
 app = Flask(__name__)
@@ -55,7 +56,7 @@ host = config.host
 
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # Maximum file size in bytes (e.g., 10MB)
-CURRENT_URL = ""
+last_cleanup = 0
 
 app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
@@ -420,7 +421,10 @@ def login(conn, cur):
     cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
     cur.execute("""
-                SELECT email, verification_status, password
+                SELECT 
+                    email, 
+                    verification_status, 
+                    password
                 FROM users
                 WHERE email = %s
                 """, (email,))
@@ -1070,20 +1074,26 @@ def finish_payment(conn, cur):
 def staff_login(conn, cur):
     if request.method == 'GET':
         return render_template('staff_login.html')
-    
-    username = request.form['username']
-    password = request.form['password']
 
-    cur.execute("SELECT username, password FROM staff WHERE username = %s AND password = %s", (username, password))
-    utils.AssertUser(cur.fetchone(), "There is no registration with this staff username and password")
+    elif request.method == 'POST':
 
-    session['staff_username'] = username
+        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+        
+        username = request.form['username']
+        password = request.form['password']
 
-    session_id = utils.create_session(os, datetime, timedelta, username, cur, conn)
-    response = make_response(redirect('/staff_portal'))
-    response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
+        cur.execute("SELECT username, password FROM staff WHERE username = %s AND password = %s", (username, password))
+        utils.AssertUser(cur.fetchone(), "There is no registration with this staff username and password")
 
-    return response
+        session['staff_username'] = username
+
+        session_id = utils.create_session(os, datetime, timedelta, username, cur, conn)
+        response = make_response(redirect('/staff_portal'))
+        response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
+
+        return response
+    else:
+        utils.AssertUser(False, "Invalid method")
 
 def staff_portal(conn, cur):
     is_auth_user =  utils.get_current_user(request, cur)
@@ -2006,6 +2016,14 @@ def handle_request(username=None, path=''):
     try:
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor()
+
+        global last_cleanup
+        
+        current_time = time.time()
+        if current_time - last_cleanup > 3600: # every hour 
+            utils.clear_expired_sessions(cur, conn)
+            last_cleanup = current_time
+
         # staff_username = user_email = utils.get_current_user(request, cur)
         user_email = None
         staff_username = None

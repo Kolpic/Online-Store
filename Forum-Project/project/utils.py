@@ -60,7 +60,10 @@ def has_permission(cur, request, interface, permission_needed):
 def create_session(os, datetime, timedelta, session_data, cur, conn):
     session_id = os.urandom(20).hex()
     expires_at = datetime.now() + timedelta(hours=1)
-    cur.execute("INSERT INTO custom_sessions (session_id, data, expires_at) VALUES (%s, %s, %s)", (session_id, session_data, expires_at))
+
+    cur.execute("INSERT INTO custom_sessions (session_id, data, expires_at) VALUES (%s, %s, %s) RETURNING id", (session_id, session_data, expires_at))
+    _id = cur.fetchone()['id']
+
     conn.commit()
     return session_id
 
@@ -70,11 +73,13 @@ def get_current_user(request, cur):
     if not session_id:
         return None
     else:
-        return get_user_by_session(session_id, cur)
+        return _get_user_by_session(session_id, cur)
 
-def get_user_by_session(session_id, cur):
-    # NOW -> now
-    cur.execute("SELECT data FROM custom_sessions WHERE session_id = %s AND expires_at > NOW()", (session_id,))
+def _get_user_by_session(session_id, cur):
+    cur.execute("SELECT id FROM custom_sessions WHERE session_id = %s", (session_id,))
+    _id = cur.fetchone()
+ 
+    cur.execute("SELECT data FROM custom_sessions WHERE session_id = %s AND id = %s AND expires_at > now()", (session_id, _id))
 
     # utils.AssertDev(rowcounut = 1)
 
@@ -90,7 +95,10 @@ def clear_expired_sessions(cur, conn):
     conn.commit()
 
 def update_current_user_session_data(cur, conn, new_data, session_id):
-    cur.execute("UPDATE custom_sessions SET data = %s WHERE session_id = %s", (new_data, session_id))
+    cur.execute("SELECT id FROM custom_sessions WHERE session_id = %s", (session_id, ))
+    _id = cur.fetchone()[0]
+
+    cur.execute("UPDATE custom_sessions SET data = %s WHERE session_id = %s AND id = %s", (new_data, session_id, _id))
     conn.commit()
 
 def get_user_session_id(request):

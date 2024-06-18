@@ -16,7 +16,8 @@ class Currency(db.Model):
 
 class CustomSession(db.Model):
     __tablename__ = 'custom_sessions'
-    session_id = db.Column(db.String(40), primary_key=True, default=lambda:uuid.uuid4().hex)
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.String(40), default=lambda:uuid.uuid4().hex)
     data = db.Column(db.Text)
     expires_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now() + timedelta(hours=1))
 
