@@ -75,9 +75,10 @@ def refresh_captcha(conn, cur):
     second_captcha_number = random.randint(0, 100)
     cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING id", 
                 (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
-    conn.commit()
+    # conn.commit()
     captcha_id = cur.fetchone()[0]
     session["captcha_id"] = captcha_id
+
     return jsonify({'first': first_captcha_number, 'second': second_captcha_number, 'captcha_id': captcha_id})
 
 def handle_image_field(image_data):
@@ -283,7 +284,6 @@ def registration(conn, cur):
         second_captcha_number = random.randint(0,100)
 
         cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING id", (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
-        conn.commit()
         captcha_id = cur.fetchone()[0]
      
         session["captcha_id"] = captcha_id
@@ -326,10 +326,8 @@ def registration(conn, cur):
         new_attempts = attempts + 1
         if attempt_record:
             cur.execute("UPDATE captcha_attempts SET attempts = %s, last_attempt_time = CURRENT_TIMESTAMP WHERE id = %s", (new_attempts, attempt_id))
-            conn.commit()
         else:
             cur.execute("INSERT INTO captcha_attempts (ip_address, attempts, last_attempt_time) VALUES (%s, 1, CURRENT_TIMESTAMP)", (user_ip,))
-            conn.commit()
         raise exception.WrongUserInputException("Invalid CAPTCHA. Please try again")
     else:
         if attempt_record:
@@ -351,7 +349,6 @@ def registration(conn, cur):
         utils.AssertUser(not(is_email_present_in_database[0] and not is_email_verified[0]), "Account was already registered with this email, but it's not verified")
 
     cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", (first_name, last_name, email, hashed_password, verification_code))
-    conn.commit()
 
     send_verification_email(email, verification_code)
 
@@ -399,7 +396,6 @@ def verify(conn, cur):
     utils.AssertUser(verification_code_database == verification_code, "The verification code you typed is different from the one we send you")
     
     cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
-    conn.commit()
 
     session['login_message'] = 'Successful verification'
     return redirect("/login") 
@@ -516,7 +512,6 @@ def logout(conn, cur):
     session_id = request.cookies.get('session_id')
 
     cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (session_id,))
-    conn.commit()
     response = make_response(redirect('/login'))
     response.set_cookie('session_id', '', expires=0)
     return response
@@ -529,7 +524,6 @@ def profile(conn, cur):
     
     cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (is_auth_user,))
     user_details = cur.fetchone()
-    conn.commit()
 
     if user_details:
         return render_template('profile.html', user_details=user_details)
@@ -595,8 +589,6 @@ def update_profile(conn, cur):
     fields_list.append(email_in_session)
 
     cur.execute(query_string, (fields_list))
-
-    conn.commit()
     
     # Update session email if email was changed
     if email:
@@ -613,10 +605,8 @@ def delete_account(conn, cur):
        return redirect('/login')
 
     cur.execute("DELETE FROM users WHERE email = %s", (is_auth_user,))
-    conn.commit()
 
     cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (session_id,))
-    conn.commit()
     response = make_response(redirect('/login'))
     response.set_cookie('session_id', '', expires=0)
     session['login_message'] = 'You successful deleted your account'
@@ -636,8 +626,6 @@ def recover_password(conn, cur):
     hashed_password = utils.hash_password(new_password)
 
     cur.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_password, email))
-
-    conn.commit()
 
     send_recovey_password_email(email, new_password)
     
@@ -671,8 +659,6 @@ def resend_verf_code(conn, cur):
 
     cur.execute("UPDATE users SET verification_code = %s WHERE email = %s", (new_verification_code, email))
 
-    conn.commit()
-
     send_verification_email(email, new_verification_code)
 
     session['verification_message'] = 'A new verification code has been sent to your email.'
@@ -696,16 +682,17 @@ def send_login_link(conn, cur):
     expiration_time = datetime.now() + timedelta(hours=1)
 
     cur.execute("INSERT INTO tokens(login_token, expiration) VALUES (%s, %s)", (login_token, expiration_time))
-    conn.commit()
+
     cur.execute("SELECT id FROM tokens WHERE login_token = %s", (login_token,))
     token_id = cur.fetchone()[0]
     cur.execute("UPDATE users SET token_id = %s WHERE email = %s", (token_id, email))
 
-    conn.commit()
-
     login_link = f"http://10.20.3.101:5001/log?token={login_token}"
+
     send_verification_link(email, login_link)
+
     session['login_message'] = 'A login link has been sent to your email.'
+
     return redirect('/login')
 
 def send_verification_link(user_email, verification_link):
@@ -750,19 +737,23 @@ def login_with_token(conn, cur):
     email = user[3]
 
     cur.execute("UPDATE users SET token_id = NULL WHERE email = %s", (email,))
-    conn.commit()
+
     cur.execute("DELETE FROM tokens WHERE id = %s", (token_data[0],))
-    conn.commit()
+
     cur.execute("UPDATE users SET verification_status = true WHERE email = %s", (email,))
-    conn.commit()
 
     session['user_email'] = email   
     return redirect('/home')
 
-def log_exception(conn, cur, exception_type, message ,email = None):
+def log_exception(exception_type, message ,email = None):
+    conn_new = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+    cur_new = conn_new.cursor()
 
-    cur.execute("INSERT INTO exception_logs (user_email, exception_type, message) VALUES (%s, %s, %s)", (email, exception_type, message))
-    conn.commit()
+    cur_new.execute("INSERT INTO exception_logs (user_email, exception_type, message) VALUES (%s, %s, %s)", (email, exception_type, message))
+
+    conn_new.commit()
+    conn_new.close()
+    cur_new.close()
 
 def add_product(conn, cur):
     is_auth_user =  sessions.get_current_user(request, cur)
@@ -793,7 +784,7 @@ def add_product(conn, cur):
         image_ = validate_image_size(image_data)
 
     cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image_))
-    conn.commit()
+
     session['crud_message'] = "Item was added successful"
     return redirect('/crud')
 
@@ -820,7 +811,6 @@ def add_to_cart(conn, cur, user_id, product_id, quantity):
     else:
         cur.execute("INSERT INTO carts(user_id) VALUES (%s) RETURNING cart_id", (user_id,))
         cart_id = cur.fetchone()[0]
-        conn.commit()
     
     cur.execute("SELECT id FROM cart_itmes WHERE cart_id = %s AND product_id = %s", (cart_id, product_id))
     item = cur.fetchone()
@@ -828,7 +818,6 @@ def add_to_cart(conn, cur, user_id, product_id, quantity):
         cur.execute("UPDATE cart_itmes SET quantity = quantity + %s WHERE id = %s", (quantity, item[0]))
     else:
         cur.execute("INSERT INTO cart_itmes (cart_id, product_id, quantity) VALUES (%s, %s, %s)", (cart_id, product_id, quantity))
-    conn.commit()
     return "You successfully added item."
 
 def view_cart(conn, cur, user_id):
@@ -855,7 +844,6 @@ def get_cart_items_count(conn, cur, user_id):
 
 def remove_from_cart(conn, cur, item_id):
     cur.execute("DELETE FROM cart_itmes where product_id = %s", (item_id,))
-    conn.commit()
     return "You successfully deleted item."
 
 def add_to_cart_meth(conn, cur):
@@ -978,8 +966,6 @@ def cart(conn, cur):
     cur.execute("SELECT id FROM country_codes WHERE code = %s", (country_code,))
     country_code_id = cur.fetchone()[0]
     cur.execute("INSERT INTO shipping_details (order_id, email, first_name, last_name, town, address, phone, country_code_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (order_id, email, first_name, last_name, town, address, phone, country_code_id))
-    
-    conn.commit()
 
     # Total sum to be passed to the payment.html
     items = view_cart(conn, cur, user_id)
@@ -990,7 +976,6 @@ def cart(conn, cur):
     cart_id = cur.fetchone()[0]
     cur.execute("DELETE FROM cart_itmes WHERE cart_id = %s", (cart_id,))
 
-    conn.commit()
     cur.execute("""
                 SELECT shd.shipping_id, shd.order_id, shd.email, shd.first_name, shd.last_name, shd.town, shd.address, shd.phone, cc.code 
                 FROM shipping_details AS shd 
@@ -1034,7 +1019,9 @@ def finish_payment(conn, cur):
 
         cur.execute("SELECT * FROM shipping_details WHERE order_id = %s", (order_id,))
         shipping_details = cur.fetchone()
+
         session['order_id'] = order_id
+
         return render_template('payment.html', order_products=order_products, shipping_details=shipping_details, total_sum=total_sum)
 
     order_id = request.form.get('order_id')
@@ -1068,7 +1055,7 @@ def finish_payment(conn, cur):
         return redirect('/finish_payment')
     # formatted_datetime = datetime.now().strftime('%Y-%m-%d')
     cur.execute("UPDATE orders SET status = 'Paid' WHERE order_id = %s", (order_id,))
-    conn.commit()
+
     session['home_message'] = "You paid the order successful"
     return redirect('/home')
 
@@ -1115,7 +1102,6 @@ def logout_staff(conn, cur):
     session_id = request.cookies.get('session_id')
 
     cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (session_id,))
-    conn.commit()
     response = make_response(redirect('/staff_login'))
     response.set_cookie('session_id', '', expires=0)
     return response
@@ -1137,13 +1123,11 @@ def add_products_from_file(conn, cur, string_path):
                 image_data = img_file.read()
 
             cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image_data))
-            conn.commit()
         return "Imprted"
 
 def generate_orders(conn, cur):
     number_products_to_import = 100
     utils.create_random_orders(number_products_to_import, cur, conn)
-    conn.commit()
 
     return "Successfully imported products: " + str(number_products_to_import)
         
@@ -1161,7 +1145,6 @@ def update_cart_quantity(conn, cur):
     new_total = price * quantity_
 
     cur.execute("UPDATE cart_itmes SET quantity = %s WHERE product_id = %s", (quantity_, item_id))
-    conn.commit()
 
     return jsonify(success=True, new_total=new_total)
 
@@ -1272,11 +1255,10 @@ def back_office_manager(conn, cur, *params):
         if new_timeout_minutes:
             cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'captcha_timeout_minutes'", (new_timeout_minutes,))
             str_message += 'You updated timeout minutes.'
-        
-        conn.commit()
     
         if str_message != "":
             session['staff_message'] = str_message
+
         return redirect(f'/{username}/staff_portal')
 
     if request.path.split('/')[2] == 'report_sales':
@@ -1401,9 +1383,12 @@ def back_office_manager(conn, cur, *params):
                 report = deaggregated_report
 
             total_records = len(report)
+
             if not flag:
                 total_price = sum(row[3] for row in report)
+
             report_json = utils.serialize_report(report)
+
             return render_template('report.html', report=report, username=username, total_records=total_records, total_price=total_price, report_json=report_json, default_to_date=date_to, default_from_date=date_from)
         else:
             utils.AssertUser(False, "Invalid url")
@@ -1577,26 +1562,13 @@ def back_office_manager(conn, cur, *params):
                     permission_id = cur.fetchone()[0]
                     cur.execute('INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)', 
                                 (role_id, permission_id))
-        conn.commit()
+
         cur.execute("SELECT role_name FROM roles WHERE role_id = %s", (role_id,))
         role_name = cur.fetchone()[0]
-        session['role_permission_message'] = f'You successfully updated permissions for role: {role_name}'
-        return redirect(f'/{username}/role_permissions?role=' + role_id)
 
-    # print("request.path.split('/')[0]", flush=True)
-    # print(request.path.split('/')[0], flush=True)
-    # print("request.path.split('/')[1]", flush=True)
-    # print(request.path.split('/')[1], flush=True)
-    # print("request.path.split('/')[2]", flush=True)
-    # print(request.path.split('/')[2], flush=True)
-    # print("len(request.path.split('/'))", flush=True)
-    # print(len(request.path.split('/')), flush=True)
-    # print("request.path", flush=True)
-    # print(request.path, flush=True)
-    # print("request.path.split('_')[0]", flush=True)
-    # print(request.path.split('_')[0], flush=True)
-    # print("request.path.split('_')[1]", flush=True)
-    # print(request.path.split('_')[1], flush=True)
+        session['role_permission_message'] = f'You successfully updated permissions for role: {role_name}'
+
+        return redirect(f'/{username}/role_permissions?role=' + role_id)
 
     if f'/{username}/crud_products' in request.path and len(request.path.split('/')) == 3:
 
@@ -1656,8 +1628,9 @@ def back_office_manager(conn, cur, *params):
             data = process_form('CRUD Products', 'create')
             
             cur.execute(f"INSERT INTO products ({ data['fields'] }) VALUES ({ data['placeholders'] })", data['values'])
-            conn.commit()
+
             session['crud_message'] = "Item was added successfully"
+
             return redirect(f'/{username}/crud_products')
         else:
             utils.AssertDev(False, "Different method")
@@ -1686,8 +1659,9 @@ def back_office_manager(conn, cur, *params):
             print(data, flush=True)
 
             cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s, currency_id = %s WHERE id = %s", (data['values'][0], data['values'][1], data['values'][2], data['values'][3], data['values'][4],product_id))
-            conn.commit()
+            
             session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
+
             return redirect(f'/{username}/crud_products')
         else:
             utils.AssertDev(False, "Different method")
@@ -1700,7 +1674,7 @@ def back_office_manager(conn, cur, *params):
 
         product_id = request.path.split('/')[4]
         cur.execute("UPDATE products SET quantity = 0 WHERE id = %s", (product_id,))
-        conn.commit()
+
         session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
 
         return redirect(f'/{username}/crud_products')
@@ -1712,6 +1686,7 @@ def back_office_manager(conn, cur, *params):
 
         cur.execute("SELECT s.username, r.role_name, sr.staff_id, sr.role_id FROM staff_roles sr JOIN staff s ON s.id = sr.staff_id JOIN roles r ON r.role_id = sr.role_id")
         relations = cur.fetchall()
+
         return render_template('staff_role_assignment.html', relations=relations, username=username)
 
     elif f'/{username}/crud_staff' in request.path and request.path.split('/')[3] == 'add_role_staff':
@@ -1738,7 +1713,6 @@ def back_office_manager(conn, cur, *params):
             role_id = cur.fetchone()[0]
 
             cur.execute(f"INSERT INTO staff_roles ({data['fields']}) VALUES ({data['placeholders']})", (staff_id, role_id))
-            conn.commit()
 
             session['staff_message'] = "You successful gave a role: " + str(data['values'][1]) + " to user: " + str(data['values'][0])
             return redirect('/staff_portal')
@@ -1759,7 +1733,6 @@ def back_office_manager(conn, cur, *params):
             print(data, flush=True)
 
             cur.execute(f"INSERT INTO staff ({data['fields']}) VALUES ({data['placeholders']})", (data['values']))
-            conn.commit()
 
             session['staff_message'] = "You successful made new user with name: " + str(data['values'][0]) 
             return redirect('/staff_portal')
@@ -1774,7 +1747,6 @@ def back_office_manager(conn, cur, *params):
         staff_id = request.path.split('/')[4]
         role_id = request.path.split('/')[5]
         cur.execute('DELETE FROM staff_roles WHERE staff_id = %s AND role_id = %s', (staff_id, role_id))
-        conn.commit()
 
         session['staff_message'] = "You successful deleted a role"
         return redirect(f'/{username}/staff_portal')
@@ -1843,7 +1815,7 @@ def back_office_manager(conn, cur, *params):
 
         loaded_orders = len(orders)
 
-        session['crud_message'] = "Only 50 orders are displayed based on the filters"
+        # session['crud_message'] = "Only 50 orders are displayed based on the filters"
 
         return render_template('crud_orders.html', orders=orders, username=username, statuses=statuses, current_status=status, price_min=price_min, price_max=price_max, order_by_id=order_by_id, date_from=date_from, date_to=date_to)
 
@@ -1866,11 +1838,8 @@ def back_office_manager(conn, cur, *params):
 
             cur.execute("SELECT id FROM users WHERE id = %s", (order_data['values'][0],))
 
-            utils.AssertUser(cur.fetchone()[0], "There is no such product with id " + str(order_data['values'][0]))
+            utils.AssertUser(cur.fetchone() != None, "There is no such product with id " + str(order_data['values'][0]))
         
-            #TODO(Done): Kude trqbva da se namira tova neshto (conn.autocommit) v koda  Start transaction
-            conn.commit()
-            conn.autocommit = False
             try:
                 #TODO: Insert da bude v otdelna fukciq i da se podavat parametrite, koito trqbva da se insertnat
 
@@ -1882,21 +1851,12 @@ def back_office_manager(conn, cur, *params):
                 query_two = f"INSERT INTO order_items (order_id, {item_data['fields']}) VALUES (%s, {item_data['placeholders']})"
                 cur.execute(query_two, order_item_values)
 
-                conn.commit()
-
                 session['crud_message'] = "Successfully added new order with id: " + str(order_id)
                 return redirect(f'/{username}/crud_orders')
 
             except Exception as e:
-                conn.rollback()
-
                 session['crud_error'] = "Failed to add order. Please try again."
                 return redirect(f'/{username}/crud_orders')
-
-            finally:
-
-                conn.autocommit = True
-
         else:
             utils.AssertUser(False, "Invalid operation")
 
@@ -1945,13 +1905,7 @@ def back_office_manager(conn, cur, *params):
             print("Enterd crud_orders edit POST successful", flush=True)
             data = process_form('CRUD Orders', 'edit')
 
-            # order_data = data['orders']
-            # item_data = data['order_items']
-
             cur.execute("UPDATE orders SET status = %s, order_date = %s WHERE order_id = %s", (data['values'][0], data['values'][1], order_id))
-            # cur.execute("UPDATE order_items SET price = %s, quantity = %s WHERE order_id = %s AND product_id = %s", (item_data['values'][0], item_data['values'][1], order_id, product_id))
-            
-            conn.commit()
             
             session['crud_message'] = "Order was updated successfully with id = " + str(order_id)
             return redirect(f'/{username}/crud_orders')
@@ -1969,9 +1923,8 @@ def back_office_manager(conn, cur, *params):
         cur.execute('DELETE FROM shipping_details WHERE order_id = %s', (order_id,))
         cur.execute("DELETE FROM order_items WHERE order_id = %s", (order_id,))
         cur.execute('DELETE FROM orders WHERE order_id = %s', (order_id,))
-        session['crud_message'] = "You successful deleted a  order with id: " + str(order_id)
-        
-        conn.commit()
+
+        session['crud_message'] = "You successful deleted a  order with id: " + str(order_id)       
 
         return redirect(f'/{username}/crud_orders')
 
@@ -2040,7 +1993,6 @@ def handle_request(username=None, path=''):
             cur.execute("SELECT last_active FROM users WHERE email = %s", (user_email,))
             current_user_last_active = cur.fetchone()[0]
             cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (user_email,))
-            conn.commit()
         
         if staff_username is not None:
            if username is None:
@@ -2066,9 +2018,11 @@ def handle_request(username=None, path=''):
         else:
             return funtion_to_call(conn, cur)
     except Exception as message:
+
         user_email = sessions.get_current_user(request, cur)
         traceback_details = traceback.format_exc()
-        log_exception(conn, cur, message.__class__.__name__, str(message), user_email)
+
+        log_exception(message.__class__.__name__, str(message), user_email)
 
         print(f"Day: {datetime.now()} = ERROR by = {user_email} - {traceback_details} = error class name = {message.__class__.__name__} - Dev message: {message}", flush=True)
 
@@ -2082,8 +2036,13 @@ def handle_request(username=None, path=''):
             session['staff_login'] = "Yes"
 
         utils.add_form_data_in_session(session.get('form_data'))
+
+        conn.rollback()
+
         return render_template("error.html", message = str(message), redirect_url = request.url)
     finally:
+        conn.commit()
+
         if conn is not None:
             conn.close()
         if cur is not None:
