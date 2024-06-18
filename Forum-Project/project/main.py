@@ -21,6 +21,7 @@ from flask_session_captcha import FlaskSessionCaptcha
 # from flask_sessionstore import Session
 from flask_session import Session
 from project import utils
+from project import sessions
 from .models import User
 from sqlalchemy import or_
 import traceback
@@ -434,14 +435,14 @@ def login(conn, cur):
     utils.AssertUser(utils.verify_password(password_, user_data['password']), "Invalid email or password")
     utils.AssertUser(user_data['verification_status'], "Your account is not verified or has been deleted")
 
-    session_id = utils.create_session(os, datetime, timedelta, email, cur, conn)
+    session_id = sessions.create_session(os, datetime, timedelta, email, cur, conn)
     response = make_response(redirect('/home'))
     response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
 
     return response
 
 def home(conn, cur, page = 1):
-    is_auth_user =  utils.get_current_user(request, cur)
+    is_auth_user =  sessions.get_current_user(request, cur)
 
     if is_auth_user == None:
        return redirect('/login') 
@@ -521,7 +522,7 @@ def logout(conn, cur):
     return response
 
 def profile(conn, cur):
-    is_auth_user =  utils.get_current_user(request, cur)
+    is_auth_user =  sessions.get_current_user(request, cur)
 
     if is_auth_user == None:
        return redirect('/login') 
@@ -536,7 +537,7 @@ def profile(conn, cur):
     return render_template('profile.html')
 
 def update_profile(conn, cur):
-    is_auth_user =  utils.get_current_user(request, cur)
+    is_auth_user =  sessions.get_current_user(request, cur)
 
     if is_auth_user == None:
        return redirect('/login')
@@ -590,7 +591,7 @@ def update_profile(conn, cur):
     query_string = query_string[:-2]
     query_string += " WHERE email = %s"
 
-    email_in_session = utils.get_current_user(request, cur)
+    email_in_session = sessions.get_current_user(request, cur)
     fields_list.append(email_in_session)
 
     cur.execute(query_string, (fields_list))
@@ -599,14 +600,14 @@ def update_profile(conn, cur):
     
     # Update session email if email was changed
     if email:
-        utils.update_current_user_session_data(cur, conn, email, utils.get_user_session_id(request))
+        sessions.update_current_user_session_data(cur, conn, email, sessions.get_user_session_id(request))
     
     updated_fields_message = ', '.join(updated_fields)
     session['home_message'] = f"You successfully updated your {updated_fields_message}."
     return redirect('/home')
 
 def delete_account(conn, cur):
-    is_auth_user =  utils.get_current_user(request, cur)
+    is_auth_user =  sessions.get_current_user(request, cur)
 
     if is_auth_user == None:
        return redirect('/login')
@@ -764,7 +765,7 @@ def log_exception(conn, cur, exception_type, message ,email = None):
     conn.commit()
 
 def add_product(conn, cur):
-    is_auth_user =  utils.get_current_user(request, cur)
+    is_auth_user =  sessions.get_current_user(request, cur)
 
     if is_auth_user == None:
        return redirect('/login')
@@ -858,7 +859,7 @@ def remove_from_cart(conn, cur, item_id):
     return "You successfully deleted item."
 
 def add_to_cart_meth(conn, cur):
-    is_auth_user =  utils.get_current_user(request, cur)
+    is_auth_user =  sessions.get_current_user(request, cur)
 
     if is_auth_user == None:
        return redirect('/login')
@@ -875,7 +876,7 @@ def add_to_cart_meth(conn, cur):
     return jsonify({'message':response, 'newCartCount': newCartCount})
 
 def cart(conn, cur):
-    is_auth_user =  utils.get_current_user(request, cur)
+    is_auth_user =  sessions.get_current_user(request, cur)
 
     if is_auth_user == None:
        return redirect('/login')
@@ -1003,7 +1004,7 @@ def cart(conn, cur):
     return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum=total_sum)
 
 def remove_from_cart_meth(conn, cur):
-    is_auth_user =  utils.get_current_user(request, cur)
+    is_auth_user =  sessions.get_current_user(request, cur)
 
     if is_auth_user == None:
        return redirect('/login')
@@ -1014,7 +1015,7 @@ def remove_from_cart_meth(conn, cur):
     return redirect('/cart')
 
 def finish_payment(conn, cur):
-    is_auth_user =  utils.get_current_user(request, cur)
+    is_auth_user =  sessions.get_current_user(request, cur)
 
     if is_auth_user == None:
        return redirect('/login')
@@ -1087,7 +1088,7 @@ def staff_login(conn, cur):
 
         session['staff_username'] = username
 
-        session_id = utils.create_session(os, datetime, timedelta, username, cur, conn)
+        session_id = sessions.create_session(os, datetime, timedelta, username, cur, conn)
         response = make_response(redirect('/staff_portal'))
         response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
 
@@ -1096,7 +1097,7 @@ def staff_login(conn, cur):
         utils.AssertUser(False, "Invalid method")
 
 def staff_portal(conn, cur):
-    is_auth_user =  utils.get_current_user(request, cur)
+    is_auth_user =  sessions.get_current_user(request, cur)
 
     if is_auth_user == None:
        return redirect('/staff_login')
@@ -1191,7 +1192,7 @@ def get_active_users(sort_by='id', sort_order='desc', name=None, email=None, use
     return active_users
 
 def back_office_manager(conn, cur, *params):
-    is_auth_user =  utils.get_current_user(request, cur)
+    is_auth_user =  sessions.get_current_user(request, cur)
 
     if is_auth_user == None:
        return redirect('/staff_login')
@@ -2021,7 +2022,7 @@ def handle_request(username=None, path=''):
         
         current_time = time.time()
         if current_time - last_cleanup > 3600: # every hour 
-            utils.clear_expired_sessions(cur, conn)
+            sessions.clear_expired_sessions(cur, conn)
             last_cleanup = current_time
 
         # staff_username = user_email = utils.get_current_user(request, cur)
@@ -2030,10 +2031,10 @@ def handle_request(username=None, path=''):
 
         if request.path == '/home' or '/profile' and '/staff_portal' not in request.path and '/crud' not in request.path and '/error_logs' not in request.path and '/update_captcha_settings' not in request.path and '/report_sales' not in request.path and '/download_report' not in request.path and '/role_permissions' not in request.path and '/active_users' not in request.path and '/download_report_without_generating_rows_in_the_html' not in request.path:
             staff_username = None
-            user_email = utils.get_current_user(request, cur)
+            user_email = sessions.get_current_user(request, cur)
         else:
             user_email = None
-            staff_username = utils.get_current_user(request, cur)
+            staff_username = sessions.get_current_user(request, cur)
 
         if user_email is not None:
             cur.execute("SELECT last_active FROM users WHERE email = %s", (user_email,))
@@ -2065,7 +2066,7 @@ def handle_request(username=None, path=''):
         else:
             return funtion_to_call(conn, cur)
     except Exception as message:
-        user_email = utils.get_current_user(request, cur)
+        user_email = sessions.get_current_user(request, cur)
         traceback_details = traceback.format_exc()
         log_exception(conn, cur, message.__class__.__name__, str(message), user_email)
 
