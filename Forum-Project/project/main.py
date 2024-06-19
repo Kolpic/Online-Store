@@ -1412,22 +1412,22 @@ def back_office_manager(conn, cur, *params):
                 
                 offset = 0
 
-                while True:
-                    rows_fetched = False
-                    batch = utils.fetch_batches(conn, form_data['date_from'], form_data['date_to'], offset)               
+                # while True:
+                # rows_fetched = False
+                batch = utils.fetch_batches(conn, form_data['date_from'], form_data['date_to'], offset)               
 
-                    for row in batch:
-                        rows_fetched = True
+                for row in batch:
+                    rows_fetched = True
 
-                        for innerRow in row:
-                        
-                            cw.writerow(innerRow)
-                            si.seek(0)
-                            yield si.getvalue()
-                            si.truncate(0)
+                    for innerRow in row:
+                    
+                        cw.writerow(innerRow)
+                        si.seek(0)
+                        yield si.getvalue()
+                        si.truncate(0)
 
-                    if not rows_fetched: 
-                        break
+                    # if not rows_fetched: 
+                    #     break
                     offset += 10000
 
                 si.close()

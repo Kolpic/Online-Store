@@ -125,26 +125,36 @@ def create_random_orders(number_orders, cur, conn):
         counter = counter + 1
 
 def fetch_batches(conn, date_from, date_to, offset, batch_size=10000):
-
-    print("offset", flush=True)
-    print(offset, flush=True)
-
     with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
 
-        query = """
-            SELECT DATE(date_trunc('second',o.order_date)) as datee, o.order_id as ooid, o.status as ss, u.first_name as fn, SUM(oi.quantity * oi.price) AS total_price 
-            FROM orders AS o 
+        cursor_name = 'batch_cursor'
+        
+        query = f"""
+            DECLARE {cursor_name} CURSOR FOR
+            SELECT DATE(date_trunc('second', o.order_date)) AS datee, 
+                   o.order_id AS ooid, 
+                   o.status AS ss, 
+                   u.first_name AS fn, 
+                   SUM(oi.quantity * oi.price) AS total_price
+            FROM orders AS o
             JOIN users AS u ON o.user_id = u.id
             JOIN order_items AS oi ON o.order_id = oi.order_id
-            WHERE order_date >= '2017-01-01 21:00:00' and order_date <= '2024-03-20 00:00:00'
+            WHERE o.order_date >= '1950-01-01 21:00:00' AND o.order_date <= '2024-01-01 00:00:00'
             GROUP BY datee, o.order_id, u.first_name, u.last_name, oi.quantity, oi.price
-            ORDER BY order_date
-            LIMIT %s OFFSET %s
+            ORDER BY o.order_date;
         """
-        cur.execute(query, (batch_size, offset))
+
+        cur.execute(query)
+        fetch_query = f"FETCH {batch_size} FROM {cursor_name}"
+
         while True:
-            rows = cur.fetchmany(batch_size)
+
+            cur.execute(fetch_query)
+            rows = cur.fetchall()
 
             if not rows:
+                print("No more rows to fetch, breaking loop...", flush=True)
                 break
             yield rows
+
+        cur.execute(f"CLOSE {cursor_name}")
