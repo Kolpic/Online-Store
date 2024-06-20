@@ -45,14 +45,6 @@
                     {{ session['staff_username'] }}
                 {% endif %}
             </h1>
-            <div class="nav">
-                {% if 'staff_username' in session %}
-                    <a href="/logout_staff" class="btn btn-danger">Logout</a>
-                {% else %}
-                    <a href="/registration" class="btn btn-info">Register</a>
-                    <a href="/login" class="btn btn-primary">Login</a>
-                {% endif %}
-            </div>
         </div>
         <div class="list-group">
             <a href="/error_logs" class="list-group-item list-group-item-action">1. View Logs</a>

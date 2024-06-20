@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title> {% block title %} Back Office {% endblock %}</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+<style>
+        body, html {
+            height: 100%;
+            margin: 0;
+        }
+        .flex-container {
+            display: flex;
+            height: 100%;
+        }
+        .sidebar {
+            flex: 0 0 300px; /* fixed width */
+            background: #f8f9fa;
+            padding: 20px;
+            overflow-y: auto; /* makes it scrollable */
+        }
+        .main-content {
+            flex-grow: 1;
+            padding: 20px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+        }
+        .nav .btn {
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="flex-container">
+        <div class="sidebar">
+            <div class="list-group">
+                <a href="/error_logs" class="list-group-item list-group-item-action">1. View Logs</a>
+                <a href="/crud_products" class="list-group-item list-group-item-action">2. Manage Products</a>
+                <a href="/update_captcha_settings" class="list-group-item list-group-item-action">3. Update Captcha Settings</a>
+                <a href="/report_sales" class="list-group-item list-group-item-action">4. Report Sales</a>
+                <a href="/crud_staff" class="list-group-item list-group-item-action">5. Assign a role to staff</a>
+                <a href="/role_permissions" class="list-group-item list-group-item-action">6. Assign a permission to role</a>
+                <a href="/crud_orders" class="list-group-item list-group-item-action">7. Manage Orders</a>
+                <a href="/active_users" class="list-group-item list-group-item-action">8. See active users</a>
+            </div>
+        </div>
+        <div class="main-content">
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</body>
+<script>
+    window.onload = function() {
+     setTimeout(function() {
+         let homeAlert = document.getElementById('homeAlert');
+         if (homeAlert) {
+             homeAlert.style.display = 'none';
+         }
+     }, 3000);
+ };
+</script>
+</html>

@@ -2,12 +2,15 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Product Management</title>
+
+    {% extends "base.html" %}
+    {% block title %}Product Management{% endblock %}
+
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 </head>
 <style>
     .container {
-        margin-top: 50px;
+        margin-top: 100px;
     }
     .list-group-item {
         font-size: 1.2rem; 
@@ -48,6 +51,7 @@
                 {% endif %}
             </div>
         </div>
+    {% block content %}
     <div class="container mt-3">
         <h2>Product Management</h2>
         <div class="mb-2">
@@ -95,6 +99,7 @@
             </tbody>
         </table>
     </div>
+    {% endblock %}
 </body>
 <script>
     function navigateTo(path) {

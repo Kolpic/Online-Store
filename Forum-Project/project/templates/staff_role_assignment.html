@@ -2,10 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Assign Role to Staff</title>
+
+    {% extends "base.html" %}
+    {% block title %}Assign Role to Staff{% endblock %}
+
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 </head>
 <body>
+    {% block content %}
     <div class="container mt-3">
         <div class="container mt-3">
             <h2>Staff Roles Management</h2>
@@ -34,5 +38,6 @@
                 </tbody>
             </table>
         </div>
+        {% endblock %}
 </body>
 </html>

@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Log Exceptions</title>
+
+    {% extends "base.html" %}
+    {% block title %}Logs Exception{% endblock %}
+
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
     <style>
         .container {
@@ -26,6 +29,7 @@
     </style>
 </head>
 <body>
+    {% block content %}
     <div class="container mt-3">
         <div class="header">
             <h1 class="mb-4">{{ session['staff_username'] }}</h1>
@@ -39,6 +43,7 @@
             </div>
         </div>
         <h2>Log Exceptions</h2>
+        <br>
         <table class="table">
             <thead>
                 <tr>
@@ -60,5 +65,6 @@
             </tbody>
         </table>
     </div>
+    {% endblock %}
 </body>
 </html>

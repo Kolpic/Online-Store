@@ -20,6 +20,7 @@ class CustomSession(db.Model):
     session_id = db.Column(db.String(40), default=lambda:uuid.uuid4().hex)
     data = db.Column(db.Text)
     expires_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now() + timedelta(hours=1))
+    is_active = db.Column(db.Boolean, default=False, nullable=False)
 
 class CartItem(db.Model):
     __tablename__ = 'cart_items'

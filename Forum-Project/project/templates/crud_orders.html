@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Order Management</title>
+
+    {% extends "base.html" %}
+    {% block title %}Order Management{% endblock %}
+
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
     <style>
         .container {
@@ -26,6 +29,7 @@
     </style>
 </head>
 <body>
+    {% block content %}
     {% if 'crud_error' in session %}
         <div class="alert alert-danger" id="homeAlert">
             {{ session.pop('crud_error') }}
@@ -116,6 +120,7 @@
             </tbody>
         </table>
     </div>
+    {% endblock %}
 </body>
 <script>
     function navigateTo(path) {

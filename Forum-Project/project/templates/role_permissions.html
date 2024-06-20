@@ -2,7 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Role Permissions Management</title>
+
+    {% extends "base.html" %}
+    {% block title %} Role Permission's Management {% endblock %}
+
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
     <script>
         function onRoleChange() {
@@ -13,6 +16,7 @@
     </script>
 </head>
 <body>
+    {% block content %}
     {% if 'role_permission_error' in session %}
     <div class="alert alert-danger" id="homeAlert">
         {{ session.pop('role_permission') }}
@@ -63,6 +67,7 @@
         <br>
         <a href="/{{ role_to_display }}/staff_portal" class="btn btn-primary">Home page</a>
     </div>
+    {% endblock %}
 </body>
 <script>
     window.onload = function() {
