@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>User Orders</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<style>
+</style>
+<body>
+    <div class="container mt-3">
+        <h2>Orders</h2>
+        <form id="priceForm" method="get">
+            
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label for="price_min">Price from:</label>
+                    <input type="text" id="price_min" name="price_min" placeholder="Min Price" class="form-control" value="{{ price_min }}">
+                </div>
+                <div class="form-group col-md-4">
+                    <label for="price_max">Price to:</label>
+                    <input type="text" id="price_max" name="price_max" placeholder="Max Price" class="form-control" value="{{ price_max }}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label for="date_from">Date from:</label>
+                    <input type="datetime-local" id="date_from" name="date_from" placeholder="Date from" class="form-control" value="{{ date_from }}">
+                </div>
+                <div class="form-group col-md-4">
+                    <label for="date_to">Date to:</label>
+                    <input type="datetime-local" id="date_to" name="date_to" placeholder="Date to" class="form-control" value="{{ date_to }}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label for="order_by_id">Find order by id:</label>
+                    <input type="text" id="order_by_id" name="order_by_id" placeholder="Order id" class="form-control" value="{{ order_by_id }}" onchange="submitForm()">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                        <label for="status">Status:</label>
+                        <select class="form-control" id="status" name="status">
+                            {% for status in statuses %}
+                            <option value="{{ status[0] }}" {% if current_status == status[0] %} selected {% endif %}>{{ status[0] }}</option>
+                            {% endfor %}
+                        </select>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary mt-4">Filter by all selected fields</button>
+
+        </form>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th><a href="?sort=id&order={{ 'asc' if request.args.get('sort') == 'id' and request.args.get('order') == 'desc' else 'desc' }}">Order ID</a></th>
+                    <th><a href="">Status</a></th>
+                    <th><a href="?sort=date&order={{ 'desc' if request.args.get('sort') == 'date' and request.args.get('order') == 'asc' else 'asc' }}">Date</a></th>
+                    <th>Product ID</th>
+                    <th>Product Name</th>
+                    <th class="text-right">Product price</th>
+                    <th class="text-right">Product quantity</th>
+                    <th class="text-right">Total order price</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for order in orders %}
+                <tr>
+                    <td>{{ order[0]}}</td>
+                    <td>{{ order[1]}}</td>
+                    <td>{{ order[2]}}</td>
+                    <td>{{ order[3]}}</td>
+                    <td>{{ order[4]}}</td>
+                    <td class="text-right">{{ order[5]}} {{ order[8] }}</td>
+                    <td class="text-right">{{ order[6]}}</td>
+                    <td class="text-right">{{ order[7]}} {{ order[8] }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+<script>
+    function navigateTo(path) {
+            const baseURL = window.location.href.split('?')[0]; 
+            window.location.href = baseURL + '/' + path;
+    }
+
+    function submitForm() {
+        document.getElementById("priceForm").submit();
+    }
+    window.onload = function() {
+        setTimeout(function() {
+            let homeAlert = document.getElementById('homeAlert');
+            if (homeAlert) {
+                homeAlert.style.display = 'none';
+            }
+        }, 3000);
+    };
+</script>
+</html>

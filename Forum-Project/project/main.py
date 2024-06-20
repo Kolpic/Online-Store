@@ -1148,6 +1148,81 @@ def update_cart_quantity(conn, cur):
 
     return jsonify(success=True, new_total=new_total)
 
+def user_orders(conn, cur):
+    is_auth_user =  sessions.get_current_user(request, cur)
+
+    if is_auth_user == None:
+       return redirect('/login')
+
+    if request.method == 'GET':
+
+        valid_sort_columns = {'id', 'date'}
+        valid_sort_orders = {'asc', 'desc'}
+
+        sort_by = request.args.get('sort', 'id')
+        sort_order = request.args.get('order', 'desc')
+        price_min = request.args.get('price_min', '', type=float)
+        price_max = request.args.get('price_max', '', type=float)
+        order_by_id = request.args.get('order_by_id', '', type=int)
+        date_from = request.args.get('date_from', '')
+        date_to = request.args.get('date_to', '')
+        status = request.args.get('status', '')
+
+        cur.execute("SELECT DISTINCT status FROM orders")
+        statuses = cur.fetchall()
+
+        params = []
+        query = """
+            SELECT 
+                o.order_id                                             AS ooid, 
+                o.status                                               AS os, 
+                to_char(o.order_date, 'MM-DD-YYYY HH:MI:SS')           AS od, 
+                oi.product_id                                          AS oipid, 
+                p.name                                                 AS pn,
+                oi.price                                               AS oip, 
+                oi.quantity                                            AS oiq, 
+                to_char(sum(oi.price * oi.quantity), 'FM999999990.00') AS total_price,
+                c.symbol                                               AS cs
+            FROM orders      AS o 
+            JOIN users       AS u  on o.user_id     = u.id 
+            JOIN order_items AS oi on o.order_id    = oi.order_id 
+            JOIN products    AS p  on oi.product_id = p.id 
+            JOIN currencies  AS c  on p.currency_id = c.id 
+            WHERE u.email = %s 
+            """
+
+        params.append(is_auth_user)
+
+        if order_by_id:
+            query += " AND o.order_id = %s"
+            params.append(order_by_id)
+
+        if date_from and date_to and order_by_id == '':
+            query += " AND o.order_date >= %s AND o.order_date <= %s"
+            params.extend([date_from, date_to])
+
+        if status and order_by_id == '':
+            query += " AND o.status = %s"
+            params.append(status)
+
+        if price_min and price_max and order_by_id == '':
+            query += "GROUP BY ooid, os, od, oipid, oip, oiq, pn, cs HAVING sum(oi.quantity * oi.price) >= %s AND sum(oi.quantity * oi.price) <= %s"
+            params.extend([price_min, price_max])
+
+        if price_min == '' and price_max == '':
+            query += " GROUP BY ooid, os, od, oipid, oip, oiq, pn, cs "
+
+        query += f" ORDER BY o.order_{sort_by} {sort_order} LIMIT 50;"
+
+        cur.execute(query, params)
+
+        orders = cur.fetchall()
+
+        return render_template('user_orders.html', orders = orders, statuses = statuses, price_min=price_min, price_max=price_max, date_from=date_from, date_to=date_to, order_by_id=order_by_id)
+    else:
+        utils.AssertUser(False, "Invalid method")
+
+
 def get_active_users(sort_by='id', sort_order='desc', name=None, email=None, user_id=None):
     active_threshold = datetime.now() - timedelta(minutes=30)
 
@@ -1956,6 +2031,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/update_cart_quantity', update_cart_quantity),
     (r'(?:/[A-z]+)?/remove_from_cart', remove_from_cart_meth),
     (r'(?:/[A-z]+)?/finish_payment', finish_payment),
+    (r'(?:/[A-z]+)?/user_orders', user_orders),
     (r'(?:/[A-z]+)?/staff_login', staff_login),
     (r'(?:/[A-z]+)?/staff_portal', staff_portal),
     (r'(?:/[A-z]+)?/logout_staff', logout_staff),
