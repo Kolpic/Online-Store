@@ -2,10 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-
     {% extends "base.html" %}
-    {% block title %}Product Management{% endblock %}
-
+    {% block title %}Product Management{% endblock %}s
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 </head>
 <style>
@@ -99,7 +97,6 @@
             </tbody>
         </table>
     </div>
-    {% endblock %}
 </body>
 <script>
     function navigateTo(path) {
@@ -119,4 +116,5 @@
         }, 3000);
     };
 </script>
+{% endblock %}
 </html>

@@ -1,4 +1,4 @@
-from flask import Flask, request, render_template, redirect, url_for, session, abort, Response, jsonify, flash, make_response, request, stream_with_context
+from flask import Flask, request, render_template, redirect, url_for, session, abort, Response, jsonify, flash, make_response, request, stream_with_context, send_file
 from flask_mail import Mail, Message
 from flask_migrate import Migrate
 from decimal import Decimal
@@ -1148,6 +1148,17 @@ def update_cart_quantity(conn, cur):
 
     return jsonify(success=True, new_total=new_total)
 
+def serve_image_crud_products_edit(conn, cur, product_id):
+    cur.execute("SELECT image FROM products WHERE id = %s", (product_id,))
+    image = cur.fetchone()[0]
+    if image:
+        return Response(
+            io.BytesIO(image).getvalue(),
+            mimetype='image/jpeg'
+        )
+    else:
+        return "No image found"
+
 def user_orders(conn, cur):
     is_auth_user =  sessions.get_current_user(request, cur)
 
@@ -1763,6 +1774,8 @@ def back_office_manager(conn, cur, *params):
             cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
             product = cur.fetchone()
 
+            print(product, flush=True)
+
             utils.AssertUser(product, "Invalid product")
 
             return render_template('edit_product.html', product=product, product_id=product_id, username=username, currencies = all_currencies)
@@ -2043,7 +2056,7 @@ def back_office_manager(conn, cur, *params):
         return redirect(f'/{username}/crud_orders')
 
     else:
-        utils.AssertUser(False, "Invalid url") 
+        utils.AssertUser(False, "Invalid url")
 
 @app.route('/favicon.ico')
 def favicon():
@@ -2064,6 +2077,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/send_login_link', send_login_link),
     (r'/log', login_with_token),
     (r'(?:/[A-z]+)?/image/(\d+)', serve_image),
+    (r'(?:/[A-z]+)?/crud_products_edit_picture/(\d+)', serve_image_crud_products_edit),
     (r'/generate_orders', generate_orders),
     (r'(?:/[A-z]+)?/add_to_cart', add_to_cart_meth),
     (r'(?:/[A-z]+)?/cart', cart),
