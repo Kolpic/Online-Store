@@ -125,7 +125,7 @@ FIELD_CONFIG = {
             'orders': {
                 'user_id': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "User id must be possitive")]},
                 'status': {'type': str, 'required': True},
-                'order_date': {'type': datetime, 'required': True},
+                'order_date': {'type': datetime, 'required': True, 'conditions': [(lambda x: datetime.strptime(x, '%Y-%m-%dT%H:%M') <= datetime.now(), "You can't make orders with future date")]},
             },
             'order_items': {
                 'product_id': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "Product id must be possitive")]},
@@ -1923,15 +1923,15 @@ def back_office_manager(conn, cur, *params):
             query += " AND o.order_id = %s"
             params.append(order_by_id)
 
-        if date_from and date_to and order_by_id == '':
+        if date_from and date_to:
             query += " AND o.order_date >= %s AND o.order_date <= %s"
             params.extend([date_from, date_to])
 
-        if status and order_by_id == '':
+        if status:
             query += " AND o.status = %s"
             params.append(status)
 
-        if price_min and price_max and order_by_id == '':
+        if price_min and price_max:
             query += "GROUP BY o.order_id, user_names, c.symbol HAVING sum(oi.quantity * oi.price) >= %s AND sum(oi.quantity * oi.price) <= %s"
             params.extend([price_min, price_max])
 
@@ -2004,8 +2004,10 @@ def back_office_manager(conn, cur, *params):
             cur.execute("SELECT DISTINCT status FROM orders")
             statuses = cur.fetchall()
 
-            cur.execute("SELECT order_date FROM orders")
+            cur.execute("SELECT order_date FROM orders WHERE order_id = %s", (order_id,))
             order_date = cur.fetchone()[0]
+
+            formatted_date = order_date.strftime('%Y-%m-%dT%H:%M:%S')
 
             cur.execute("""
                     SELECT 
@@ -2028,7 +2030,7 @@ def back_office_manager(conn, cur, *params):
             for product in products_from_order:
                 all_products_sum += product[2] * product[3]
 
-            return render_template('edit_order.html', order_id=order_id, username=username, statuses=statuses, order_date = order_date, products_from_order=products_from_order, all_products_sum=all_products_sum)
+            return render_template('edit_order.html', order_id=order_id, username=username, statuses=statuses, order_date = formatted_date, products_from_order=products_from_order, all_products_sum=all_products_sum)
 
         elif request.method == 'POST':
 
