@@ -1159,6 +1159,7 @@ def user_orders(conn, cur):
         valid_sort_columns = {'id', 'date'}
         valid_sort_orders = {'asc', 'desc'}
 
+        # SQL adaptation protocol objects
         sort_by = request.args.get('sort', 'id')
         sort_order = request.args.get('order', 'desc')
         price_min = request.args.get('price_min', '', type=float)
@@ -1167,6 +1168,10 @@ def user_orders(conn, cur):
         date_from = request.args.get('date_from', '')
         date_to = request.args.get('date_to', '')
         status = request.args.get('status', '')
+
+        page = request.args.get('page', 1, type=int)
+        per_page = request.args.get('per_page', 50, type=int)
+        offset = (page - 1) * per_page
 
         cur.execute("SELECT DISTINCT status FROM orders")
         statuses = cur.fetchall()
@@ -1210,13 +1215,47 @@ def user_orders(conn, cur):
             params.extend([price_min, price_max])
 
         if price_min == '' and price_max == '':
+            # o.order_id
             query += " GROUP BY ooid, os, od, oipid, oip, oiq, pn, cs "
 
-        query += f" ORDER BY o.order_{sort_by} {sort_order} LIMIT 50;"
+        # TODO  o.order_{sort_by} {sort_order}
+        query += f" ORDER BY o.order_{sort_by} {sort_order} LIMIT 1000" # LIMIT %s OFFSET %s; params += [per_page, (page - 1) * per_page]
 
-        cur.execute(query, params)
 
-        orders = cur.fetchall()
+        # cur.execute(query, params)
+        # rows = cur.fetchall()
+        # if not rows:
+        #     return jsonify([])
+        # column_names = ["order_id", "status", "order_date", "product_id", "product_name", "price", "quantity", "total_price", "currency_symbol"]
+        # orders = [{column: row[idx] for idx, column in enumerate(column_names)} for row in rows]
+        # return jsonify(orders)
+
+        cur_name = "order_cursor"
+        cur.execute(f"DECLARE {cur_name} SCROLL CURSOR FOR {query}", params)
+
+        cur.execute("FETCH FORWARD 50 FROM order_cursor")
+
+        fetch_size = 50
+
+        def fetch_orders():
+            while True:
+                cur.execute(f"FETCH FORWARD {fetch_size} FROM {cur_name}")
+                batch = cur.fetchall()
+
+                if not batch:
+                    break
+
+                for row in batch:
+                    yield row
+
+            cur.execute(f"CLOSE {cur_name}") 
+
+        orders_generator = fetch_orders()
+
+        print("orders_generator", flush=True)
+        print(orders_generator, flush=True)
+
+        orders = list(orders_generator)
 
         return render_template('user_orders.html', orders = orders, statuses = statuses, price_min=price_min, price_max=price_max, date_from=date_from, date_to=date_to, order_by_id=order_by_id)
     else:

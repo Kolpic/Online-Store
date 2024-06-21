@@ -127,10 +127,11 @@ def create_random_orders(number_orders, cur, conn):
 def fetch_batches(conn, date_from, date_to, offset, batch_size=10000):
     with conn.cursor(cursor_factory=psycopg2.extras.DictCursor) as cur:
 
-        cursor_name = 'batch_cursor'
+        CURSOR_NAME = 'batch_cursor'
         
+        #TODO: rename as
         query = f"""
-            DECLARE {cursor_name} CURSOR FOR
+            DECLARE {CURSOR_NAME} CURSOR FOR
             SELECT DATE(date_trunc('second', o.order_date)) AS datee, 
                    o.order_id AS ooid, 
                    o.status AS ss, 
@@ -145,7 +146,7 @@ def fetch_batches(conn, date_from, date_to, offset, batch_size=10000):
         """
 
         cur.execute(query)
-        fetch_query = f"FETCH {batch_size} FROM {cursor_name}"
+        fetch_query = f"FETCH {batch_size} FROM {CURSOR_NAME}"
 
         while True:
 
@@ -157,4 +158,4 @@ def fetch_batches(conn, date_from, date_to, offset, batch_size=10000):
                 break
             yield rows
 
-        cur.execute(f"CLOSE {cursor_name}")
+        cur.execute(f"CLOSE {CURSOR_NAME}")
