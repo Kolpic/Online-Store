@@ -1230,16 +1230,22 @@ def user_orders(conn, cur):
             query += " GROUP BY ooid, os, od, oipid, oip, oiq, pn, cs "
 
         # TODO  o.order_{sort_by} {sort_order}
-        query += f" ORDER BY o.order_{sort_by} {sort_order} LIMIT 1000" # LIMIT %s OFFSET %s; params += [per_page, (page - 1) * per_page]
+        query += f" ORDER BY o.order_{sort_by} {sort_order} LIMIT 100; " # LIMIT %s OFFSET %s; params += [per_page, (page - 1) * per_page]
 
+        # params += [per_page, (page - 1) * per_page]
 
         # cur.execute(query, params)
         # rows = cur.fetchall()
+
         # if not rows:
         #     return jsonify([])
+
         # column_names = ["order_id", "status", "order_date", "product_id", "product_name", "price", "quantity", "total_price", "currency_symbol"]
         # orders = [{column: row[idx] for idx, column in enumerate(column_names)} for row in rows]
+
         # return jsonify(orders)
+
+        # print(jsonify(orders), flush=True)
 
         cur_name = "order_cursor"
         cur.execute(f"DECLARE {cur_name} SCROLL CURSOR FOR {query}", params)
@@ -1262,9 +1268,6 @@ def user_orders(conn, cur):
             cur.execute(f"CLOSE {cur_name}") 
 
         orders_generator = fetch_orders()
-
-        print("orders_generator", flush=True)
-        print(orders_generator, flush=True)
 
         orders = list(orders_generator)
 

@@ -84,47 +84,6 @@
             </tbody>
         </table>
     </div>
-    <script>
-        window.onload = function() {
-            loadMoreOrders();
-        };
-
-        let currentPage = 1;
-        const ordersBody = document.getElementById('ordersBody');
-
-        window.onscroll = function() {
-            if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
-                loadMoreOrders();
-            }
-        };
-
-        function loadMoreOrders() {
-            fetch(`/user_orders?page=${currentPage}&per_page=50`)
-                .then(response => response.json())
-                .then(orders => {
-                    if (orders.length === 0) {
-                        window.onscroll = null; // No more orders to load
-                        return;
-                    }
-                    orders.forEach(order => {
-                        const row = document.createElement('tr');
-                        row.innerHTML = `
-                            <td>${order.order_id}</td>
-                            <td>${order.status}</td>
-                            <td>${order.order_date}</td>
-                            <td>${order.product_id}</td>
-                            <td>${order.product_name}</td>
-                            <td class="text-right">${order.price.toFixed(2)} ${order.currency_symbol}</td>
-                            <td class="text-right">${order.quantity}</td>
-                            <td class="text-right">${(order.price * order.quantity).toFixed(2)} ${order.currency_symbol}</td>
-                        `;
-                        ordersBody.appendChild(row);
-                    });
-                    currentPage++;
-                })
-                .catch(error => console.error('Error loading more orders:', error));
-        }
-    </script>
 </body>
 <script>
     function navigateTo(path) {
@@ -135,5 +94,54 @@
     function submitForm() {
         document.getElementById("priceForm").submit();
     }
+
+    // window.onload = function() {
+    //         loadMoreOrders();
+    //     };
+
+    //     let currentPage = 1;
+    //     const ordersBody = document.getElementById('ordersBody');
+
+    //     window.onscroll = function() {
+    //         if (window.innerHeight + window.scrollY >= document.body.offsetHeight - 100) {
+    //             loadMoreOrders();
+    //         }
+    //     };
+
+    //     function loadMoreOrders() {
+    //         fetch(`/user_orders?page=${currentPage}&per_page=50`)
+    //             .then(response => {
+    //                 if (response.ok && response.headers.get("content-type")?.includes("application/json")) {
+    //                     return response.json();
+    //                 } else {
+    //                     throw new Error('Non-JSON response received');
+    //                 }
+    //             })
+    //             .then(orders => {
+    //                 if (orders.length === 0) {
+    //                     window.onscroll = null; // No more orders to load
+    //                     return;
+    //                 }
+    //                 orders.forEach(order => {
+    //                     const row = document.createElement('tr');
+    //                     row.innerHTML = `
+    //                         <td>${order.order_id}</td>
+    //                         <td>${order.status}</td>
+    //                         <td>${order.order_date}</td>
+    //                         <td>${order.product_id}</td>
+    //                         <td>${order.product_name}</td>
+    //                         <td class="text-right">${order.price.toFixed(2)} ${order.currency_symbol}</td>
+    //                         <td class="text-right">${order.quantity}</td>
+    //                         <td class="text-right">${(order.price * order.quantity).toFixed(2)} ${order.currency_symbol}</td>
+    //                     `;
+    //                     ordersBody.appendChild(row);
+    //                 });
+    //                 currentPage++;
+    //             })
+    //             .catch(error => {
+    //                 console.error('Error loading more orders:', error);
+
+    //     });
+    //         }
 </script>
 </html>
