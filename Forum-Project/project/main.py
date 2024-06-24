@@ -1338,7 +1338,34 @@ def back_office_manager(conn, cur, *params):
 
         return render_template('active_users.html', users=users, name=name, email=email, user_id=user_id)
 
-    if request.path == f'/{username}/error_logs':     
+    elif request.path == f'/{username}/crud_products/upload_products':
+        print("Entered /crud_products/upload_products cucessfully", flush=True)
+
+        file = request.files['productFile']
+
+        print("file", flush=True)
+        print(file, flush=True)
+
+        if file and  '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in ['csv']:
+
+            data = csv.reader(file.read().decode('utf-8').splitlines())
+
+            print("data", flush=True)
+            print(data, flush=True)
+
+            headers = next(data)  # Skip the header row
+
+            try:
+                utils.batch_insert_import_csv(cur, data, os)
+                session['crud_message'] = "Successfully inserted all products"
+            except Exception as e:
+                session['crud_error'] = "Something went wrong with the upload"
+        else:
+            session['crud_error'] = "Invalid file or file type."
+
+        return redirect(f'/{username}/crud_products')
+
+    elif request.path == f'/{username}/error_logs':     
         utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read'), "You don't have permission to this resource")
 
         sort_by = request.args.get('sort','time')
@@ -1361,7 +1388,7 @@ def back_office_manager(conn, cur, *params):
 
         return render_template('logs.html', log_exceptions = log_exceptions, sort_by=sort_by, sort_order=sort_order)
     
-    if request.path == f'/{username}/update_captcha_settings':
+    elif request.path == f'/{username}/update_captcha_settings':
         utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'read'), "You don't have permission to this resource")
 
         if request.method == 'GET':
@@ -1389,7 +1416,7 @@ def back_office_manager(conn, cur, *params):
 
         return redirect(f'/{username}/staff_portal')
 
-    if request.path.split('/')[2] == 'report_sales':
+    elif request.path.split('/')[2] == 'report_sales':
         utils.AssertUser(utils.has_permission(cur, request, 'Report sales', 'read'), "You don't have permission to this resource")
 
         default_to_date = datetime.now()
@@ -1521,7 +1548,7 @@ def back_office_manager(conn, cur, *params):
         else:
             utils.AssertUser(False, "Invalid url")
 
-    if request.path == f'/{username}/download_report_without_generating_rows_in_the_html':
+    elif request.path == f'/{username}/download_report_without_generating_rows_in_the_html':
 
         form_data = {key: request.form.get(key, '') for key in ['date_from', 'date_to', 'format']}
 
@@ -1566,7 +1593,7 @@ def back_office_manager(conn, cur, *params):
             return response
 
 
-    if request.path == f'/{username}/download_report':
+    elif request.path == f'/{username}/download_report':
 
         keys = ['date_from', 'date_to', 'group_by', 'status', 'total_records', 'total_price', 'report_data', 'format']
 
@@ -1655,7 +1682,7 @@ def back_office_manager(conn, cur, *params):
         else:
             utils.AssertDev(False, "Invalid download format")
 
-    if request.path == f'/{username}/role_permissions':
+    elif request.path == f'/{username}/role_permissions':
         utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read'), "You don't have permission to this resource")
         interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles', 'CRUD Orders']
 
@@ -1698,7 +1725,7 @@ def back_office_manager(conn, cur, *params):
 
         return redirect(f'/{username}/role_permissions?role=' + role_id)
 
-    if f'/{username}/crud_products' in request.path and len(request.path.split('/')) == 3:
+    elif f'/{username}/crud_products' in request.path and len(request.path.split('/')) == 3:
 
         print("Enterd crud_products read successfully", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read'), "You don't have permission to this resource")
@@ -2067,6 +2094,35 @@ def back_office_manager(conn, cur, *params):
 def favicon():
     return app.send_static_file('favicon.ico')
 
+# @app.route('/<username>/upload_products', methods=['POST'])
+# def upload_products(username):
+
+#     file = request.files['productFile']
+#     if file and  '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in ['csv']:
+
+#         data = csv.reader(file.read().decode('utf-8').splitlines())
+#         headers = next(data)  # Skip the header row
+
+#         try:
+#             batch_insert(cur, data)
+#             flash("Products uploaded successfully.")
+#         except Exception as e:
+#             flash(str(e))  
+#     else:
+#         flash("Invalid file or file type.")
+
+#     return redirect('/crud.html', username=username)
+
+# def batch_insert_import_csv(cursor, data, batch_size=100):
+#     batch = []
+#     for row in data:
+#         batch.append(row)
+#         if len(batch) >= batch_size:
+#             cursor.executemany("INSERT INTO products (name, price, quantity, category, currency_id) VALUES (%s, %s, %s, %s, %s)", batch)
+#             batch = [] 
+#     if batch:
+#         cursor.executemany("INSERT INTO products (name, price, quantity, category, currency_id) VALUES (%s, %s, %s, %s, %s)", batch)
+
 url_to_function_map = [
     (r'(?:/[A-z]+)?/registration', registration),
     (r'(?:/[A-z]+)?/refresh_captcha', refresh_captcha),
@@ -2094,7 +2150,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/staff_portal', staff_portal),
     (r'(?:/[A-z]+)?/logout_staff', logout_staff),
     (r'(/[A-z]+)/logout_staff', logout_staff),
-    (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html)(?:/[\w\d\-_/]*)?', back_office_manager),
+    (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 
 @app.endpoint("handle_request")

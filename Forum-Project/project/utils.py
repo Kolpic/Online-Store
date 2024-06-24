@@ -159,3 +159,31 @@ def fetch_batches(conn, date_from, date_to, offset, batch_size=10000):
             yield rows
 
         cur.execute(f"CLOSE {CURSOR_NAME}")
+
+def batch_insert_import_csv(cursor, data, os, batch_size=100):
+    batch = []
+
+    for row in data:
+        row_currency = row[5]
+
+        cursor.execute("SELECT id FROM currencies WHERE symbol = %s", ([row_currency]))
+        row_currency_id = cursor.fetchone()[0]
+
+        row[5] = row_currency_id
+
+        image_filename = row[4]
+
+        image_path = os.path.join(os.path.dirname("/home/galin/Desktop/projects/GitHub/Forum-Project/images/"), image_filename)
+
+        with open(image_path, 'rb') as img_file:
+            image_data = img_file.read()
+
+            row[4] = image_data
+
+        batch.append(row)
+
+        if len(batch) >= batch_size:
+            cursor.executemany("INSERT INTO products (name, price, quantity, category, image, currency_id) VALUES (%s, %s, %s, %s, %s, %s)", batch)
+            batch = [] 
+    if batch:
+        cursor.executemany("INSERT INTO products (name, price, quantity, category, image, currency_id) VALUES (%s, %s, %s, %s, %s, %s)", batch)
