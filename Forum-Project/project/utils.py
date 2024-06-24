@@ -132,16 +132,23 @@ def fetch_batches(conn, date_from, date_to, offset, batch_size=10000):
         #TODO: rename as
         query = f"""
             DECLARE {CURSOR_NAME} CURSOR FOR
-            SELECT DATE(date_trunc('second', o.order_date)) AS datee, 
-                   o.order_id AS ooid, 
-                   o.status AS ss, 
-                   u.first_name AS fn, 
-                   SUM(oi.quantity * oi.price) AS total_price
+            SELECT 
+                    DATE(date_trunc('second', o.order_date)) AS date, 
+                    o.order_id, 
+                    o.status, 
+                    u.first_name, 
+                    SUM(oi.quantity * oi.price)              AS total_price
             FROM orders AS o
-            JOIN users AS u ON o.user_id = u.id
+            JOIN users       AS u  ON o.user_id  = u.id
             JOIN order_items AS oi ON o.order_id = oi.order_id
             WHERE o.order_date >= '1950-01-01 21:00:00' AND o.order_date <= '2024-01-01 00:00:00'
-            GROUP BY datee, o.order_id, u.first_name, u.last_name, oi.quantity, oi.price
+            GROUP BY 
+                    date,
+                    o.order_id,
+                    u.first_name,
+                    u.last_name,
+                    oi.quantity,
+                    oi.price
             ORDER BY o.order_date;
         """
 
