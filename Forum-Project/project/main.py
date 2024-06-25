@@ -2159,6 +2159,7 @@ url_to_function_map = [
     (r'(/[A-z]+)/logout_staff', logout_staff),
     (r'(?:/[A-z]+)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
+# (?:/[A-z]+)?
 
 @app.endpoint("handle_request")
 def handle_request(username=None, path=''):
@@ -2168,16 +2169,11 @@ def handle_request(username=None, path=''):
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor()
 
-        # global last_cleanup
-        
-        # current_time = time.time()
-        # if current_time - last_cleanup > 3600: # every hour 
-        #     sessions.clear_expired_sessions(cur, conn)
-        #     last_cleanup = current_time
-
-        # staff_username = user_email = utils.get_current_user(request, cur)
         user_email = None
         staff_username = None
+
+        print("request.path 1 ", flush=True)
+        print(request.path, flush=True)
 
         if request.path == '/home' or '/profile' and '/staff_portal' not in request.path and '/crud' not in request.path and '/error_logs' not in request.path and '/update_captcha_settings' not in request.path and '/report_sales' not in request.path and '/download_report' not in request.path and '/role_permissions' not in request.path and '/active_users' not in request.path and '/download_report_without_generating_rows_in_the_html' not in request.path:
             staff_username = None
@@ -2190,7 +2186,7 @@ def handle_request(username=None, path=''):
             cur.execute("SELECT last_active FROM users WHERE email = %s", (user_email,))
             current_user_last_active = cur.fetchone()[0]
             cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (user_email,))
-        
+
         if staff_username is not None:
            if username is None:
                 # Redirect to the URL with the role included
@@ -2201,6 +2197,7 @@ def handle_request(username=None, path=''):
         match = None
 
         for pattern, function in url_to_function_map:
+
             match = re.match(pattern, request.path)
             if match:
                 funtion_to_call = function
