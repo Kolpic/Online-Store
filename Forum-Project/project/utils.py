@@ -6,6 +6,7 @@ from datetime import date
 import pandas as pd
 import random
 from datetime import datetime, timedelta
+# from psycopg2.extensions import adapt, register_adapter, AsIs
 
 database = config.database
 user = config.user
@@ -194,3 +195,65 @@ def batch_insert_import_csv(cursor, data, os, batch_size=100):
             batch = [] 
     if batch:
         cursor.executemany("INSERT INTO products (name, price, quantity, category, image, currency_id) VALUES (%s, %s, %s, %s, %s, %s)", batch)
+
+# def adapt_datetime(dt):
+#     return AsIs("'" + dt.strftime('%Y-%m-%dT%H:%M:%S') + "'")
+
+# register_adapter(datetime, adapt_datetime)
+
+def check_request_arg_fields(cur, request, datetime):
+
+    print("Entered check_request_arg_fields method")
+
+    valid_sort_columns = {'id', 'date'}
+    valid_sort_orders = {'asc', 'desc'}
+
+    # SQL adaptation protocol objects
+    sort_by = request.args.get('sort', 'id')
+    sort_order = request.args.get('order', 'desc')
+    price_min = request.args.get('price_min', '', type=float)
+    price_max = request.args.get('price_max', '', type=float)
+    order_by_id = request.args.get('order_by_id', '', type=int)
+    date_from = request.args.get('date_from', '')
+    date_to = request.args.get('date_to', '')
+    status = request.args.get('status', '')
+
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 50, type=int)
+    offset = (page - 1) * per_page
+
+    if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
+        sort_by = 'id'
+        sort_order = 'asc'
+
+    if price_min:
+        try:
+            price_min = float(price_min)
+        except:
+            utils.AssertUser(False, "Entered min price is not a number")
+
+    if price_max:
+        try:
+            price_max = float(price_max)
+        except:
+            utils.AssertUser(False, "Entered max price is not a number")
+
+    if order_by_id:
+        try:
+            order_by_id = int(order_by_id)
+        except:
+            utils.AssertUser(False, "Entered order by id is not a number")
+
+    if date_from:
+        try:
+            date_from = datetime.strptime(date_from, '%Y-%m-%dT%H:%M')
+        except:
+            utils.AssertUser(False, "Entered date_from is not a date")
+
+    if date_to:
+        try:
+            date_to = datetime.strptime(date_to, '%Y-%m-%dT%H:%M')
+        except:
+            utils.AssertUser(False, "Entered date_to is not a date")
+
+    return [sort_by, sort_order, price_min, price_max, order_by_id, date_from, date_to, status, page, per_page, offset]

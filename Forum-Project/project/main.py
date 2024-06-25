@@ -1167,22 +1167,59 @@ def user_orders(conn, cur):
 
     if request.method == 'GET':
 
-        valid_sort_columns = {'id', 'date'}
-        valid_sort_orders = {'asc', 'desc'}
+        # valid_sort_columns = {'id', 'date'}
+        # valid_sort_orders = {'asc', 'desc'}
 
         # SQL adaptation protocol objects
-        sort_by = request.args.get('sort', 'id')
-        sort_order = request.args.get('order', 'desc')
-        price_min = request.args.get('price_min', '', type=float)
-        price_max = request.args.get('price_max', '', type=float)
-        order_by_id = request.args.get('order_by_id', '', type=int)
-        date_from = request.args.get('date_from', '')
-        date_to = request.args.get('date_to', '')
-        status = request.args.get('status', '')
+        # sort_by = request.args.get('sort', 'id')
+        # sort_order = request.args.get('order', 'desc')
+        # price_min = request.args.get('price_min', '', type=float)
+        # price_max = request.args.get('price_max', '', type=float)
+        # order_by_id = request.args.get('order_by_id', '', type=int)
+        # date_from = request.args.get('date_from', '')
+        # date_to = request.args.get('date_to', '')
+        # status = request.args.get('status', '')
 
-        page = request.args.get('page', 1, type=int)
-        per_page = request.args.get('per_page', 50, type=int)
-        offset = (page - 1) * per_page
+        # page = request.args.get('page', 1, type=int)
+        # per_page = request.args.get('per_page', 50, type=int)
+        # offset = (page - 1) * per_page
+
+        # request_args_fields = utils.check_request_arg_fields(cur, request, datetime)
+
+        sort_by, sort_order, price_min, price_max, order_by_id, date_from, date_to, status, page, per_page, offset = utils.check_request_arg_fields(cur, request, datetime)
+
+        print("sort_by", flush=True)
+        print(sort_by, flush=True)
+
+        print("sort_order", flush=True)
+        print(sort_order, flush=True)
+
+        print("price_min", flush=True)
+        print(price_min, flush=True)
+
+        print("price_max", flush=True)
+        print(price_max, flush=True)
+
+        print("order_by_id", flush=True)
+        print(order_by_id, flush=True)
+
+        print("date_from", flush=True)
+        print(date_from, flush=True)
+
+        print("date_to", flush=True)
+        print(date_to, flush=True)
+
+        print("status", flush=True)
+        print(status, flush=True)
+
+        print("page", flush=True)
+        print(page, flush=True)
+
+        print("per_page", flush=True)
+        print(per_page, flush=True)
+
+        print("offset", flush=True)
+        print(offset, flush=True)
 
         cur.execute("SELECT DISTINCT status FROM orders")
         statuses = cur.fetchall()
@@ -1190,15 +1227,15 @@ def user_orders(conn, cur):
         params = []
         query = """
             SELECT 
-                o.order_id                                             AS ooid, 
-                o.status                                               AS os, 
-                to_char(o.order_date, 'MM-DD-YYYY HH:MI:SS')           AS od, 
-                oi.product_id                                          AS oipid, 
-                p.name                                                 AS pn,
-                oi.price                                               AS oip, 
-                oi.quantity                                            AS oiq, 
+                o.order_id, 
+                o.status, 
+                to_char(o.order_date, 'MM-DD-YYYY HH:MI:SS')           AS o_date, 
+                oi.product_id, 
+                p.name,
+                oi.price, 
+                oi.quantity, 
                 to_char(sum(oi.price * oi.quantity), 'FM999999990.00') AS total_price,
-                c.symbol                                               AS cs
+                c.symbol
             FROM orders      AS o 
             JOIN users       AS u  on o.user_id     = u.id 
             JOIN order_items AS oi on o.order_id    = oi.order_id 
@@ -1213,24 +1250,25 @@ def user_orders(conn, cur):
             query += " AND o.order_id = %s"
             params.append(order_by_id)
 
-        if date_from and date_to and order_by_id == '':
+        if date_from and date_to:
             query += " AND o.order_date >= %s AND o.order_date <= %s"
             params.extend([date_from, date_to])
 
-        if status and order_by_id == '':
+        if status:
             query += " AND o.status = %s"
             params.append(status)
 
-        if price_min and price_max and order_by_id == '':
-            query += "GROUP BY ooid, os, od, oipid, oip, oiq, pn, cs HAVING sum(oi.quantity * oi.price) >= %s AND sum(oi.quantity * oi.price) <= %s"
+        if price_min and price_max:
+            query += "GROUP BY o.order_id, o.status, o_date, oi.product_id, oi.price, oi.quantity, p.name, c.symbol HAVING sum(oi.quantity * oi.price) >= %s AND sum(oi.quantity * oi.price) <= %s"
             params.extend([price_min, price_max])
 
         if price_min == '' and price_max == '':
             # o.order_id
-            query += " GROUP BY ooid, os, od, oipid, oip, oiq, pn, cs "
+            query += " GROUP BY o.order_id, o.status, o_date, oi.product_id, oi.price, oi.quantity, p.name, c.symbol"
 
         # TODO  o.order_{sort_by} {sort_order}
-        query += f" ORDER BY o.order_{sort_by} {sort_order} LIMIT 100; " # LIMIT %s OFFSET %s; params += [per_page, (page - 1) * per_page]
+        query += f" ORDER BY o.order_{sort_by} {sort_order}  LIMIT 100; " # LIMIT %s OFFSET %s; params += [per_page, (page - 1) * per_page]
+        # params += [per_page, offset]
 
         # params += [per_page, (page - 1) * per_page]
 
