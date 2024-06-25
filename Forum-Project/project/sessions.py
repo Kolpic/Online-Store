@@ -5,7 +5,6 @@ def create_session(os, datetime, timedelta, session_data, cur, conn):
     cur.execute("INSERT INTO custom_sessions (session_id, data, expires_at, is_active) VALUES (%s, %s, %s, %s) RETURNING id", (session_id, session_data, expires_at, True))
     _id = cur.fetchone()['id']
 
-    # conn.commit()
     return session_id
 
 def get_current_user(request, cur):
@@ -20,14 +19,14 @@ def _get_user_by_session(session_id, cur):
     cur.execute("SELECT id FROM custom_sessions WHERE session_id = %s", (session_id,))
     _id = cur.fetchone()
  
-    cur.execute("SELECT data FROM custom_sessions WHERE session_id = %s AND id = %s AND expires_at > now()", (session_id, _id))
+    cur.execute("SELECT data FROM custom_sessions WHERE session_id = %s AND id = %s AND is_active = True", (session_id, _id))
 
     # utils.AssertDev(rowcounut = 1)
 
     result = cur.fetchone()
 
     if result:
-        cur.execute("UPDATE custom_sessions SET is_active = True WHERE session_id = %s AND id = %s", (session_id, _id))
+        # cur.execute("UPDATE custom_sessions SET is_active = True WHERE session_id = %s AND id = %s", (session_id, _id))
         return result[0]
     else:
         return None

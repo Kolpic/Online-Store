@@ -57,7 +57,7 @@ host = config.host
 
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # Maximum file size in bytes (e.g., 10MB)
-last_cleanup = 0
+# last_cleanup = 0
 
 app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
@@ -2094,35 +2094,6 @@ def back_office_manager(conn, cur, *params):
 def favicon():
     return app.send_static_file('favicon.ico')
 
-# @app.route('/<username>/upload_products', methods=['POST'])
-# def upload_products(username):
-
-#     file = request.files['productFile']
-#     if file and  '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in ['csv']:
-
-#         data = csv.reader(file.read().decode('utf-8').splitlines())
-#         headers = next(data)  # Skip the header row
-
-#         try:
-#             batch_insert(cur, data)
-#             flash("Products uploaded successfully.")
-#         except Exception as e:
-#             flash(str(e))  
-#     else:
-#         flash("Invalid file or file type.")
-
-#     return redirect('/crud.html', username=username)
-
-# def batch_insert_import_csv(cursor, data, batch_size=100):
-#     batch = []
-#     for row in data:
-#         batch.append(row)
-#         if len(batch) >= batch_size:
-#             cursor.executemany("INSERT INTO products (name, price, quantity, category, currency_id) VALUES (%s, %s, %s, %s, %s)", batch)
-#             batch = [] 
-#     if batch:
-#         cursor.executemany("INSERT INTO products (name, price, quantity, category, currency_id) VALUES (%s, %s, %s, %s, %s)", batch)
-
 url_to_function_map = [
     (r'(?:/[A-z]+)?/registration', registration),
     (r'(?:/[A-z]+)?/refresh_captcha', refresh_captcha),
@@ -2161,12 +2132,12 @@ def handle_request(username=None, path=''):
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor()
 
-        global last_cleanup
+        # global last_cleanup
         
-        current_time = time.time()
-        if current_time - last_cleanup > 3600: # every hour 
-            sessions.clear_expired_sessions(cur, conn)
-            last_cleanup = current_time
+        # current_time = time.time()
+        # if current_time - last_cleanup > 3600: # every hour 
+        #     sessions.clear_expired_sessions(cur, conn)
+        #     last_cleanup = current_time
 
         # staff_username = user_email = utils.get_current_user(request, cur)
         user_email = None
