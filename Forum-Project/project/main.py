@@ -1270,8 +1270,6 @@ def user_orders(conn, cur):
         query += f" ORDER BY o.order_{sort_by} {sort_order}  LIMIT 100; " # LIMIT %s OFFSET %s; params += [per_page, (page - 1) * per_page]
         # params += [per_page, offset]
 
-        # params += [per_page, (page - 1) * per_page]
-
         # cur.execute(query, params)
         # rows = cur.fetchall()
 

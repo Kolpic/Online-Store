@@ -6,7 +6,7 @@ from datetime import date
 import pandas as pd
 import random
 from datetime import datetime, timedelta
-# from psycopg2.extensions import adapt, register_adapter, AsIs
+from psycopg2.extensions import adapt, register_adapter, AsIs
 
 database = config.database
 user = config.user
@@ -196,10 +196,10 @@ def batch_insert_import_csv(cursor, data, os, batch_size=100):
     if batch:
         cursor.executemany("INSERT INTO products (name, price, quantity, category, image, currency_id) VALUES (%s, %s, %s, %s, %s, %s)", batch)
 
-# def adapt_datetime(dt):
-#     return AsIs("'" + dt.strftime('%Y-%m-%dT%H:%M:%S') + "'")
+def adapt_datetime(dt):
+    return AsIs("'" + dt.strftime('%Y-%m-%dT%H:%M:%S') + "'")
 
-# register_adapter(datetime, adapt_datetime)
+register_adapter(datetime, adapt_datetime)
 
 def check_request_arg_fields(cur, request, datetime):
 
