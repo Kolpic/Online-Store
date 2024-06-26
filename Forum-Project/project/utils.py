@@ -217,6 +217,8 @@ def check_request_arg_fields(cur, request, datetime):
     date_from = request.args.get('date_from', '')
     date_to = request.args.get('date_to', '')
     status = request.args.get('status', '')
+    email = request.args.get('email','', type=str)
+    user_by_id = request.args.get('user_by_id', '', type=int)
 
     page = request.args.get('page', 1, type=int)
     per_page = request.args.get('per_page', 50, type=int)
@@ -256,4 +258,25 @@ def check_request_arg_fields(cur, request, datetime):
         except:
             utils.AssertUser(False, "Entered date_to is not a date")
 
-    return [sort_by, sort_order, price_min, price_max, order_by_id, date_from, date_to, status, page, per_page, offset]
+    if email:
+        AssertUser('@' in email, "Not valid email")
+
+    if user_by_id:
+        try:
+            user_by_id = int(user_by_id)
+        except:
+            utils.AssertUser(False, "Entered user by id is not a number")
+
+    return {'sort_by': sort_by,
+            'sort_order': sort_order, 
+            'price_min': price_min, 
+            'price_max': price_max, 
+            'order_by_id': order_by_id, 
+            'date_from': date_from, 
+            'date_to': date_to, 
+            'status': status, 
+            'page': page, 
+            'per_page': per_page, 
+            'offset': offset,
+            'email': email, 
+            'user_by_id': user_by_id}

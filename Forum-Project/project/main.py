@@ -1096,7 +1096,8 @@ def staff_portal(conn, cur):
         session['first_visit'] = False
 
     if request.method == 'GET':
-        return render_template('staff_portal.html')
+        username = request.path.split('/')[1]
+        return render_template('staff_portal.html', username=username)
     
 def logout_staff(conn, cur):
     session_id = request.cookies.get('session_id')
@@ -2127,6 +2128,74 @@ def back_office_manager(conn, cur, *params):
 
         return redirect(f'/{username}/{back_office}/crud_orders')
 
+    elif f'/{username}/{back_office}/crud_users' in request.path and len(request.path.split('/')) == 4:
+
+        if request.method == 'GET':
+
+            sort_by = utils.check_request_arg_fields(cur, request, datetime)['sort_by']
+            sort_order = utils.check_request_arg_fields(cur, request, datetime)['sort_order']
+            email = utils.check_request_arg_fields(cur, request, datetime)['email']
+            user_by_id = utils.check_request_arg_fields(cur, request, datetime)['user_by_id']
+            status = utils.check_request_arg_fields(cur, request, datetime)['status']
+
+            print("sort_by",flush=True)
+            print(sort_by,flush=True)
+            print("sort_order",flush=True)
+            print(sort_order,flush=True)
+            print("email",flush=True)
+            print(email,flush=True)
+            print("user_by_id",flush=True)
+            print(user_by_id,flush=True)
+            print("status",flush=True)
+            print(status,flush=True)
+
+            cur.execute("SELECT DISTINCT verification_status FROM users")
+            statuses = cur.fetchall()
+
+            params = []
+            query = """
+                SELECT  id, 
+                        first_name, 
+                        last_name, 
+                        email, 
+                        verification_status, 
+                        verification_code, 
+                        last_active 
+                FROM users
+                WHERE 1=1
+                """
+
+            if email:
+                query += " AND email = %s"
+                params.append(email)
+
+            if user_by_id:
+                query += " AND id = %s"
+                params.append(user_by_id)
+
+            if status:
+                query += " AND verification_status = %s"
+                params.append(status)
+
+            query += f" ORDER BY {sort_by} {sort_order}"
+
+            print(query, flush=True)
+
+            cur.execute(query, params)
+            users = cur.fetchall()
+
+            return render_template('crud_users.html', username=username, back_office=back_office, users=users, statuses=statuses, email=email, user_by_id=user_by_id)
+        elif request.method == 'POST':
+            return redirect(f'/{username}/{back_office}/crud_users')
+        else:
+            utils.AssertUser(False, "Invalid method")
+
+    elif f'/{username}/{back_office}/crud_users' in request.path and request.path.split('/')[5] == 'add_user':
+        a=5
+    elif f'/{username}/{back_office}/crud_users' in request.path and request.path.split('/')[5] == 'edit_user':
+        a=5
+    elif f'/{username}/{back_office}/crud_users' in request.path and request.path.split('/')[5] == 'delete_user':
+        a=5
     else:
         utils.AssertUser(False, "Invalid url")
 
@@ -2160,7 +2229,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/staff_login', staff_login),
     (r'(?:/[A-z]+)?(?:/back_office)?/staff_portal', staff_portal),
     (r'(?:/[A-z]+)?(?:/back_office)?/logout_staff', logout_staff),
-    (r'(?:/[A-z]+)?(?:/back_office)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products)(?:/[\w\d\-_/]*)?', back_office_manager),
+    (r'(?:/[A-z]+)?(?:/back_office)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 # (?:/[A-z]+)?
 
@@ -2175,7 +2244,12 @@ def handle_request(username=None, path=''):
         user_email = None
         staff_username = None
 
-        if 'back_office' in request.path or 'staff_login' in request.path:
+        print("user_email 0",flush=True)
+        print(user_email,flush=True)
+        print("staff_username 0",flush=True)
+        print(staff_username,flush=True)
+
+        if 'back_office' in request.path or 'staff_login' in request.path or 'staff_portal' in request.path:
             user_email = None
             staff_username = sessions.get_current_user(request, cur)
         else:
@@ -2186,6 +2260,11 @@ def handle_request(username=None, path=''):
                 cur.execute("SELECT last_active FROM users WHERE email = %s", (user_email,))
                 current_user_last_active = cur.fetchone()[0]
                 cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (user_email,))
+
+        print("user_email 1",flush=True)
+        print(user_email,flush=True)
+        print("staff_username 1",flush=True)
+        print(staff_username,flush=True)
 
         if staff_username is not None:
            if username is None:

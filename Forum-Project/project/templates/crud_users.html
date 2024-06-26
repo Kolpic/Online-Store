@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+
+    {% extends "base.html" %}
+    {% block title %}CRUD Users{% endblock %}
+
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <style>
+        .container {
+            max-width: 1200px;
+            margin: auto;
+        }
+        .table {
+            width: 100%;
+            margin-top: 20px;
+        }
+        .btn-group-horizontal {
+            display: flex; 
+            flex-wrap: nowrap; 
+        }
+        .btn-group-horizontal .btn {
+            margin-right: 5px; 
+        }
+        .btn-group-horizontal .btn:last-child {
+            margin-right: 0; 
+        }
+    </style>
+</head>
+<body>
+    {% block content %}
+    {% if 'crud_error' in session %}
+        <div class="alert alert-danger" id="homeAlert">
+            {{ session.pop('crud_error') }}
+        </div>
+    {% endif %}
+    {% if 'crud_message' in session %}
+        <div class="alert alert-success" id="homeAlert">
+            {{ session.pop('crud_message') }}
+        </div>
+    {% endif %}
+    <div class="container mt-3">
+        <h2>CRUD Users</h2>
+        <div class="mb-2">
+            <button onclick="navigateTo('{{ username }}/{{ back_office }}/crud_users/add_user')" class="btn btn-primary">Add New User</button>
+        </div>
+        <form id="priceForm" method="get">
+            
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label for="email">Email:</label>
+                    <input type="text" id="email" name="email" placeholder="Email" class="form-control" value="{{ email }}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                    <label for="user_by_id">Find user by id:</label>
+                    <input type="text" id="user_by_id" name="user_by_id" placeholder="User id" class="form-control" value="{{ user_by_id }}">
+                </div>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                        <label for="status">Status:</label>
+                        <select class="form-control" id="status" name="status">
+                            {% for status in statuses %}
+                            <option value="{{ status[0] }}" {% if current_status == status[0] %} selected {% endif %}>{{ status[0] }}</option>
+                            {% endfor %}
+                        </select>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary mt-4">Filter by all selected fields</button>
+        </form>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>User ID</th>
+                    <th>First Name</th>
+                    <th>Last Name</th>
+                    <th>Email</th>
+                    <th>Verification status</th>1q
+                    <th>Verification code</th>
+                    <th>Last Active</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for user in users %}
+                <tr>
+                    <td>{{ user[0] }}</td>
+                    <td>{{ user[1] }}</td>
+                    <td>{{ user[2] }}</td>
+                    <td>{{ user[3] }}</td>
+                    <td>{{ user[4] }}</td>
+                    <td>{{ user[5] }}</td>
+                    <td>{{ user[6] }}</td>
+                    <td>
+                        <div class="btn-group-horizontal">
+                            <button onclick="navigateTo('{{ username }}/{{ back_office }}/crud_users/edit_user/{{ user[0] }}')" class="btn btn-secondary">Edit</button>
+                            <button onclick="if(confirm('Are you sure?')) navigateTo('{{ username }}/{{ back_office }}/crud_users/delete_user/{{ user[0] }}')" class="btn btn-danger">Delete User</button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</body>
+<script>
+    function navigateTo(path) {
+        event.preventDefault();
+        const baseURL = window.location.origin;
+        window.location.href = baseURL + '/' + path;
+    }
+    function submitForm() {
+        document.getElementById("priceForm").submit();
+    }
+    window.onload = function() {
+        setTimeout(function() {
+            let homeAlert = document.getElementById('homeAlert');
+            if (homeAlert) {
+                homeAlert.style.display = 'none';
+            }
+        }, 3000);
+    };
+</script>
+{% endblock %}
+</html>
