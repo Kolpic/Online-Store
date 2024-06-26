@@ -2159,8 +2159,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/user_orders', user_orders),
     (r'(?:/[A-z]+)?/staff_login', staff_login),
     (r'(?:/[A-z]+)?(?:/back_office)?/staff_portal', staff_portal),
-    (r'(?:/[A-z]+)?/logout_staff', logout_staff),
-    (r'(/[A-z]+)/logout_staff', logout_staff),
+    (r'(?:/[A-z]+)?(?:/back_office)?/logout_staff', logout_staff),
     (r'(?:/[A-z]+)?(?:/back_office)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 # (?:/[A-z]+)?
@@ -2176,20 +2175,17 @@ def handle_request(username=None, path=''):
         user_email = None
         staff_username = None
 
-        print("request.path 1 ", flush=True)
-        print(request.path, flush=True)
-
-        if request.path == '/home' or '/profile' and '/staff_portal' not in request.path and '/crud' not in request.path and '/error_logs' not in request.path and '/update_captcha_settings' not in request.path and '/report_sales' not in request.path and '/download_report' not in request.path and '/role_permissions' not in request.path and '/active_users' not in request.path and '/download_report_without_generating_rows_in_the_html' not in request.path and '/staff_login' not in request.path:
-            staff_username = None
-            user_email = sessions.get_current_user(request, cur)
-        else:
+        if 'back_office' in request.path or 'staff_login' in request.path:
             user_email = None
             staff_username = sessions.get_current_user(request, cur)
+        else:
+            user_email = sessions.get_current_user(request, cur)
+            staff_username = None
 
-        if user_email is not None and staff_username is None:
-            cur.execute("SELECT last_active FROM users WHERE email = %s", (user_email,))
-            current_user_last_active = cur.fetchone()[0]
-            cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (user_email,))
+            if user_email is not None:
+                cur.execute("SELECT last_active FROM users WHERE email = %s", (user_email,))
+                current_user_last_active = cur.fetchone()[0]
+                cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (user_email,))
 
         if staff_username is not None:
            if username is None:
