@@ -8,7 +8,7 @@
 <body>
     <div class="container mt-3">
         <h2>Add New Order</h2>
-        <form method="POST" action="/{{ username }}/crud_orders/add_order" enctype="multipart/form-data">
+        <form method="POST" action="/{{ username }}/{{ back_office }}/crud_orders/add_order" enctype="multipart/form-data">
             <div class="form-group">
                 <label for="user_id">User ID</label>
                 <input type="text" class="form-control" id="user_id" name="user_id" required>

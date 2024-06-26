@@ -43,7 +43,7 @@
     <div class="container mt-3">
         <h2>Order Management</h2>
         <div class="mb-2">
-            <button onclick="navigateTo('{{ username }}/crud_orders/add_order')" class="btn btn-primary">Add New Order</button>
+            <button onclick="navigateTo('{{ username }}/{{ back_office }}/crud_orders/add_order')" class="btn btn-primary">Add New Order</button>
         </div>
         <form id="priceForm" method="get">
             
@@ -111,8 +111,8 @@
                     <td class="text-right">{{ order[4] }}</td>
                     <td>
                         <div class="btn-group-horizontal">
-                            <button onclick="navigateTo('{{ username }}/crud_orders/edit_order/{{ order[0] }}')" class="btn btn-secondary">Edit</button>
-                            <button onclick="if(confirm('Are you sure?')) navigateTo('{{ username }}/crud_orders/delete_order/{{ order[0] }}')" class="btn btn-danger">Delete Order</button>
+                            <button onclick="navigateTo('{{ username }}/{{ back_office }}/crud_orders/edit_order/{{ order[0] }}')" class="btn btn-secondary">Edit</button>
+                            <button onclick="if(confirm('Are you sure?')) navigateTo('{{ username }}/{{ back_office }}/crud_orders/delete_order/{{ order[0] }}')" class="btn btn-danger">Delete Order</button>
                         </div>
                     </td>
                 </tr>

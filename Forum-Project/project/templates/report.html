@@ -12,7 +12,7 @@
     {% block content %}
     <div class="container mt-5">
         <h2>Generate Sales Report</h2>
-        <form id="reportForm" action="/{{ username }}/report_sales" method="post">
+        <form id="reportForm" action="/{{ username }}/{{ back_office }}/report_sales" method="post">
             <div class="form-row">
                 <div class="col">
                     <label for="date_from">From:</label>
@@ -92,7 +92,7 @@
                 </tbody>
             </table>
         </div>
-        <form action="/{{ username }}/download_report" method="post">
+        <form action="/{{ username }}/{{ back_office }}/download_report" method="post">
             <input type="hidden" name="date_from" value="{{ request.form['date_from'] }}">
             <input type="hidden" name="date_to" value="{{ request.form['date_to'] }}">
             <input type="hidden" name="group_by" value="{{ request.form['group_by'] }}">
@@ -111,7 +111,7 @@
         {% else %}
         <br>
         <h2>No records with these filters</h2>
-         <form action="/{{ username }}/download_report_without_generating_rows_in_the_html" method="post">
+         <form action="/{{ username }}/{{ back_office }}/download_report_without_generating_rows_in_the_html" method="post">
             <input type="hidden" name="date_from" value="{{ request.form['date_from'] }}">
             <input type="hidden" name="date_to" value="{{ request.form['date_to'] }}">
             <input type="hidden" name="group_by" value="{{ request.form['group_by'] }}">

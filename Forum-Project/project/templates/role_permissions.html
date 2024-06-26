@@ -29,7 +29,7 @@
     {% endif %}
     <div class="container mt-5">
         <h2>Manage Role Permissions</h2>
-        <form action="/{{role_to_display}}/role_permissions" method="POST">
+        <form action="/{{role_to_display}}/{{ back_office }}/role_permissions" method="POST">
             <div class="form-group">
                 <label for="role">Select Role:</label>
                 <select id="role" name="role" class="form-control" onchange="onRoleChange()">
@@ -65,7 +65,7 @@
             <button type="submit" class="btn btn-primary">Save Permissions</button> 
         </form>
         <br>
-        <a href="/{{ role_to_display }}/staff_portal" class="btn btn-primary">Home page</a>
+        <a href="/{{ role_to_display }}/{{ back_office }}/staff_portal" class="btn btn-primary">Home page</a>
     </div>
 </body>
 <script>
