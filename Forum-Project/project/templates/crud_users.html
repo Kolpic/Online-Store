@@ -77,11 +77,11 @@
         <table class="table">
             <thead>
                 <tr>
-                    <th>User ID</th>
-                    <th>First Name</th>
-                    <th>Last Name</th>
-                    <th>Email</th>
-                    <th>Verification status</th>1q
+                    <th><a href="?sort=id&order={{ 'desc' if  request.args.get('sort') == 'id' and request.args.get('order') == 'asc' else 'asc'}}">User ID</a></th>
+                    <th><a href="?sort=first_name&order={{ 'desc' if request.args.get('sort') == 'first_name' and request.args.get('order') == 'asc' else 'asc'}}">First Name</a></th>
+                    <th><a href="?sort=last_name&order={{ 'desc' if request.args.get('sort') == 'last_name' and request.args.get('order') == 'asc' else 'asc'}}">Last Name</a></th>
+                    <th><a href="?sort=email&order= {{ 'desc' if request.args.get('sort') == 'email' and request.args.get('order') == 'asc' else 'asc'}}">Email</a></th>
+                    <th>Verification status</th>
                     <th>Verification code</th>
                     <th>Last Active</th>
                 </tr>

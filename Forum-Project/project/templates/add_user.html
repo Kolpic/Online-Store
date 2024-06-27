@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Add User</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+</head>
+<style>
+    .container {
+        margin-top: 50px;
+    }
+    .list-group-item {
+        font-size: 1.2rem; 
+    }
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .nav {
+        display: flex;
+        justify-content: flex-end;
+    }
+    .nav .btn {
+        margin-left: 10px;
+    }
+</style>
+<body>
+    <div class="container">
+        <div class="header">
+        </div>
+    <div class="container mt-3">
+        <h2>Add New User</h2>
+        <form method="POST" action="/{{ username }}/{{ back_office }}/crud_users/add_user" enctype="multipart/form-data">
+
+            <div class="form-group">
+                <label for="first_name">First Name</label>
+                <input type="text" class="form-control" id="first_name" name="first_name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="last_name">Last Name</label>
+                <input type="text" class="form-control" id="last_name" name="last_name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="text" class="form-control" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password:</label>
+                <input type="password" class="form-control" id="password" name="password" required>
+            </div>
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password:</label>
+                <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+                <div id="passwordError" class="text-danger" style="display: none;">Passwords do not match.</div>
+            </div>
+
+            <div class="form-group">
+                <label for="verification_code">Verification Code</label>
+                <input type="text" class="form-control" id="verification_code" name="verification_code" required>
+            </div>
+
+            <div class="form-row">
+                <div class="form-group col-md-4">
+                        <label for="verification_status">Verification Status:</label>
+                        <select class="form-control" id="verification_status" name="verification_status">
+                            {% for status in statuses %}
+                            <option value="{{ status[0] }}">{{ status[0] }}</option>
+                            {% endfor %}
+                        </select>
+                </div>
+            </div>
+        
+            <button type="submit" class="btn btn-primary">Add Product</button>
+        </form>
+    </div>
+<script>
+        function checkPasswords() {
+            let password = document.getElementById('password').value;
+            let confirmPassword = document.getElementById('confirm_password').value;
+            if (password !== confirmPassword) {
+                document.getElementById('passwordError').style.display = 'block';
+                return false;
+            }
+            document.getElementById('passwordError').style.display = 'none';
+            return true;
+        }
+    </script>
+</body>
+</html>

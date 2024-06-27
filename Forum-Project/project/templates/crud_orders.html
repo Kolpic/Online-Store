@@ -93,8 +93,8 @@
         <table class="table">
             <thead>
                 <tr>
-                    <th><a href="?sort=id&order={{ 'asc' if request.args.get('sort') == 'id' and request.args.get('order') == 'desc' else 'desc' }}">Order ID</a></th>
-                    <th><a href="?sort=date&order={{ 'desc' if request.args.get('sort') == 'date' and request.args.get('order') == 'asc' else 'asc' }}">Order date</a></th>
+                    <th><a href="?sort=id&order={{ 'asc' if request.args.get('sort') == 'id' and request.args.get('order') == 'desc' else 'desc' }}&page={{ page }}&price_min={{ price_min }}&price_max={{ price_max }}&order_by_id={{ order_by_id }}&date_from={{ date_from }}&date_to={{ date_to }}&status={{ status }}">Order ID</a></th>
+                    <th><a href="?sort=date&order={{ 'desc' if request.args.get('sort') == 'date' and request.args.get('order') == 'asc' else 'asc' }}&page={{ page }}&price_min={{ price_min }}&price_max={{ price_max }}&order_by_id={{ order_by_id }}&date_from={{ date_from }}&date_to={{ date_to }}&status={{ status }}">Order date</a></th>
                     <th>User</th>
                     <th class="text-right">Order price</th>
                     <th class="text-right">Order status</th>
@@ -120,6 +120,40 @@
             </tbody>
         </table>
     </div>
+
+    <nav>
+            <ul class="pagination">
+            
+                {% set window = 5 %}
+                {% set start_page = page - window if page - window > 0 else 1 %}
+                {% set end_page = page + window if page + window <= total_pages else total_pages %}
+                
+                {% if start_page > 1 %}
+                <li class="page-item">
+                    <a class="page-link" href="/{{ username }}/{{ back_office }}/crud_orders?sort={{sort_by}}&order={{sort_order}}&page=1&price_min={{ price_min }}&price_max={{ price_max }}&order_by_id={{ order_by_id }}&date_from={{ date_from }}&date_to={{ date_to }}&status={{ status }}">1</a>
+                </li>
+                {% if start_page > 2 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+                {% endif %}
+        
+                {% for i in range(start_page, end_page + 1) %}
+                <li class="page-item {% if i == page %}active{% endif %}">
+                    <a class="page-link" href="/{{ username }}/{{ back_office }}/crud_orders?sort={{sort_by}}&order={{sort_order}}&page={{ i }}&price_min={{ price_min }}&price_max={{ price_max }}&order_by_id={{ order_by_id }}&date_from={{ date_from }}&date_to={{ date_to }}&status={{ status }}">{{ i }}</a>
+                </li>
+                {% endfor %}
+                
+                {% if end_page < total_pages %}
+                {% if end_page < total_pages - 1 %}
+                <li class="page-item disabled"><span class="page-link">...</span></li>
+                {% endif %}
+                <li class="page-item">
+                    <a class="page-link" href="/{{ username }}/{{ back_office }}/crud_orders?sort={{sort_by}}&order={{sort_order}}&page={{total_pages}}&price_min={{ price_min }}&price_max={{ price_max }}&order_by_id={{ order_by_id }}&date_from={{ date_from }}&date_to={{ date_to }}&status={{ status }}">{{total_pages}}</a>
+                </li>
+                {% endif %}
+            </ul>
+        </nav>
+
 </body>
 <script>
     function navigateTo(path) {

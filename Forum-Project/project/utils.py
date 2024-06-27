@@ -203,9 +203,7 @@ register_adapter(datetime, adapt_datetime)
 
 def check_request_arg_fields(cur, request, datetime):
 
-    print("Entered check_request_arg_fields method")
-
-    valid_sort_columns = {'id', 'date'}
+    valid_sort_columns = {'id', 'date', 'first_name', 'last_name', 'email'}
     valid_sort_orders = {'asc', 'desc'}
 
     # SQL adaptation protocol objects

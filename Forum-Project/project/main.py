@@ -137,6 +137,23 @@ FIELD_CONFIG = {
             'status': {'type': str, 'required': True},
             'order_date': {'type': datetime, 'required': True},
         }
+    },
+    'CRUD Users': {
+        'create': {
+            'first_name': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >=4 and len(x) <= 15, "First name must be al least 4 symbols long and under 16 symbols")]},
+            'last_name': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >= 4 and len(x) <= 15, "Last name must be al least 4 symbols long and under 16 symbols")]},
+            'email': {'type': str, 'required': True, 'conditions': [(lambda x: '@' in x, "Invalid email")]},
+            'password': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >=4 and len(x) <= 20, "Password must be between 4 and 20 symbols")]},
+            # 'confirm_password': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >=4 and len(x) <= 20, "Password must be between 4 and 20 symbols")]},
+            'verification_code': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >=10 and len(x) <= 20, "Verification code must be between 10 and 20 symbols")] },
+            'verification_status': {'type': bool, 'required': True, 'conditions': [(lambda x: x == True or x == False, "The status can be only true or false")]}
+        },
+        'edit': {
+            'first_name': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >=4 and len(x) <= 15, "First name must be al least 4 symbols long and under 16 symbols")]},
+            'last_name': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >= 4 and len(x) <= 15, "Last name must be al least 4 symbols long and under 16 symbols")]},
+            'email': {'type': str, 'required': True, 'conditions': [(lambda x: '@' in x, "Invalid email")]},
+            'verification_status': {'type': bool, 'required': True, 'conditions': [(lambda x: x == True or x == False, "The status can be only true or false")]}
+        }
     }
 }
 
@@ -154,7 +171,7 @@ def validate_field(field_name, value, config):
 
     utils.AssertUser(config['required'] and value, f"You must add information in every field: {field_name}")
 
-    if 'type' in config and config['type'] in [float, int]:
+    if 'type' in config and config['type'] in [float, int, bool]:
         print("==== Entered type validation ======",flush=True)
         try:
             value = config['type'](value)
@@ -1168,59 +1185,19 @@ def user_orders(conn, cur):
 
     if request.method == 'GET':
 
-        # valid_sort_columns = {'id', 'date'}
-        # valid_sort_orders = {'asc', 'desc'}
-
         # SQL adaptation protocol objects
-        # sort_by = request.args.get('sort', 'id')
-        # sort_order = request.args.get('order', 'desc')
-        # price_min = request.args.get('price_min', '', type=float)
-        # price_max = request.args.get('price_max', '', type=float)
-        # order_by_id = request.args.get('order_by_id', '', type=int)
-        # date_from = request.args.get('date_from', '')
-        # date_to = request.args.get('date_to', '')
-        # status = request.args.get('status', '')
+        sort_by = utils.check_request_arg_fields(cur, request, datetime)['sort_by']
+        sort_order = utils.check_request_arg_fields(cur, request, datetime)['sort_order']
+        price_min = utils.check_request_arg_fields(cur, request, datetime)['price_min']
+        price_max = utils.check_request_arg_fields(cur, request, datetime)['price_max']
+        order_by_id = utils.check_request_arg_fields(cur, request, datetime)['order_by_id']
+        date_from = utils.check_request_arg_fields(cur, request, datetime)['date_from']
+        date_to = utils.check_request_arg_fields(cur, request, datetime)['date_to']
+        status = utils.check_request_arg_fields(cur, request, datetime)['status']
 
-        # page = request.args.get('page', 1, type=int)
-        # per_page = request.args.get('per_page', 50, type=int)
-        # offset = (page - 1) * per_page
-
-        # request_args_fields = utils.check_request_arg_fields(cur, request, datetime)
-
-        sort_by, sort_order, price_min, price_max, order_by_id, date_from, date_to, status, page, per_page, offset = utils.check_request_arg_fields(cur, request, datetime)
-
-        print("sort_by", flush=True)
-        print(sort_by, flush=True)
-
-        print("sort_order", flush=True)
-        print(sort_order, flush=True)
-
-        print("price_min", flush=True)
-        print(price_min, flush=True)
-
-        print("price_max", flush=True)
-        print(price_max, flush=True)
-
-        print("order_by_id", flush=True)
-        print(order_by_id, flush=True)
-
-        print("date_from", flush=True)
-        print(date_from, flush=True)
-
-        print("date_to", flush=True)
-        print(date_to, flush=True)
-
-        print("status", flush=True)
-        print(status, flush=True)
-
-        print("page", flush=True)
-        print(page, flush=True)
-
-        print("per_page", flush=True)
-        print(per_page, flush=True)
-
-        print("offset", flush=True)
-        print(offset, flush=True)
+        page = utils.check_request_arg_fields(cur, request, datetime)['page']
+        per_page = utils.check_request_arg_fields(cur, request, datetime)['per_page']
+        offset = utils.check_request_arg_fields(cur, request, datetime)['offset']
 
         cur.execute("SELECT DISTINCT status FROM orders")
         statuses = cur.fetchall()
@@ -1725,7 +1702,14 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/{username}/{back_office}/role_permissions':
         utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read'), "You don't have permission to this resource")
-        interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles', 'CRUD Orders']
+
+        # interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles', 'CRUD Orders', 'CRUD Users']
+
+        cur.execute("SELECT DISTINCT interface FROM permissions ORDER BY interface ASC")
+
+        interfaces = []
+        for interface in cur.fetchall():
+            interfaces.append(interface[0])
 
         if request.method == 'GET':
             role = request.path.split('/')[1]
@@ -1749,6 +1733,7 @@ def back_office_manager(conn, cur, *params):
             return render_template('role_permissions.html', roles=roles, back_office=back_office, interfaces=interfaces, role_permissions=role_permissions, selected_role=selected_role, role_to_display=role)
     
         utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'update'), "You don't have permission to this resource")
+
         role_id = request.form['role']
         cur.execute('DELETE FROM role_permissions WHERE role_id = %s', (role_id,))
         for interface in interfaces:
@@ -1952,19 +1937,21 @@ def back_office_manager(conn, cur, *params):
     elif f'/{username}/{back_office}/crud_orders' in request.path and len(request.path.split('/')) == 4:
 
         print("Enterd crud_orders read successful", flush=True)
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read'), "You don't have permission for this resource")
-        
-        valid_sort_columns = {'id', 'date', 'price'}
-        valid_sort_orders = {'asc', 'desc'}
 
-        sort_by = request.args.get('sort', 'id')
-        sort_order = request.args.get('order', 'desc')
-        price_min = request.args.get('price_min', '', type=float)
-        price_max = request.args.get('price_max', '', type=float)
-        order_by_id = request.args.get('order_by_id', '', type=int)
-        date_from = request.args.get('date_from', '')
-        date_to = request.args.get('date_to', '')
-        status = request.args.get('status', '')
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read'), "You don't have permission for this resource")
+
+        sort_by = utils.check_request_arg_fields(cur, request, datetime)['sort_by']
+        sort_order = utils.check_request_arg_fields(cur, request, datetime)['sort_order']
+        price_min = utils.check_request_arg_fields(cur, request, datetime)['price_min']
+        price_max = utils.check_request_arg_fields(cur, request, datetime)['price_max']
+        order_by_id = utils.check_request_arg_fields(cur, request, datetime)['order_by_id']
+        date_from = utils.check_request_arg_fields(cur, request, datetime)['date_from']
+        date_to = utils.check_request_arg_fields(cur, request, datetime)['date_to']
+        status = utils.check_request_arg_fields(cur, request, datetime)['status']
+
+        page = utils.check_request_arg_fields(cur, request, datetime)['page']
+        per_page = utils.check_request_arg_fields(cur, request, datetime)['per_page']
+        offset = utils.check_request_arg_fields(cur, request, datetime)['offset']
 
         cur.execute("SELECT DISTINCT status FROM orders")
         statuses = cur.fetchall()
@@ -2006,16 +1993,26 @@ def back_office_manager(conn, cur, *params):
         if price_min == '' and price_max == '':
             query += " GROUP BY o.order_id, user_names, c.symbol "
 
-        query += f" ORDER BY o.order_{sort_by} {sort_order} LIMIT 50"
+        query += f" ORDER BY o.order_{sort_by} {sort_order} "
+
+        cur.execute(query, params)
+        total_length_query = len(cur.fetchall())
+
+        query += "LIMIT %s OFFSET %s"
+        params.extend([per_page, offset])
 
         cur.execute(query, params)
         orders = cur.fetchall()
 
         loaded_orders = len(orders)
 
-        # session['crud_message'] = "Only 50 orders are displayed based on the filters"
+        print("total_length_query", flush=True)
+        print(total_length_query, flush=True)
 
-        return render_template('crud_orders.html', orders=orders, username=username, back_office=back_office,statuses=statuses, current_status=status, price_min=price_min, price_max=price_max, order_by_id=order_by_id, date_from=date_from, date_to=date_to)
+        print("total_length_query // per_page + 1", flush=True)
+        print(total_length_query // per_page + 1, flush=True)
+
+        return render_template('crud_orders.html', page=page,total_pages=total_length_query // per_page ,orders=orders, username=username, back_office=back_office,statuses=statuses, current_status=status, price_min=price_min, price_max=price_max, order_by_id=order_by_id, date_from=date_from, date_to=date_to, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
 
     elif f'/{username}/{back_office}/crud_orders' in request.path and request.path.split('/')[4] == 'add_order':
 
@@ -2116,6 +2113,7 @@ def back_office_manager(conn, cur, *params):
     elif f'/{username}/{back_office}/crud_orders' in request.path and request.path.split('/')[4] == 'delete_order':
 
         print("Enterd crud_orders delete successful", flush=True)
+
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'delete'), "You don't have permission to this resource")
 
         order_id = request.path.split('/')[5]
@@ -2130,6 +2128,8 @@ def back_office_manager(conn, cur, *params):
 
     elif f'/{username}/{back_office}/crud_users' in request.path and len(request.path.split('/')) == 4:
 
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'read'), "You don't have permission for this resource")
+
         if request.method == 'GET':
 
             sort_by = utils.check_request_arg_fields(cur, request, datetime)['sort_by']
@@ -2137,17 +2137,6 @@ def back_office_manager(conn, cur, *params):
             email = utils.check_request_arg_fields(cur, request, datetime)['email']
             user_by_id = utils.check_request_arg_fields(cur, request, datetime)['user_by_id']
             status = utils.check_request_arg_fields(cur, request, datetime)['status']
-
-            print("sort_by",flush=True)
-            print(sort_by,flush=True)
-            print("sort_order",flush=True)
-            print(sort_order,flush=True)
-            print("email",flush=True)
-            print(email,flush=True)
-            print("user_by_id",flush=True)
-            print(user_by_id,flush=True)
-            print("status",flush=True)
-            print(status,flush=True)
 
             cur.execute("SELECT DISTINCT verification_status FROM users")
             statuses = cur.fetchall()
@@ -2179,23 +2168,92 @@ def back_office_manager(conn, cur, *params):
 
             query += f" ORDER BY {sort_by} {sort_order}"
 
-            print(query, flush=True)
-
             cur.execute(query, params)
             users = cur.fetchall()
 
             return render_template('crud_users.html', username=username, back_office=back_office, users=users, statuses=statuses, email=email, user_by_id=user_by_id)
+
         elif request.method == 'POST':
+
             return redirect(f'/{username}/{back_office}/crud_users')
+
         else:
             utils.AssertUser(False, "Invalid method")
 
-    elif f'/{username}/{back_office}/crud_users' in request.path and request.path.split('/')[5] == 'add_user':
-        a=5
-    elif f'/{username}/{back_office}/crud_users' in request.path and request.path.split('/')[5] == 'edit_user':
-        a=5
-    elif f'/{username}/{back_office}/crud_users' in request.path and request.path.split('/')[5] == 'delete_user':
-        a=5
+
+    elif f'/{username}/{back_office}/crud_users' in request.path and request.path.split('/')[4] == 'add_user':
+
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'create'), "You don't have permission for this resource")
+
+        if request.method == 'GET':
+
+            cur.execute("SELECT DISTINCT verification_status FROM users")
+            statuses = cur.fetchall()
+
+            return render_template("add_user.html", username=username, back_office=back_office, statuses=statuses) 
+
+        elif request.method == 'POST':
+
+            data = process_form('CRUD Users', 'create')
+
+            sql_command = f"INSERT INTO users ({data['fields']}) VALUES ({data['placeholders']}) RETURNING id;"
+            cur.execute(sql_command, data['values'])
+
+            user_id = cur.fetchone()[0]
+
+            session['crud_message'] = "You successfully added new user with id: " + str(user_id)
+
+            return redirect(f'/{username}/{back_office}/crud_users')
+
+        else:
+            utils.AssertUser(False, "Invalid method")
+
+    elif f'/{username}/{back_office}/crud_users' in request.path and request.path.split('/')[4] == 'edit_user':
+
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'update'), "You don't have permission for this resource")
+
+        if request.method == 'GET':
+
+            user_id = request.path.split('/')[5]
+
+            cur.execute("SELECT first_name, last_name, email, verification_status FROM users WHERE id = %s", (user_id,))
+            first_name, last_name, email, verification_status = cur.fetchall()[0]
+
+            return render_template('edit_user.html', username=username, back_office=back_office, first_name=first_name, last_name=last_name, email=email, verification_status=verification_status, user_id=user_id)
+
+        elif request.method == 'POST':
+
+            user_id = request.path.split('/')[5]
+            data = process_form('CRUD Users', 'edit')
+
+            cur.execute("""
+                UPDATE users 
+                SET 
+                    first_name = %s, 
+                    last_name = %s, 
+                    email = %s, 
+                    verification_status = %s 
+                WHERE id = %s""", (data['values'][0], data['values'][1], data['values'][2], data['values'][3], user_id))
+
+            session['crud_message'] = "You successfully edited user with id: " + str(user_id)
+
+            return redirect(f'/{username}/{back_office}/crud_users')
+
+        else:
+            utils.AssertUser(False, "Invalid method")
+
+    elif f'/{username}/{back_office}/crud_users' in request.path and request.path.split('/')[4] == 'delete_user':
+
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'delete'), "You don't have permission to this resource")
+
+        user_id = request.path.split('/')[5]
+
+        cur.execute("UPDATE users SET verification_status = False WHERE id = %s", (user_id,))
+
+        session['crud_message'] = "You successfully made user with id: " + str(user_id) + " unverified"
+
+        return redirect(f'/{username}/{back_office}/crud_users')
+
     else:
         utils.AssertUser(False, "Invalid url")
 
@@ -2244,11 +2302,6 @@ def handle_request(username=None, path=''):
         user_email = None
         staff_username = None
 
-        print("user_email 0",flush=True)
-        print(user_email,flush=True)
-        print("staff_username 0",flush=True)
-        print(staff_username,flush=True)
-
         if 'back_office' in request.path or 'staff_login' in request.path or 'staff_portal' in request.path:
             user_email = None
             staff_username = sessions.get_current_user(request, cur)
@@ -2260,11 +2313,6 @@ def handle_request(username=None, path=''):
                 cur.execute("SELECT last_active FROM users WHERE email = %s", (user_email,))
                 current_user_last_active = cur.fetchone()[0]
                 cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (user_email,))
-
-        print("user_email 1",flush=True)
-        print(user_email,flush=True)
-        print("staff_username 1",flush=True)
-        print(staff_username,flush=True)
 
         if staff_username is not None:
            if username is None:
@@ -2290,6 +2338,7 @@ def handle_request(username=None, path=''):
             return funtion_to_call(conn, cur, *match.groups())
         else:
             return funtion_to_call(conn, cur)
+
     except Exception as message:
 
         user_email = sessions.get_current_user(request, cur)
