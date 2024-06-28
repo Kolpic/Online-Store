@@ -70,7 +70,7 @@
                 <label for="image">Current Image:</label>
                 <div>
                     {% if product[5] %}
-                    <img src="/crud_products_edit_picture/{{ product_id }}" alt="Product Image">
+                    <img src="/{{ username }}/{{ back_office }}/crud_products_edit_picture/{{ product_id }}" alt="Product Image">
                     {% else %}
                     <p>No image available</p>
                     {% endif %}

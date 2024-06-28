@@ -65,7 +65,8 @@
             </div>
             <div class="form-group">
                 <label for="image">Image (up to 10MB)</label>
-                <input type="file" name="image" accept="image/*" required>
+                <input type="file" name="image" id="image" accept="image/*" onchange="validateImage()" required>
+                <p id="error-message" style="color: red;"></p>
             </div>
             <div class="form-group">
                 <label for="category">Category</label>
@@ -78,5 +79,57 @@
             <button type="submit" class="btn btn-primary">Add Product</button>
         </form>
     </div>
+<script>
+         function validateImage() {
+            let fileInput = document.getElementById('image');
+            let file = fileInput.files[0];
+            let errorMessage = document.getElementById('error-message');
+
+            // Clear previous error messages
+            errorMessage.textContent = '';
+
+            if (file) {
+                // Check the file type
+                if (!file.type.includes('jpeg')) {
+                    errorMessage.textContent = "Please select a JPEG image.";
+                    fileInput.value = '';  // Clear the file input
+                    return;
+                }
+
+                // FileReader to read file contents
+                let reader = new FileReader();
+
+                reader.onload = (e) => {
+                    let img = new Image();
+
+                    img.onload = () => {
+                        let width = img.naturalWidth;
+                        let height = img.naturalHeight;
+
+                        console.log(`Image dimensions: ${width} x ${height}`);
+                        
+                        if (width > 600 || height > 400) {
+                            errorMessage.textContent = "Image dimensions should not exceed 600 x 400 pixels.";
+                            fileInput.value = '';  // Clear the file input
+                        } else {
+                            errorMessage.textContent = '';  // Clear the error message if any
+                        }
+                    };
+
+                    img.onerror = () => {
+                        errorMessage.textContent = 'Invalid image. Please check the file and try again.';
+                    };
+
+                    img.src = e.target.result;
+                };
+
+                reader.onerror = () => {
+                    errorMessage.textContent = 'Error loading the image. Please try a different file.';
+                };
+
+                reader.readAsDataURL(file);
+            }
+        }
+</script>
 </body>
 </html>

@@ -1166,16 +1166,18 @@ def update_cart_quantity(conn, cur):
 
     return jsonify(success=True, new_total=new_total)
 
-def serve_image_crud_products_edit(conn, cur, product_id):
-    cur.execute("SELECT image FROM products WHERE id = %s", (product_id,))
-    image = cur.fetchone()[0]
-    if image:
-        return Response(
-            io.BytesIO(image).getvalue(),
-            mimetype='image/jpeg'
-        )
-    else:
-        return "No image found"
+# def serve_image_crud_products_edit(conn, cur, product_id):
+#     print("Entered get image for edit product", flush=True)
+
+#     cur.execute("SELECT image FROM products WHERE id = %s", (product_id,))
+#     image = cur.fetchone()[0]
+#     if image:
+#         return Response(
+#             io.BytesIO(image).getvalue(),
+#             mimetype='image/jpeg'
+#         )
+#     else:
+#         return "No image found"
 
 def user_orders(conn, cur):
     is_auth_user =  sessions.get_current_user(request, cur)
@@ -1355,6 +1357,21 @@ def back_office_manager(conn, cur, *params):
         users = get_active_users(sort_by, sort_order, name, email, user_id)
 
         return render_template('active_users.html', users=users, name=name, email=email, user_id=user_id)
+
+    elif f'/{username}/{back_office}/crud_products_edit_picture' in request.path:
+        print("Entered get image for edit product", flush=True)
+
+        product_id = request.path.split('/')[4]
+
+        cur.execute("SELECT image FROM products WHERE id = %s", (product_id,))
+        image = cur.fetchone()[0]
+        if image:
+            return Response(
+                io.BytesIO(image).getvalue(),
+                mimetype='image/jpeg'
+            )
+        else:
+            return "No image found"
 
     elif request.path == f'/{username}/{back_office}/crud_products/upload_products':
         print("Entered /crud_products/upload_products cucessfully", flush=True)
@@ -2307,7 +2324,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/send_login_link', send_login_link),
     (r'/log', login_with_token),
     (r'(?:/[A-z]+)?/image/(\d+)', serve_image),
-    (r'(?:/[A-z]+)?/crud_products_edit_picture/(\d+)', serve_image_crud_products_edit),
+    # (r'(?:/[A-z]+)?(?:/back_office)?/crud_products_edit_picture/(\d+)', serve_image_crud_products_edit),
     (r'/generate_orders', generate_orders),
     (r'(?:/[A-z]+)?/add_to_cart', add_to_cart_meth),
     (r'(?:/[A-z]+)?/cart', cart),
@@ -2318,7 +2335,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?/staff_login', staff_login),
     (r'(?:/[A-z]+)?(?:/back_office)?/staff_portal', staff_portal),
     (r'(?:/[A-z]+)?(?:/back_office)?/logout_staff', logout_staff),
-    (r'(?:/[A-z]+)?(?:/back_office)?/(error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users)(?:/[\w\d\-_/]*)?', back_office_manager),
+    (r'(?:/[A-z]+)?(?:/back_office)?/(crud_products_edit_picture|error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 # (?:/[A-z]+)?
 
@@ -2332,6 +2349,9 @@ def handle_request(username=None, path=''):
 
         user_email = None
         staff_username = None
+
+        print("request.path", flush=True)
+        print(request.path, flush=True)
 
         if 'back_office' in request.path or 'staff_login' in request.path or 'staff_portal' in request.path:
             user_email = None
