@@ -42,11 +42,11 @@
                     </select>
                 </div>
                 <div class="col-md-4">
-                    <label for="filter">Filter by status:</label>
-                    <select id="filter" class="form-control" name="filter">
+                    <label for="filter_by_status">Filter by status:</label>
+                    <select id="filter_by_status" class="form-control" name="filter_by_status">
                         <option value="">Hide</option>
-                        <option value="Ready for Paying" {{ 'selected' if request.form.status == 'Ready for Paying' else '' }}>Ready for Paying</option>
-                        <option value="Paid" {{ 'selected' if request.form.status == 'Paid' else '' }}>Paid</option>
+                        <option value="Ready for Paying" {{ 'selected' if request.form.filter_by_status == 'Ready for Paying' else '' }}>Ready for Paying</option>
+                        <option value="Paid" {{ 'selected' if request.form.filter_by_status == 'Paid' else '' }}>Paid</option>
                     </select>
                 </div>
             </div>
@@ -77,10 +77,28 @@
                     {% for row in report %}
                     <tr>
                         <td>{{ row[0] }}</td>
-                        <td>{{ "-" if row[1]|length > 2 else row[1]|join(', ') }}</td>
-                        <td>{{ "-" if row[2]|length > 2 else row[2]|join(', ') }}</td>
+                        <td>
+                            {% if request.form.group_by == '' %}
+                                {{ row[1]|join(', ') }}
+                            {% else %}
+                                {{ "-" }}
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if request.form.group_by == '' %}
+                                {{ row[2]|join(', ') }}
+                            {% else %}
+                                {{ "-" }}
+                            {% endif %}
+                        </td>
                         <td class="text-right">{{ row[3] }} {{'лв.'}}</td>
-                        <td class="text-right">{{ "-" if row[4]|length > 2 else row[4]|join(', ') }}</td>
+                        <td class="text-right">
+                            {% if request.form.filter_by_status != "" or request.form.status != "" %}
+                                {{ row[4][0] }}
+                            {% else %}
+                                {{ "-" if row[4]|length > 1 else row[4]|join(', ') }}
+                            {% endif %}
+                        </td>
                     </tr>
                     {% endfor %}
                     <tr>

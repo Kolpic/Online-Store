@@ -1452,7 +1452,7 @@ def back_office_manager(conn, cur, *params):
             date_to = request.form.get('date_to')
             group_by = request.form.get('group_by')
             status = request.form.get('status')
-            filter = request.form.get('filter')
+            filter_by_status = request.form.get('filter_by_status', '')
             order_id = request.form.get('sale_id')
 
             page = request.args.get('page', 1, type=int)
@@ -1480,7 +1480,8 @@ def back_office_manager(conn, cur, *params):
                 SUM(order_sum) AS total_sum, 
                 array_agg(status) AS order_statuses 
                 FROM OrderSums AS o 
-                GROUP BY period;
+                GROUP BY period
+                ORDER BY period DESC;
                 """
             elif (group_by == 'day' or group_by == 'month' or group_by == 'year') and status != "": # tova
                 group_by_clause = f"""
@@ -1491,7 +1492,8 @@ def back_office_manager(conn, cur, *params):
                 SUM(order_sum) AS total_sum, 
                 array_agg(status) AS order_statuses 
                 FROM OrderSums AS o 
-                GROUP BY period, status;
+                GROUP BY period, status
+                ORDER BY period DESC;
                 """
             elif status != "": # tova
                 group_by_clause = f"""
@@ -1502,7 +1504,8 @@ def back_office_manager(conn, cur, *params):
                 array_agg(order_sum) AS total_sum, 
                 array_agg(status) AS order_statuses 
                 FROM OrderSums AS o
-                GROUP BY status;
+                GROUP BY status
+                ORDER BY period DESC;
                 """
             else:
                 group_by_clause = f"""
@@ -1514,30 +1517,58 @@ def back_office_manager(conn, cur, *params):
                 array_agg(status) AS order_statuses 
                 FROM OrderSums AS o 
                 GROUP BY order_date 
-                ORDER BY order_date;
+                ORDER BY period DESC;
                 """
 
-            # TODO(Done): BETWEEN %s AND %s da se mahne -> < >
-            query = f"""
-                WITH OrderSums AS (
-                    SELECT 
-                        o.order_id, 
-                        DATE(o.order_date) AS order_date, 
-                        u.first_name || ' ' || u.last_name AS buyer_name, 
-                        o.status, SUM(oi.quantity * oi.price) AS order_sum 
-                    FROM orders AS o 
-                    JOIN users AS u ON o.user_id = u.id 
-                    JOIN order_items AS oi ON o.order_id = oi.order_id 
-                    WHERE o.order_date >= %s AND o.order_date <= %s 
-                    GROUP BY o.order_id, order_date, buyer_name
-                ) 
-                {group_by_clause}
-            """
-            params = [date_from, date_to]
+            if filter_by_status == "":
+
+                query = f"""
+                    WITH OrderSums AS (
+                        SELECT 
+                            o.order_id, 
+                            DATE(o.order_date)                 AS order_date, 
+                            u.first_name || ' ' || u.last_name AS buyer_name, 
+                            o.status, 
+                            SUM(oi.quantity * oi.price)        AS order_sum 
+                        FROM orders      AS o 
+                        JOIN users       AS u  ON o.user_id  = u.id 
+                        JOIN order_items AS oi ON o.order_id = oi.order_id 
+                        WHERE o.order_date >= %s AND o.order_date <= (%s::date + INTERVAL '1 day')
+                        GROUP BY o.order_id, order_date, buyer_name
+                        ORDER BY order_date DESC
+                    ) 
+                    {group_by_clause}
+                """
+                params = [date_from, date_to]
+            else:
+
+                query = f"""
+                    WITH OrderSums AS (
+                        SELECT 
+                            o.order_id, 
+                            DATE(o.order_date)                 AS order_date, 
+                            u.first_name || ' ' || u.last_name AS buyer_name, 
+                            o.status, 
+                            SUM(oi.quantity * oi.price)        AS order_sum 
+                        FROM orders      AS o 
+                        JOIN users       AS u  ON o.user_id  = u.id 
+                        JOIN order_items AS oi ON o.order_id = oi.order_id 
+                        WHERE o.order_date >= %s AND o.order_date <= (%s::date + INTERVAL '1 day') AND o.status = %s
+                        GROUP BY o.order_id, order_date, buyer_name
+                        ORDER BY order_date DESC
+                    ) 
+                    {group_by_clause}
+                """
+                params = [date_from, date_to, filter_by_status]
+
+            print(query, flush=True)
+            print(params, flush=True)
         
             cur.execute(query, tuple(params))
             report = cur.fetchall()
+
             utils.AssertUser(report[0][0] != None and report[0][1] != None and report[0][2] != None and report[0][3] != None, "No result with this filter")
+
             total_price = 0
             flag = False
             if group_by not in ['day', 'month', 'year']: # Here we have one row with only aggregated values, (without group by) and we have to deaggregate in order to make the report 
@@ -1562,7 +1593,7 @@ def back_office_manager(conn, cur, *params):
 
             report_json = utils.serialize_report(report)
 
-            return render_template('report.html', report=report, username=username, back_office = back_office,total_records=total_records, total_price=total_price, report_json=report_json, default_to_date=date_to, default_from_date=date_from)
+            return render_template('report.html', filter_by_status=filter_by_status,report=report, username=username, back_office = back_office,total_records=total_records, total_price=total_price, report_json=report_json, default_to_date=date_to, default_from_date=date_from)
         else:
             utils.AssertUser(False, "Invalid url")
 
