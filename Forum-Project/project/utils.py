@@ -142,7 +142,7 @@ def fetch_batches(conn, date_from, date_to, offset, batch_size=10000):
             FROM orders AS o
             JOIN users       AS u  ON o.user_id  = u.id
             JOIN order_items AS oi ON o.order_id = oi.order_id
-            WHERE o.order_date >= '1950-01-01 21:00:00' AND o.order_date <= '2024-01-01 00:00:00'
+            WHERE o.order_date >= '2023-01-01 21:00:00' AND o.order_date <= '2024-01-01 00:00:00'
             GROUP BY 
                     date,
                     o.order_id,
