@@ -1188,6 +1188,8 @@ def user_orders(conn, cur):
     if request.method == 'GET':
 
         # SQL adaptation protocol objects
+        # MAP = utils.check_request_arg_fields(cur, request, datetime)['sort_by']
+        # map['sort_by']
         sort_by = utils.check_request_arg_fields(cur, request, datetime)['sort_by']
         sort_order = utils.check_request_arg_fields(cur, request, datetime)['sort_order']
         price_min = utils.check_request_arg_fields(cur, request, datetime)['price_min']
@@ -2353,6 +2355,12 @@ def handle_request(username=None, path=''):
         print("request.path", flush=True)
         print(request.path, flush=True)
 
+        print("user_email", flush=True)
+        print(user_email, flush=True)
+
+        print("staff_username", flush=True)
+        print(staff_username, flush=True)
+
         if 'back_office' in request.path or 'staff_login' in request.path or 'staff_portal' in request.path:
             user_email = None
             staff_username = sessions.get_current_user(request, cur)
@@ -2360,10 +2368,14 @@ def handle_request(username=None, path=''):
             user_email = sessions.get_current_user(request, cur)
             staff_username = None
 
-            if user_email is not None:
-                cur.execute("SELECT last_active FROM users WHERE email = %s", (user_email,))
-                current_user_last_active = cur.fetchone()[0]
-                cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (user_email,))
+            # if user_email is not None:
+            #     cur.execute("SELECT last_active FROM users WHERE email = %s", (user_email,))
+                    
+            #     print("cur.fetchone()[0]", flush=True)
+            #     print(cur.fetchone()[0], flush=True)
+
+            #     current_user_last_active = cur.fetchone()[0]
+            #     cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (user_email,))
 
         if staff_username is not None:
            if username is None:

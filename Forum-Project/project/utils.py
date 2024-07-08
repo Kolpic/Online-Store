@@ -222,6 +222,7 @@ def check_request_arg_fields(cur, request, datetime):
     per_page = request.args.get('per_page', 50, type=int)
     offset = (page - 1) * per_page
 
+    # throw exception
     if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
         sort_by = 'id'
         sort_order = 'asc'
