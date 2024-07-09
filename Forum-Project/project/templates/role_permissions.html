@@ -6,14 +6,6 @@
     {% extends "base.html" %}
     {% block title %} Role Permission's Management {% endblock %}
 
-    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
-    <script>
-        function onRoleChange() {
-            let role = document.getElementById("role").value;
-            console.log("Changing role to:", role);
-            window.location.href = '/{{role_to_display}}/role_permissions?role=' + role;
-        }
-    </script>
 </head>
 <body>
     {% block content %}
@@ -29,7 +21,7 @@
     {% endif %}
     <div class="container mt-5">
         <h2>Manage Role Permissions</h2>
-        <form action="/{{role_to_display}}/{{ back_office }}/role_permissions" method="POST">
+        <form action="/role_permissions" method="POST">
             <div class="form-group">
                 <label for="role">Select Role:</label>
                 <select id="role" name="role" class="form-control" onchange="onRoleChange()">
@@ -65,18 +57,24 @@
             <button type="submit" class="btn btn-primary">Save Permissions</button> 
         </form>
         <br>
-        <a href="/{{ role_to_display }}/{{ back_office }}/staff_portal" class="btn btn-primary">Home page</a>
+        <a href="/staff_portal" class="btn btn-primary">Home page</a>
     </div>
 </body>
 <script>
     window.onload = function() {
-     setTimeout(function() {
-         let homeAlert = document.getElementById('homeAlert');
-         if (homeAlert) {
-             homeAlert.style.display = 'none';
-         }
-     }, 3000);
- };
+        setTimeout(function() {
+             let homeAlert = document.getElementById('homeAlert');
+             if (homeAlert) {
+                 homeAlert.style.display = 'none';
+             }
+        }, 3000);
+    };
+
+    function onRoleChange() {
+        let role = document.getElementById("role").value;
+        console.log("Changing role to:", role);
+        window.location.href = '/role_permissions?role=' + role;
+    }
 </script>
 {% endblock %}
 </html>

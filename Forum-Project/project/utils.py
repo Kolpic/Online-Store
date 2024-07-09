@@ -49,8 +49,8 @@ def AssertDev(boolean, str):
 def AssertUser(boolean, str):
     if not boolean: raise exception.WrongUserInputException(str)
 
-def has_permission(cur, request, interface, permission_needed):
-    username = request.path.split('/')[1]
+def has_permission(cur, request, interface, permission_needed, username):
+    # username = request.path.split('/')[1]
     cur.execute("select permission_name, interface from permissions as p join role_permissions as rp on p.permission_id = rp.permission_id join roles as r on rp.role_id = r.role_id join staff_roles as sr on r.role_id = sr.role_id join staff as s on sr.staff_id = s.id where s.username = %s", (username,))
     permission_interface = cur.fetchall()
     for perm_interf in permission_interface:

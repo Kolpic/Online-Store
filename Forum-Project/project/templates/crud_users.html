@@ -43,7 +43,7 @@
     <div class="container mt-3">
         <h2>CRUD Users</h2>
         <div class="mb-2">
-            <button onclick="navigateTo('{{ username }}/{{ back_office }}/crud_users/add_user')" class="btn btn-primary">Add New User</button>
+            <button onclick="navigateTo('crud_users/add_user')" class="btn btn-primary">Add New User</button>
         </div>
         <form id="priceForm" method="get">
             
@@ -98,8 +98,8 @@
                     <td>{{ user[6] }}</td>
                     <td>
                         <div class="btn-group-horizontal">
-                            <button onclick="navigateTo('{{ username }}/{{ back_office }}/crud_users/edit_user/{{ user[0] }}')" class="btn btn-secondary">Edit</button>
-                            <button onclick="if(confirm('Are you sure?')) navigateTo('{{ username }}/{{ back_office }}/crud_users/delete_user/{{ user[0] }}')" class="btn btn-danger">Delete User</button>
+                            <button onclick="navigateTo('crud_users/edit_user/{{ user[0] }}')" class="btn btn-secondary">Edit</button>
+                            <button onclick="if(confirm('Are you sure?')) navigateTo('crud_users/delete_user/{{ user[0] }}')" class="btn btn-danger">Delete User</button>
                         </div>
                     </td>
                 </tr>

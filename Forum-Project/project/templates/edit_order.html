@@ -8,7 +8,7 @@
 <body>
     <div class="container mt-3">
         <h2>Edit Order with order id: {{ order_id }} </h2>
-        <form method="POST" action="/{{ username }}/{{ back_office }}/crud_orders/edit_order/{{ order_id }}">
+        <form method="POST" action="/crud_orders/edit_order/{{ order_id }}">
             <div class="form-group">
                 <label for="status">Status</label>
                 <select class="form-control" id="status" name="status">

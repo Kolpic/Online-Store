@@ -43,7 +43,7 @@
     <div class="container mt-3">
         <h2>Order Management</h2>
         <div class="mb-2">
-            <button onclick="navigateTo('{{ username }}/{{ back_office }}/crud_orders/add_order')" class="btn btn-primary">Add New Order</button>
+            <button onclick="navigateTo('/crud_orders/add_order')" class="btn btn-primary">Add New Order</button>
         </div>
         <form id="priceForm" method="get">
             
@@ -111,8 +111,8 @@
                     <td class="text-right">{{ order[4] }}</td>
                     <td>
                         <div class="btn-group-horizontal">
-                            <button onclick="navigateTo('{{ username }}/{{ back_office }}/crud_orders/edit_order/{{ order[0] }}')" class="btn btn-secondary">Edit</button>
-                            <button onclick="if(confirm('Are you sure?')) navigateTo('{{ username }}/{{ back_office }}/crud_orders/delete_order/{{ order[0] }}')" class="btn btn-danger">Delete Order</button>
+                            <button onclick="navigateTo('/crud_orders/edit_order/{{ order[0] }}')" class="btn btn-secondary">Edit</button>
+                            <button onclick="if(confirm('Are you sure?')) navigateTo('/crud_orders/delete_order/{{ order[0] }}')" class="btn btn-danger">Delete Order</button>
                         </div>
                     </td>
                 </tr>
@@ -130,7 +130,7 @@
                 
                 {% if start_page > 1 %}
                 <li class="page-item">
-                    <a class="page-link" href="/{{ username }}/{{ back_office }}/crud_orders?sort={{sort_by}}&order={{sort_order}}&page=1&price_min={{ price_min }}&price_max={{ price_max }}&order_by_id={{ order_by_id }}&date_from={{ date_from }}&date_to={{ date_to }}&status={{ status }}">1</a>
+                    <a class="page-link" href="/crud_orders?sort={{sort_by}}&order={{sort_order}}&page=1&price_min={{ price_min }}&price_max={{ price_max }}&order_by_id={{ order_by_id }}&date_from={{ date_from }}&date_to={{ date_to }}&status={{ status }}">1</a>
                 </li>
                 {% if start_page > 2 %}
                 <li class="page-item disabled"><span class="page-link">...</span></li>
@@ -139,7 +139,7 @@
         
                 {% for i in range(start_page, end_page + 1) %}
                 <li class="page-item {% if i == page %}active{% endif %}">
-                    <a class="page-link" href="/{{ username }}/{{ back_office }}/crud_orders?sort={{sort_by}}&order={{sort_order}}&page={{ i }}&price_min={{ price_min }}&price_max={{ price_max }}&order_by_id={{ order_by_id }}&date_from={{ date_from }}&date_to={{ date_to }}&status={{ status }}">{{ i }}</a>
+                    <a class="page-link" href="/crud_orders?sort={{sort_by}}&order={{sort_order}}&page={{ i }}&price_min={{ price_min }}&price_max={{ price_max }}&order_by_id={{ order_by_id }}&date_from={{ date_from }}&date_to={{ date_to }}&status={{ status }}">{{ i }}</a>
                 </li>
                 {% endfor %}
                 
@@ -148,7 +148,7 @@
                 <li class="page-item disabled"><span class="page-link">...</span></li>
                 {% endif %}
                 <li class="page-item">
-                    <a class="page-link" href="/{{ username }}/{{ back_office }}/crud_orders?sort={{sort_by}}&order={{sort_order}}&page={{total_pages}}&price_min={{ price_min }}&price_max={{ price_max }}&order_by_id={{ order_by_id }}&date_from={{ date_from }}&date_to={{ date_to }}&status={{ status }}">{{total_pages}}</a>
+                    <a class="page-link" href="/crud_orders?sort={{sort_by}}&order={{sort_order}}&page={{total_pages}}&price_min={{ price_min }}&price_max={{ price_max }}&order_by_id={{ order_by_id }}&date_from={{ date_from }}&date_to={{ date_to }}&status={{ status }}">{{total_pages}}</a>
                 </li>
                 {% endif %}
             </ul>

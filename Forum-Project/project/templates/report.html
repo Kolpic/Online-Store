@@ -12,7 +12,7 @@
     {% block content %}
     <div class="container mt-5">
         <h2>Generate Sales Report</h2>
-        <form id="reportForm" action="/{{ username }}/{{ back_office }}/report_sales" method="post">
+        <form id="reportForm" action="/report_sales" method="post">
             <div class="form-row">
                 <div class="col">
                     <label for="date_from">From:</label>
@@ -110,7 +110,7 @@
                 </tbody>
             </table>
         </div>
-        <form action="/{{ username }}/{{ back_office }}/download_report" method="post">
+        <form action="/download_report" method="post">
             <input type="hidden" name="date_from" value="{{ request.form['date_from'] }}">
             <input type="hidden" name="date_to" value="{{ request.form['date_to'] }}">
             <input type="hidden" name="group_by" value="{{ request.form['group_by'] }}">
@@ -129,13 +129,13 @@
         {% else %}
         <br>
         <h2>No records with these filters</h2>
-         <form action="/{{ username }}/{{ back_office }}/download_report_without_generating_rows_in_the_html" method="post">
+         <form action="/download_report_without_generating_rows_in_the_html" method="post">
             <input type="hidden" name="date_from" value="{{ request.form['date_from'] }}">
             <input type="hidden" name="date_to" value="{{ request.form['date_to'] }}">
             <input type="hidden" name="group_by" value="{{ request.form['group_by'] }}">
             <input type="hidden" name="status" value="{{ request.form['status'] }}">
-            <input type="hidden" name="total_records" value="0">  <!-- Adjust total_records if needed -->
-            <input type="hidden" name="total_price" value="0">   <!-- Adjust total_price if needed -->
+            <input type="hidden" name="total_records" value="0"> 
+            <input type="hidden" name="total_price" value="0">   
             <select name="format" class="form-control">
                 <option value="csv">CSV</option>
             </select>

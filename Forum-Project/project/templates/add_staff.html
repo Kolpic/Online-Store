@@ -17,7 +17,7 @@
 <body>
     <div class="container">
         <h2 class="form-title">Add User</h2>
-        <form id="addUserForm" action="/{{ username }}/{{ back_office }}/crud_staff/add_staff" method="POST" onsubmit="return checkPasswords();">
+        <form id="addUserForm" action="/crud_staff/add_staff" method="POST" onsubmit="return checkPasswords();">
             <div class="form-group">
                 <label for="username">Username:</label>
                 <input type="text" class="form-control" id="username" name="username" placeholder="Enter username without spaces" required>
