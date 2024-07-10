@@ -4,6 +4,13 @@ from datetime import datetime
 
 db = SQLAlchemy()
 
+class EmailTemplate(db.Model):
+    __tablename__ = 'email_template'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)
+    subject = db.Column(db.String(255), nullable=False)
+    body = db.Column(db.String(255), nullable=False)
+    sender = db.Column(db.String(255), nullable=False)
 
 class Currency(db.Model):
     __tablename__ = 'currencies'

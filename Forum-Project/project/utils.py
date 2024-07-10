@@ -49,6 +49,9 @@ def AssertDev(boolean, str):
 def AssertUser(boolean, str):
     if not boolean: raise exception.WrongUserInputException(str)
 
+def trace(str):
+    print(str, flush=True)
+
 def has_permission(cur, request, interface, permission_needed, username):
     # username = request.path.split('/')[1]
     cur.execute("select permission_name, interface from permissions as p join role_permissions as rp on p.permission_id = rp.permission_id join roles as r on rp.role_id = r.role_id join staff_roles as sr on r.role_id = sr.role_id join staff as s on sr.staff_id = s.id where s.username = %s", (username,))
@@ -227,6 +230,7 @@ def check_request_arg_fields(cur, request, datetime):
         sort_by = 'id'
         sort_order = 'asc'
 
+    #TODO: refactor da ne se povtarqt if-ove
     if price_min:
         try:
             price_min = float(price_min)

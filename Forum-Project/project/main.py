@@ -98,7 +98,6 @@ FIELD_CONFIG = {
             'price': {'type': float, 'required': True, 'conditions': [(lambda x: x > 0, "Price must be a positive number")]},
             'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "Quantity must be a positive number")]},
             'category': {'type': str, 'required': True},
-            # TODO: validator -> conditions
             'image': {'type': 'file', 'required': True, 'conditions_image': ALLOWED_EXTENSIONS,'handler': handle_image_field},
             'currency_id': {'type': int, 'required': True},
         },
@@ -153,6 +152,14 @@ FIELD_CONFIG = {
             'last_name': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >= 4 and len(x) <= 15, "Last name must be al least 4 symbols long and under 16 symbols")]},
             'email': {'type': str, 'required': True, 'conditions': [(lambda x: '@' in x, "Invalid email")]},
             'verification_status': {'type': bool, 'required': True, 'conditions': [(lambda x: x == True or x == False, "The status can be only true or false")]}
+        }
+    },
+    'Template email': {
+        'edit': {
+            'name': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 5 and len(x) <= 30, "Template name should be between 5 and 30 symbols")]},
+            'subject': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 5 and len(x) <= 30, "Email subject should be between 5 and 30 symbols")]},
+            'body': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},
+            'sender': {'type': str, 'required': True, 'conditions': [(lambda x: '@' in x, "Invalid email")]},
         }
     }
 }
@@ -367,18 +374,33 @@ def registration(conn, cur):
 
     cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", (first_name, last_name, email, hashed_password, verification_code))
 
-    send_verification_email(email, verification_code)
+    send_verification_email(email, verification_code, cur)
 
     session['verification_message'] = 'Successful registration, we send you a verification code on the provided email'
     return redirect("/verify")
 
-def send_verification_email(user_email, verification_code):
-    with app.app_context():
-        msg = Message('Email Verification',
-                sender = 'galincho112@gmail.com',
-                recipients = [user_email])
-    msg.body = 'Please insert the verification code in the form: ' + verification_code
-    mail.send(msg)
+def send_verification_email(user_email, verification_code, cur):
+
+    cur.execute("SELECT subject, sender, body FROM email_template WHERE name = 'Verification Email'")
+    values = cur.fetchone()
+
+    utils.trace(values)
+
+    if values:
+        subject, sender, body = values
+
+        utils.trace(subject)
+        utils.trace(sender)
+        utils.trace(body)
+
+        with app.app_context():
+            msg = Message(subject,
+                    sender = sender,
+                    recipients = [user_email])
+        msg.body = body + " " + verification_code
+        mail.send(msg)
+    else:
+        utils.AssertDev(False, "No information in the database")
 
 def verify(conn, cur):
     assertIsProvidedMethodsTrue('GET','POST')
@@ -431,7 +453,6 @@ def login(conn, cur):
     email = request.form['email']
     password_ = request.form['password']
 
-    # TODO: Izpolzvam tova navsqkude
     cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
     cur.execute("""
@@ -704,7 +725,7 @@ def send_login_link(conn, cur):
     token_id = cur.fetchone()[0]
     cur.execute("UPDATE users SET token_id = %s WHERE email = %s", (token_id, email))
 
-    login_link = f"http://10.20.3.101:5001/log?token={login_token}"
+    login_link = f"http://10.20.3.101:5000/log?token={login_token}"
 
     send_verification_link(email, login_link)
 
@@ -1588,7 +1609,10 @@ def back_office_manager(conn, cur, *params):
             print(params, flush=True)
         
             cur.execute(query, tuple(params))
+
             report = cur.fetchall()
+
+            # total_orders = utils.get
 
             utils.AssertUser(report[0][0] != None and report[0][1] != None and report[0][2] != None and report[0][3] != None, "No result with this filter")
 
@@ -1846,7 +1870,6 @@ def back_office_manager(conn, cur, *params):
 
         print("Enterd crud_products add successfully", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'create', is_auth_user), "You don't have permission to this resource")
-        # TODO(Done): ref
 
         if request.method == 'GET':
 
@@ -1874,7 +1897,7 @@ def back_office_manager(conn, cur, *params):
 
         print("Enterd crud_products edit successfully", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'update', is_auth_user), "You don't have permission to this resource")
-        # TODO: ref
+
         product_id = request.path.split('/')[3]
 
         if request.method == 'GET':
@@ -1906,7 +1929,7 @@ def back_office_manager(conn, cur, *params):
     elif re.match(r'/crud_products/delete_product/\d+$', request.path) and len(request.path.split('/')) == 4:
 
         print("Enterd crud_products delete successfully", flush=True)
-        # TODO: ref
+        
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'delete', is_auth_user), "You don't have permission to this resource")
 
         product_id = request.path.split('/')[3]
@@ -2187,6 +2210,7 @@ def back_office_manager(conn, cur, *params):
 
         if request.method == 'GET':
 
+            #TODO: ne trqbva da se izvikva poveche ot
             sort_by = utils.check_request_arg_fields(cur, request, datetime)['sort_by']
             sort_order = utils.check_request_arg_fields(cur, request, datetime)['sort_order']
             email = utils.check_request_arg_fields(cur, request, datetime)['email']
@@ -2309,6 +2333,40 @@ def back_office_manager(conn, cur, *params):
 
         return redirect(f'/crud_users')
 
+    elif request.path == f'/template_email':
+
+        if request.method == 'GET':
+
+            cur.execute("SELECT name, subject, body, sender FROM email_template WHERE name = 'Verification Email'")
+            values = cur.fetchone()
+
+            if values:
+                name, subject, body, sender = values
+
+                return render_template('template_email.html', name=name, subject=subject, body=body, sender=sender)
+
+        elif request.method == 'POST':
+            
+            data = process_form('Template email', 'edit')
+
+            utils.trace(data)
+
+            cur.execute("""
+                UPDATE email_template 
+                SET 
+                    name = %s, 
+                    subject = %s, 
+                    body = %s, 
+                    sender = %s 
+                WHERE id = 1""", (data['values'][0], data['values'][1], data['values'][2], data['values'][3]))
+
+            session['staff_message'] = "You successfully updated template for sending emails"
+
+            return redirect(f'/staff_portal')
+
+        else:
+            utils.AssertUser(False, "Invalid method")
+
     else:
         utils.AssertUser(False, "Invalid url")
 
@@ -2345,6 +2403,7 @@ url_to_function_map = [
     (r'(?:/[A-z]+)?(?:/back_office)?/(crud_products_edit_picture|error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 
+
 url_to_function_map_front_office = [
     (r'/registration', registration),
     (r'/refresh_captcha', refresh_captcha),
@@ -2373,7 +2432,7 @@ url_to_function_map_back_office = [
     (r'/staff_login', staff_login),
     (r'/staff_portal', staff_portal),
     (r'/logout_staff', logout_staff),
-    (r'/(crud_products_edit_picture|error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users)(?:/[\w\d\-_/]*)?', back_office_manager),
+    (r'/(crud_products_edit_picture|error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users|template_email)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 
 # (?:/[A-z]+)?
@@ -2389,8 +2448,10 @@ def handle_request(username=None, path=''):
         print("request.path", flush=True)
         print(request.path, flush=True)
 
+        #TODO Validaciq na cookie prez bazata + req.args
         is_auth_user = sessions.get_current_user(request, cur)
 
+        #TODO print da se izvede v custom finkciq
         print("is_auth_user", flush=True)
         print(is_auth_user, flush=True)
 
@@ -2398,6 +2459,8 @@ def handle_request(username=None, path=''):
         match = None
         flag_front_office = False
 
+        #TODO foreign key
+        #TODO refactor
         if is_auth_user == None or "@" in is_auth_user:
             for pattern, function in url_to_function_map_front_office:
                 print("Entered front office loop",flush=True)
@@ -2408,6 +2471,7 @@ def handle_request(username=None, path=''):
                     flag_front_office = True
                     break
 
+        #TODO da se mahne == False -> not
         if is_auth_user == None or (flag_front_office == False or "@" not in is_auth_user):
             for pattern, function in url_to_function_map_back_office:
                 print("Entered back office loop",flush=True)
@@ -2455,6 +2519,7 @@ def handle_request(username=None, path=''):
 
         return render_template("error.html", message = str(message), redirect_url = request.url)
     finally:
+        #TODO: Da premestq predi if match:
         conn.commit()
 
         if conn is not None:
