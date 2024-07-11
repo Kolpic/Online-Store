@@ -5,6 +5,7 @@
     {% extends "base.html" %}
     {% block title %}Edit Email Template{% endblock %}
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.13.18/css/bootstrap-select.min.css">
 </head>
 <body>
 {% block content %}
@@ -32,12 +33,64 @@
             <textarea class="form-control" id="body" name="body" rows="10">{{ body }}</textarea>
         </div>
 
+        <!-- Placeholder Variables Dropdown -->
+        <div class="form-group">
+            <label for="variables">Insert Variables:</label>
+            <select id="variables" class="selectpicker" multiple data-live-search="true" data-actions-box="true">
+                <!-- Options will be populated here -->
+            </select>
+        </div>
+
         <button type="submit" class="btn btn-primary">Save Changes</button>
     </form>
 </div>
 <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.13.18/js/bootstrap-select.min.js"></script>
+<script>
+$(document).ready(function() {
+    // Example data - replace with actual data fetching logic
+    let variables = ['{first_name}', '{last_name}', '{verification_code}'];
+    variables.forEach(function(variable) {
+        $('#variables').append($('<option>', {
+            value: variable,
+            text: variable
+        }));
+    });
+    $('.selectpicker').selectpicker('refresh');
+
+    // When the selection changes, update the textarea
+    $('#variables').on('changed.bs.select', function (e, clickedIndex, isSelected, previousValue) {
+        let selectedVars = $(this).val();
+        let bodyText = "Hello ";
+        
+        // Filter out verification code if present and store it separately
+        let verificationCode = '';
+        let otherVars = selectedVars.filter(varName => {
+            if (varName === '{verification_code}') {
+                verificationCode = varName;
+                return false; // Do not include in the otherVars array
+            }
+            return true;
+        });
+
+        // Append all other variables except verification code
+        otherVars.forEach(function(varName) {
+            bodyText += varName + " ";
+        });
+
+        bodyText += "Please insert the verification code in the form web 2: "
+
+        // Append the verification code last if it was selected
+        if (verificationCode) {
+            bodyText += verificationCode;
+        }
+
+        $('#body').val(bodyText);
+    });
+});
+</script>
 </body>
 {% endblock %}
 </html>
