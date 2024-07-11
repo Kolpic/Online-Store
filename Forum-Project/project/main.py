@@ -384,20 +384,26 @@ def send_verification_email(user_email, verification_code, cur):
     cur.execute("SELECT subject, sender, body FROM email_template WHERE name = 'Verification Email'")
     values = cur.fetchone()
 
+    cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (user_email,))
+    user_data = cur.fetchone()
+
     utils.trace(values)
 
-    if values:
+    if values and user_data:
         subject, sender, body = values
+        first_name, last_name = user_data
 
-        utils.trace(subject)
-        utils.trace(sender)
-        utils.trace(body)
+        body_filled = body.format(
+            first_name=first_name,
+            last_name=last_name,
+            verification_code=verification_code
+        )
 
         with app.app_context():
             msg = Message(subject,
                     sender = sender,
                     recipients = [user_email])
-        msg.body = body + " " + verification_code
+        msg.body = body_filled
         mail.send(msg)
     else:
         utils.AssertDev(False, "No information in the database")
