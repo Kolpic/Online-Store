@@ -659,7 +659,7 @@ def recover_password(conn, cur):
     cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
 
     cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-    utils.AssertUser(not cur.rowcount == 0, "You entered non existent email")
+    utils.AssertUser(cur.rowcount == 1, "You entered non existent email")
 
     hashed_password = utils.hash_password(new_password)
 
@@ -1098,6 +1098,7 @@ def finish_payment(conn, cur):
     return redirect('/home')
 
 def staff_login(conn, cur):
+
     if request.method == 'GET':
         return render_template('staff_login.html')
 
@@ -2426,6 +2427,7 @@ url_to_function_map_front_office = [
     (r'/update_cart_quantity', update_cart_quantity),
     (r'/remove_from_cart', remove_from_cart_meth),
     (r'/finish_payment', finish_payment),
+    (r'/user_orders', user_orders),
 ]
 
 url_to_function_map_back_office = [
