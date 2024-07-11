@@ -227,8 +227,31 @@ def check_request_arg_fields(cur, request, datetime):
 
     # throw exception
     if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
+        utils.AssertUser(False, "Hacker detected")
         sort_by = 'id'
         sort_order = 'asc'
+
+    parameters = {
+        'sort_by': (request.args.get('sort', 'id'), int),
+        'sort_order': sort_order,
+        'price_min': price_min,
+        'price_max': price_max,
+        'order_by_id': order_by_id,
+        'date_from': date_from,
+        'date_to': date_to,
+        'status': status,
+        'email': email,
+        'user_by_id': user_by_id,
+        'page': page,
+        'per_page': per_page,
+        'offset': offset
+    }
+
+    trace(parameters)
+
+    for key, value in parameters.items():
+        trace(key)
+        trace(value)
 
     #TODO: refactor da ne se povtarqt if-ove
     if price_min:

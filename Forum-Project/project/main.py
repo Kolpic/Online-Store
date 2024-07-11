@@ -1215,21 +1215,16 @@ def user_orders(conn, cur):
 
     if request.method == 'GET':
 
-        # SQL adaptation protocol objects
-        # MAP = utils.check_request_arg_fields(cur, request, datetime)['sort_by']
-        # map['sort_by']
-        sort_by = utils.check_request_arg_fields(cur, request, datetime)['sort_by']
-        sort_order = utils.check_request_arg_fields(cur, request, datetime)['sort_order']
-        price_min = utils.check_request_arg_fields(cur, request, datetime)['price_min']
-        price_max = utils.check_request_arg_fields(cur, request, datetime)['price_max']
-        order_by_id = utils.check_request_arg_fields(cur, request, datetime)['order_by_id']
-        date_from = utils.check_request_arg_fields(cur, request, datetime)['date_from']
-        date_to = utils.check_request_arg_fields(cur, request, datetime)['date_to']
-        status = utils.check_request_arg_fields(cur, request, datetime)['status']
+        fields = utils.check_request_arg_fields(cur, request, datetime)
 
-        page = utils.check_request_arg_fields(cur, request, datetime)['page']
-        per_page = utils.check_request_arg_fields(cur, request, datetime)['per_page']
-        offset = utils.check_request_arg_fields(cur, request, datetime)['offset']
+        sort_by = fields['sort_by']
+        sort_order = fields['sort_order']
+        price_min = fields['price_min']
+        price_max = fields['price_max']
+        order_by_id = fields['order_by_id']
+        date_from = fields['date_from']
+        date_to = fields['date_to']
+        status = fields['status']
 
         cur.execute("SELECT DISTINCT status FROM orders")
         statuses = cur.fetchall()
@@ -2025,18 +2020,20 @@ def back_office_manager(conn, cur, *params):
 
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read', is_auth_user), "You don't have permission for this resource")
 
-        sort_by = utils.check_request_arg_fields(cur, request, datetime)['sort_by']
-        sort_order = utils.check_request_arg_fields(cur, request, datetime)['sort_order']
-        price_min = utils.check_request_arg_fields(cur, request, datetime)['price_min']
-        price_max = utils.check_request_arg_fields(cur, request, datetime)['price_max']
-        order_by_id = utils.check_request_arg_fields(cur, request, datetime)['order_by_id']
-        date_from = utils.check_request_arg_fields(cur, request, datetime)['date_from']
-        date_to = utils.check_request_arg_fields(cur, request, datetime)['date_to']
-        status = utils.check_request_arg_fields(cur, request, datetime)['status']
+        validated_fields = utils.check_request_arg_fields(cur, request, datetime)
 
-        page = utils.check_request_arg_fields(cur, request, datetime)['page']
-        per_page = utils.check_request_arg_fields(cur, request, datetime)['per_page']
-        offset = utils.check_request_arg_fields(cur, request, datetime)['offset']
+        sort_by = validated_fields['sort_by']
+        sort_order = validated_fields['sort_order']
+        price_min = validated_fields['price_min']
+        price_max = validated_fields['price_max']
+        order_by_id = validated_fields['order_by_id']
+        date_from = validated_fields['date_from']
+        date_to = validated_fields['date_to']
+        status = validated_fields['status']
+
+        page = validated_fields['page']
+        per_page = validated_fields['per_page']
+        offset = validated_fields['offset']
 
         cur.execute("SELECT DISTINCT status FROM orders")
         statuses = cur.fetchall()
@@ -2217,12 +2214,7 @@ def back_office_manager(conn, cur, *params):
 
         if request.method == 'GET':
 
-            #TODO: ne trqbva da se izvikva poveche ot
-            sort_by = utils.check_request_arg_fields(cur, request, datetime)['sort_by']
-            sort_order = utils.check_request_arg_fields(cur, request, datetime)['sort_order']
-            email = utils.check_request_arg_fields(cur, request, datetime)['email']
-            user_by_id = utils.check_request_arg_fields(cur, request, datetime)['user_by_id']
-            status = utils.check_request_arg_fields(cur, request, datetime)['status']
+            fields = utils.check_request_arg_fields(cur, request, datetime)
 
             cur.execute("SELECT DISTINCT verification_status FROM users")
             statuses = cur.fetchall()
@@ -2240,24 +2232,24 @@ def back_office_manager(conn, cur, *params):
                 WHERE 1=1
                 """
 
-            if email:
+            if fields['email']:
                 query += " AND email = %s"
-                params.append(email)
+                params.append(fields['email'])
 
-            if user_by_id:
+            if fields['user_by_id']:
                 query += " AND id = %s"
-                params.append(user_by_id)
+                params.append(fields['user_by_id'])
 
-            if status:
+            if fields['status']:
                 query += " AND verification_status = %s"
-                params.append(status)
+                params.append(fields['status'])
 
-            query += f" ORDER BY {sort_by} {sort_order}"
+            query += f" ORDER BY {fields['sort_by']} {fields['sort_order']}"
 
             cur.execute(query, params)
             users = cur.fetchall()
 
-            return render_template('crud_users.html', users=users, statuses=statuses, email=email, user_by_id=user_by_id)
+            return render_template('crud_users.html', users=users, statuses=statuses, email=fields['email'], user_by_id=fields['user_by_id'])
 
         elif request.method == 'POST':
 
