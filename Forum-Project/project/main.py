@@ -195,6 +195,9 @@ def validate_field(field_name, value, config):
             print(value, flush=True)
             utils.AssertUser(condition(value), message)
 
+    if field_name == 'password':
+        value = utils.hash_password(value)
+
     return value
 
 def process_form(interface, method):
@@ -1312,6 +1315,8 @@ def user_orders(conn, cur):
 
         orders = list(orders_generator)
 
+        utils.trace(orders)
+
         return render_template('user_orders.html', orders = orders, statuses = statuses, price_min=price_min, price_max=price_max, date_from=date_from, date_to=date_to, order_by_id=order_by_id)
     else:
         utils.AssertUser(False, "Invalid method")
@@ -1425,7 +1430,7 @@ def back_office_manager(conn, cur, *params):
             except Exception as e:
                 session['crud_error'] = "Something went wrong with the upload"
         else:
-            session['crud_error'] = "Invalid file or file type."
+            session['crud_error'] = "Invalid file or file type extension."
 
         return redirect(f'/crud_products')
 
@@ -2273,6 +2278,8 @@ def back_office_manager(conn, cur, *params):
         elif request.method == 'POST':
 
             data = process_form('CRUD Users', 'create')
+
+            # hashed_password = utils.hash_password(password_)
 
             sql_command = f"INSERT INTO users ({data['fields']}) VALUES ({data['placeholders']}) RETURNING id;"
             cur.execute(sql_command, data['values'])

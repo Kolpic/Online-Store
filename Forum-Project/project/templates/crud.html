@@ -55,12 +55,12 @@
         <div class="mb-2">
             <button onclick="navigateTo('add_product')" class="btn btn-primary">Add New Product</button>
 
-            <form id="addProductForm" method="POST" action="/Kolpic/crud_products/upload_products" enctype="multipart/form-data">
+            <form id="addProductForm" method="POST" action="/crud_products/upload_products" enctype="multipart/form-data">
                 <div class="form-group">
                     <label for="productFile">Upload CSV File</label>
                     <input type="file" class="form-control-file" id="productFile" name="productFile" accept=".csv" required>
                 </div>
-                <button onclick="navigateTo('upload_products')" type="submit" class="btn btn-primary">Upload Products</button>
+                <button type="submit" class="btn btn-primary">Upload Products</button>
             </form>
 
         </div>

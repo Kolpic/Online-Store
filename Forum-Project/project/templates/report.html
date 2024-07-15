@@ -93,11 +93,30 @@
                         </td>
                         <td class="text-right">{{ row[3] }} {{'лв.'}}</td>
                         <td class="text-right">
-                            {% if request.form.filter_by_status != "" or request.form.status != "" %}
+                            <!-- {% if request.form.filter_by_status != '' or request.form.status != '' or request.form.group_by == '' %}
                                 {{ row[4][0] }}
                             {% else %}
-                                {{ "-" if row[4]|length > 1 else row[4]|join(', ') }}
+                                {{ "-" if row[4]|length > 1  else row[4]|join(', ') }}
+                            {% endif %} -->
+
+                            {% if request.form.filter_by_status != '' or request.form.status != '' or request.form.group_by == '' %}
+
+                            {{ row[4][0] }}
+
+                            {% elif row[4]|length > 1 and request.form.group_by != '' %}
+
+                            {{ "-" }}
+
+                            {% elif row[4]|length == 1 and request.form.group_by != '' %}
+
+                            {{ "-" }}
+
+                            {% else %}
+
+                            {{ row[4]|join(', ') }}
+
                             {% endif %}
+
                         </td>
                     </tr>
                     {% endfor %}
@@ -128,7 +147,6 @@
         </form>
         {% else %}
         <br>
-        <h2>No records with these filters</h2>
          <form action="/download_report_without_generating_rows_in_the_html" method="post">
             <input type="hidden" name="date_from" value="{{ request.form['date_from'] }}">
             <input type="hidden" name="date_to" value="{{ request.form['date_to'] }}">
