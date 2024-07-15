@@ -209,100 +209,42 @@ def check_request_arg_fields(cur, request, datetime):
     valid_sort_columns = {'id', 'date', 'first_name', 'last_name', 'email'}
     valid_sort_orders = {'asc', 'desc'}
 
-    # SQL adaptation protocol objects
-    sort_by = request.args.get('sort', 'id')
-    sort_order = request.args.get('order', 'desc')
-    price_min = request.args.get('price_min', '', type=float)
-    price_max = request.args.get('price_max', '', type=float)
-    order_by_id = request.args.get('order_by_id', '', type=int)
-    date_from = request.args.get('date_from', '')
-    date_to = request.args.get('date_to', '')
-    status = request.args.get('status', '')
-    email = request.args.get('email','', type=str)
-    user_by_id = request.args.get('user_by_id', '', type=int)
+    parameters = {
+        'sort_by': (request.args.get('sort', 'id'), str),
+        'sort_order': (request.args.get('order', 'desc'), str),
+        'price_min': (request.args.get('price_min', '', type=float), float),
+        'price_max': (request.args.get('price_max', '', type=float), float),
+        'order_by_id': (request.args.get('order_by_id', '', type=int), int),
+        'date_from': (request.args.get('date_from', ''), datetime),
+        'date_to': (request.args.get('date_to', ''), datetime),
+        'status': (request.args.get('status', ''), str),
+        'email': (request.args.get('email','', type=str), str),
+        'user_by_id': (request.args.get('user_by_id', '', type=int), int),
+        'page': (request.args.get('page', 1, type=int), int),
+        'per_page': (request.args.get('per_page', 50, type=int), int),
+        # 'offset': (page - 1) * per_page
+    }
 
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 50, type=int)
-    offset = (page - 1) * per_page
-
-    # throw exception
-    if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
+    if parameters['sort_by'][0] not in valid_sort_columns or parameters['sort_order'][0] not in valid_sort_orders:
         utils.AssertUser(False, "Hacker detected")
         sort_by = 'id'
         sort_order = 'asc'
 
-    parameters = {
-        'sort_by': (request.args.get('sort', 'id'), int),
-        'sort_order': sort_order,
-        'price_min': price_min,
-        'price_max': price_max,
-        'order_by_id': order_by_id,
-        'date_from': date_from,
-        'date_to': date_to,
-        'status': status,
-        'email': email,
-        'user_by_id': user_by_id,
-        'page': page,
-        'per_page': per_page,
-        'offset': offset
-    }
+    validated_params = {}
 
-    trace(parameters)
+    for key, (value, expected_type) in parameters.items():
 
-    for key, value in parameters.items():
-        trace(key)
-        trace(value)
+        if value is None or value == '':
+             validated_params[key] = value
+        else:
+            try:
+                if expected_type is datetime:
+                    validated_params[key] = datetime.strptime(value, '%Y-%m-%dT%H:%M')
+                else:
+                    validated_params[key] = expected_type(value)
+            except:
+                AssertUser(False, f"Invalid value for {key}. Expected type {expected_type.__name__}.")
 
-    #TODO: refactor da ne se povtarqt if-ove
-    if price_min:
-        try:
-            price_min = float(price_min)
-        except:
-            utils.AssertUser(False, "Entered min price is not a number")
+    validated_params['offset'] = (validated_params['page'] - 1) * validated_params['per_page']
 
-    if price_max:
-        try:
-            price_max = float(price_max)
-        except:
-            utils.AssertUser(False, "Entered max price is not a number")
-
-    if order_by_id:
-        try:
-            order_by_id = int(order_by_id)
-        except:
-            utils.AssertUser(False, "Entered order by id is not a number")
-
-    if date_from:
-        try:
-            date_from = datetime.strptime(date_from, '%Y-%m-%dT%H:%M')
-        except:
-            utils.AssertUser(False, "Entered date_from is not a date")
-
-    if date_to:
-        try:
-            date_to = datetime.strptime(date_to, '%Y-%m-%dT%H:%M')
-        except:
-            utils.AssertUser(False, "Entered date_to is not a date")
-
-    if email:
-        AssertUser('@' in email, "Not valid email")
-
-    if user_by_id:
-        try:
-            user_by_id = int(user_by_id)
-        except:
-            utils.AssertUser(False, "Entered user by id is not a number")
-
-    return {'sort_by': sort_by,
-            'sort_order': sort_order, 
-            'price_min': price_min, 
-            'price_max': price_max, 
-            'order_by_id': order_by_id, 
-            'date_from': date_from, 
-            'date_to': date_to, 
-            'status': status, 
-            'page': page, 
-            'per_page': per_page, 
-            'offset': offset,
-            'email': email, 
-            'user_by_id': user_by_id}
+    return validated_params
