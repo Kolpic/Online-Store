@@ -1461,10 +1461,16 @@ def back_office_manager(conn, cur, *params):
         utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'read', is_auth_user), "You don't have permission to this resource")
 
         if request.method == 'GET':
+
             current_settings = utils.get_current_settings(cur)
-            return render_template('captcha_settings.html', **current_settings)
+
+            cur.execute("SELECT value FROM settings WHERE name = %s", ("report_limitation_rows",))
+            limitation_rows = cur.fetchone()[0]
+
+            return render_template('captcha_settings.html', limitation_rows=limitation_rows, **current_settings)
 
         utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', is_auth_user), "You don't have permission to this resource")
+
         new_max_attempts = request.form['max_captcha_attempts']
         new_timeout_minutes = request.form['captcha_timeout_minutes']
 
@@ -1485,6 +1491,27 @@ def back_office_manager(conn, cur, *params):
 
         return redirect(f'/staff_portal')
 
+    elif request.path == f'/update_report_limitation_rows':
+
+        if request.method == 'POST':
+            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', is_auth_user), "You don't have permission to this resource")
+
+            limitation_rows = int(request.form['report_limitation_rows'])
+
+            if limitation_rows <= 0 or limitation_rows >= 50000:
+                utils.AssertUser(False, "You can't enter zero or negative number. The maximum number is 50000")
+
+
+            query = ("UPDATE settings SET value = %s WHERE name = %s")
+            cur.execute(query, (limitation_rows, 'report_limitation_rows'))
+
+            session['staff_message'] = "You changed the limitation number of every report to: " + str(limitation_rows)
+
+            return redirect(f'/staff_portal')
+
+        else:
+            utils.AssertUser(False, "Invalid method")        
+
     elif request.path == f'/report_sales':
         utils.AssertUser(utils.has_permission(cur, request, 'Report sales', 'read', is_auth_user), "You don't have permission to this resource")
 
@@ -1499,6 +1526,9 @@ def back_office_manager(conn, cur, *params):
             return render_template('report.html', default_to_date=default_to_date_str, default_from_date=default_from_date_str)
         
         elif request.method == 'POST':
+
+            cur.execute("SELECT value FROM settings WHERE name = %s", ("report_limitation_rows",))
+            limitation_rows = cur.fetchone()[0]
 
             date_from = request.form.get('date_from')
             date_to = request.form.get('date_to')
@@ -1548,7 +1578,9 @@ def back_office_manager(conn, cur, *params):
                 query += "AND orders.order_id = %s "
                 params.append(order_id)
 
-            query += "GROUP BY 1, 2, 3, 4, 5 ORDER BY order_date DESC"
+            query += "GROUP BY 1, 2, 3, 4, 5 ORDER BY order_date DESC LIMIT %s"
+
+            params.append(limitation_rows)
 
             cur.execute(query, params)
 
@@ -1562,7 +1594,7 @@ def back_office_manager(conn, cur, *params):
 
             report_json = utils.serialize_report(report)
 
-            return render_template('report.html', filter_by_status=filter_by_status,report=report, total_records=total_records, total_price=total_price, report_json=report_json, default_to_date=date_to, default_from_date=date_from)
+            return render_template('report.html', limitation_rows=limitation_rows, filter_by_status=filter_by_status,report=report, total_records=total_records, total_price=total_price, report_json=report_json, default_to_date=date_to, default_from_date=date_from)
         else:
             utils.AssertUser(False, "Invalid url")
 
@@ -2352,7 +2384,7 @@ url_to_function_map_back_office = [
     (r'/staff_login', staff_login),
     (r'/staff_portal', staff_portal),
     (r'/logout_staff', logout_staff),
-    (r'/(crud_products_edit_picture|error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users|template_email)(?:/[\w\d\-_/]*)?', back_office_manager),
+    (r'/(crud_products_edit_picture|error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users|template_email|update_report_limitation_rows)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 
 # (?:/[A-z]+)?

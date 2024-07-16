@@ -43,7 +43,7 @@
                 {% endif %}
             </div>
         </div>
-        <h2>Update Application Settings</h2>
+        <h2>Update Captcha Settings</h2>
         <form action="/update_captcha_settings" method="post">
             <div class="form-group">
                 <label for="max_captcha_attempts">Maximum CAPTCHA Attempts</label>
@@ -54,6 +54,17 @@
                 <input type="number" class="form-control" id="captcha_timeout_minutes" name="captcha_timeout_minutes" value="{{ captcha_timeout_minutes }}">
             </div>
             <button type="submit" class="btn btn-primary">Update Settings</button>
+        </form>
+    </div>
+
+    <div class="container mt-5">
+        <h2>Update Report's Limitation Rows </h2>
+        <form action="/update_report_limitation_rows" method="post">
+            <div class="form-group">
+                <label for="report_limitation_rows">Limitation Rows</label>
+                <input type="number" class="form-control" id="report_limitation_rows" name="report_limitation_rows" value="{{ limitation_rows }}">
+            </div>
+            <button type="submit" class="btn btn-primary">Update Limitation Rows</button>
         </form>
     </div>
     {% endblock %}

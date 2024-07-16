@@ -90,7 +90,18 @@
                     </tr>
                     {% endfor %}
                     <tr>
-                        <td> <strong>Total Records: </strong>{{ total_records }}</td>
+                        <td> <strong>Total Records: </strong>{{ total_records }} from {{ limitation_rows }}</td>
+
+                        {% if total_records == limitation_rows %}
+
+                            <td> You can see only {{ limitation_rows }} record's. {{ limitation_rows }} is the maximum allowed, you can change it in settings inteface</td>
+
+                        {% else %}
+
+                            <td> Every record is displayed </td>
+
+                        {% endif %}
+
                         <td colspan="2" class="text-right"><strong>Total:</strong></td>
                         <td class="text-right"><strong>{{ total_price }} лв.</strong></td>
                         <td></td>
