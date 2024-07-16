@@ -1499,6 +1499,7 @@ def back_office_manager(conn, cur, *params):
             return render_template('report.html', default_to_date=default_to_date_str, default_from_date=default_from_date_str)
         
         elif request.method == 'POST':
+
             date_from = request.form.get('date_from')
             date_to = request.form.get('date_to')
             group_by = request.form.get('group_by')
@@ -1509,141 +1510,55 @@ def back_office_manager(conn, cur, *params):
             page = request.args.get('page', 1, type=int)
             per_page = 1000  
 
-            utils.AssertUser(date_from or date_to, "You have to select a date from, date to")
+            utils.AssertUser(date_from or date_to, "You have to select date from and date to")
 
-            if order_id != '':
-                group_by_clause = f"""
-                SELECT
-                array_agg(order_date) as period,
-                array_agg(order_id) AS order_ids, 
-                array_agg(buyer_name) AS name_of_buyers, 
-                array_agg(order_sum) AS total_sum, 
-                array_agg(status) AS order_statuses 
-                FROM OrderSums AS o 
-                WHERE order_id = {order_id};
-                """
-            elif (group_by == 'day' or group_by == 'month' or group_by == 'year') and status == "":
-                group_by_clause = f"""
-                SELECT
-                DATE(date_trunc('{group_by}', order_date)) as period,
-                array_agg(order_id) AS order_ids, 
-                array_agg(buyer_name) AS name_of_buyers, 
-                SUM(order_sum) AS total_sum, 
-                array_agg(status) AS order_statuses 
-                FROM OrderSums AS o 
-                GROUP BY period
-                ORDER BY period DESC;
-                """
-            elif (group_by == 'day' or group_by == 'month' or group_by == 'year') and status != "": # tova
-                group_by_clause = f"""
-                SELECT
-                DATE(date_trunc('{group_by}', order_date)) as period,
-                array_agg(order_id) AS order_ids, 
-                array_agg(buyer_name) AS name_of_buyers, 
-                SUM(order_sum) AS total_sum, 
-                array_agg(status) AS order_statuses 
-                FROM OrderSums AS o 
-                GROUP BY period, status
-                ORDER BY period DESC;
-                """
-            elif status != "": # tova
-                group_by_clause = f"""
-                SELECT
-                array_agg(order_date) as period,
-                array_agg(order_id) AS order_ids, 
-                array_agg(buyer_name) AS name_of_buyers, 
-                array_agg(order_sum) AS total_sum, 
-                array_agg(status) AS order_statuses 
-                FROM OrderSums AS o
-                GROUP BY status
-                ORDER BY period DESC;
-                """
+            params = []
+
+            query = "SELECT "
+
+            if group_by == '':
+                query += "users.id, orders.order_id, orders.order_date, users.first_name, "
             else:
-                group_by_clause = f"""
-                SELECT
-                array_agg(order_date) as period,
-                array_agg(order_id) AS order_ids, 
-                array_agg(buyer_name) AS name_of_buyers, 
-                array_agg(order_sum) AS total_sum, 
-                array_agg(status) AS order_statuses 
-                FROM OrderSums AS o 
-                GROUP BY order_date 
-                ORDER BY period DESC;
-                """
+                query += f"'-' AS id, '-' AS order_id, date_trunc('{group_by}', order_date) AS order_date, '-' AS first_name, "
 
-            if filter_by_status == "":
+            if status == '' and group_by == '':
+                query += "orders.status, "
+            elif status == '' and group_by != '':
+                query += "'-' as status, "
+            elif status != '' and group_by != '':
+                query += "orders.status, "
 
-                query = f"""
-                    WITH OrderSums AS (
-                        SELECT 
-                            o.order_id, 
-                            DATE(o.order_date)                 AS order_date, 
-                            u.first_name || ' ' || u.last_name AS buyer_name, 
-                            o.status, 
-                            SUM(oi.quantity * oi.price)        AS order_sum 
-                        FROM orders      AS o 
-                        JOIN users       AS u  ON o.user_id  = u.id 
-                        JOIN order_items AS oi ON o.order_id = oi.order_id 
-                        WHERE o.order_date >= %s AND o.order_date <= (%s::date + INTERVAL '1 day')
-                        GROUP BY o.order_id, order_date, buyer_name
-                        ORDER BY order_date DESC
-                    ) 
-                    {group_by_clause}
-                """
-                params = [date_from, date_to]
-            else:
+            query += "sum(order_items.price * order_items.quantity) As total "
 
-                query = f"""
-                    WITH OrderSums AS (
-                        SELECT 
-                            o.order_id, 
-                            DATE(o.order_date)                 AS order_date, 
-                            u.first_name || ' ' || u.last_name AS buyer_name, 
-                            o.status, 
-                            SUM(oi.quantity * oi.price)        AS order_sum 
-                        FROM orders      AS o 
-                        JOIN users       AS u  ON o.user_id  = u.id 
-                        JOIN order_items AS oi ON o.order_id = oi.order_id 
-                        WHERE o.order_date >= %s AND o.order_date <= (%s::date + INTERVAL '1 day') AND o.status = %s
-                        GROUP BY o.order_id, order_date, buyer_name
-                        ORDER BY order_date DESC
-                    ) 
-                    {group_by_clause}
-                """
-                params = [date_from, date_to, filter_by_status]
+            query += """
+                    FROM orders 
+                    JOIN order_items ON orders.order_id = order_items.order_id
+                    JOIN users       ON users.id        = orders.user_id
+                    WHERE order_date >= %s AND order_date <= %s 
+            """
 
-            print(query, flush=True)
-            print(params, flush=True)
-        
-            cur.execute(query, tuple(params))
+            params.append(date_from)
+            params.append(date_to)
+
+            if filter_by_status:
+                query += "AND orders.status = %s "
+                params.append(filter_by_status)
+
+            if order_id:
+                query += "AND orders.order_id = %s "
+                params.append(order_id)
+
+            query += "GROUP BY 1, 2, 3, 4, 5 ORDER BY order_date DESC"
+
+            cur.execute(query, params)
 
             report = cur.fetchall()
 
-            # total_orders = utils.get
-
             utils.AssertUser(report[0][0] != None and report[0][1] != None and report[0][2] != None and report[0][3] != None, "No result with this filter")
-
-            total_price = 0
-            flag = False
-            if group_by not in ['day', 'month', 'year']: # Here we have one row with only aggregated values, (without group by) and we have to deaggregate in order to make the report 
-                deaggregated_report = []
-
-                for row in report:
-                    periods, order_ids, names_of_buyers, total_sum, order_statuses = row
-                    
-                    # Use zip to iterate over all aggregated lists simultaneously
-                    for period, order_id, name_of_buyer, product_price, order_status in zip(periods, order_ids, names_of_buyers, total_sum, order_statuses):
-                        # Append the deaggregated data as a new row
-                        total_price += product_price
-                        deaggregated_report.append((period, [order_id], [name_of_buyer], product_price, [order_status]))
-                
-                flag = True
-                report = deaggregated_report
 
             total_records = len(report)
 
-            if not flag:
-                total_price = sum(row[3] for row in report)
+            total_price = sum(row[5] for row in report)
 
             report_json = utils.serialize_report(report)
 
@@ -1698,13 +1613,13 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/download_report':
 
-        keys = ['date_from', 'date_to', 'group_by', 'status', 'total_records', 'total_price', 'report_data', 'format']
+        keys = ['date_from', 'date_to', 'group_by', 'status', 'filter_by_status', 'total_records', 'total_price', 'report_data', 'format']
 
         form_data = {key: request.form.get(key, '') for key in keys}
 
         report_data = json.loads(form_data['report_data'])
 
-        headers = ['Date', 'Order ID\'s', 'Name of Buyers', 'Total Price', 'Order Status']
+        headers = ['Date', 'User ID', 'Order ID', 'Total Price', 'Buyer', 'Order Status']
 
         if form_data['format'] == 'csv':
 
@@ -1713,7 +1628,7 @@ def back_office_manager(conn, cur, *params):
                 cw = csv.writer(si)
 
                 cw.writerow(['Filters:'])
-                filter_keys = ['Date From', 'Date To', 'Group By', 'Status']
+                filter_keys = ['Date From', 'Date To', 'Group By', 'Status', 'Filter By Status']
                 for key in filter_keys:
                     cw.writerow([f'{key}:', form_data[key.lower().replace(' ', '_')]])
 
@@ -1721,16 +1636,14 @@ def back_office_manager(conn, cur, *params):
             
                 for row in report_data:
 
-                    print(row, flush=True)
-
                     date = row[0]
-                    _id = row[1][0]
-                    name = row[2][0]
+                    user_id = row[1]
+                    order_id = row[2]
                     price = row[3]
-                    status = row[4][0]
+                    name = row[4]
+                    status = row[5]
 
-                    row = [date, int(_id), str(name), price, str(status)]
-                    print(row, flush=True)
+                    row = [date, user_id, order_id, price, name, status]
 
                     cw.writerow(row)
                     si.seek(0)
@@ -1739,7 +1652,7 @@ def back_office_manager(conn, cur, *params):
                     si.seek(0)
 
                 
-                cw.writerow(['Total Records:', form_data['total_records'], 'Total:', form_data['total_price']])
+                cw.writerow(['Total Records:', form_data['total_records'], 'Total Price:', form_data['total_price']])
                 si.seek(0)
                 yield si.getvalue()
                 si.close()

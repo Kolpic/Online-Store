@@ -76,47 +76,16 @@
                 <tbody>
                     {% for row in report %}
                     <tr>
-                        <td>{{ row[0] }}</td>
+                        <td>{{ row[2] }}</td>
                         <td>
-                            {% if request.form.group_by == '' %}
-                                {{ row[1]|join(', ') }}
-                            {% else %}
-                                {{ "-" }}
-                            {% endif %}
+                            {{ row[1] }}
                         </td>
                         <td>
-                            {% if request.form.group_by == '' %}
-                                {{ row[2]|join(', ') }}
-                            {% else %}
-                                {{ "-" }}
-                            {% endif %}
+                            {{ row[3] }}
                         </td>
-                        <td class="text-right">{{ row[3] }} {{'лв.'}}</td>
+                        <td class="text-right">{{ row[5] }} {{'лв.'}}</td>
                         <td class="text-right">
-                            <!-- {% if request.form.filter_by_status != '' or request.form.status != '' or request.form.group_by == '' %}
-                                {{ row[4][0] }}
-                            {% else %}
-                                {{ "-" if row[4]|length > 1  else row[4]|join(', ') }}
-                            {% endif %} -->
-
-                            {% if request.form.filter_by_status != '' or request.form.status != '' or request.form.group_by == '' %}
-
-                            {{ row[4][0] }}
-
-                            {% elif row[4]|length > 1 and request.form.group_by != '' %}
-
-                            {{ "-" }}
-
-                            {% elif row[4]|length == 1 and request.form.group_by != '' %}
-
-                            {{ "-" }}
-
-                            {% else %}
-
-                            {{ row[4]|join(', ') }}
-
-                            {% endif %}
-
+                            {{ row[4] }}
                         </td>
                     </tr>
                     {% endfor %}
