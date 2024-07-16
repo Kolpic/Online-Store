@@ -313,74 +313,101 @@ def registration(conn, cur):
         cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING id", (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
         captcha_id = cur.fetchone()[0]
      
+        cur.execute("SELECT * FROM country_codes")
+        country_codes = cur.fetchall()
+
         session["captcha_id"] = captcha_id
-        return render_template('registration.html', form_data=form_data, captcha = {"first": first_captcha_number, "second": second_captcha_number})
+        return render_template('registration.html', country_codes=country_codes, form_data=form_data, captcha = {"first": first_captcha_number, "second": second_captcha_number})
 
-    form_data = request.form.to_dict()
-    session['form_data'] = form_data
-    first_name = request.form['first_name']
-    last_name = request.form['last_name']
-    email = request.form['email']
-    password_ = request.form['password']
-    confirm_password_ = request.form['confirm_password']
-    captcha_ = int(request.form['captcha'])
+    elif request.method == 'POST':
 
-    utils.AssertUser(password_ == confirm_password_, "Password and Confirm Password fields are different")
+        form_data = request.form.to_dict()
+        session['form_data'] = form_data
+        first_name = request.form['first_name']
+        last_name = request.form['last_name']
+        email = request.form['email']
+        password_ = request.form['password']
+        confirm_password_ = request.form['confirm_password']
 
-    cur.execute("SELECT id, last_attempt_time, attempts FROM captcha_attempts WHERE ip_address = %s", (user_ip,))
-    attempt_record = cur.fetchone()
+        address = request.form['address']
+        country_code = request.form['country_code']
+        phone = request.form['phone']
+        gender = request.form['gender']
 
-    attempts = 0
-    max_attempts = int(utils.get_captcha_setting_by_name(cur, 'max_captcha_attempts'))
-    timeout_minutes = int(utils.get_captcha_setting_by_name(cur,'captcha_timeout_minutes'))
+        captcha_ = int(request.form['captcha'])
 
-    if attempt_record:
-        attempt_id, last_attempt_time, attempts = attempt_record
-        time_since_last_attempt = datetime.now() - last_attempt_time
-        utils.AssertUser(not(attempts >= max_attempts and time_since_last_attempt < timedelta(minutes=timeout_minutes)), "You typed wrong captcha several times, now you have timeout " + str(timeout_minutes) + " minutes")
-        if time_since_last_attempt >= timedelta(minutes=timeout_minutes):
-            attempts = 0
-            
-    captcha_id = session.get("captcha_id")
-    cur.execute("SELECT result FROM captcha WHERE id = %s", (captcha_id,))
-    result = cur.fetchone()[0]
+        utils.AssertUser(password_ == confirm_password_, "Password and Confirm Password fields are different")
+        utils.AssertUser(len(address) >= 5 and len(address) <= 50, "Address must be between 5 and 50 characters long")
+        regexx = r'^\d{7,15}$'
+        utils.AssertUser(re.fullmatch(regexx, phone), "Phone number format is not valid. The number should be between 7 and 15 digits")
+        utils.AssertUser(gender == 'male' or gender == 'female', "Gender must be Male of Female")
 
-    hashed_password = utils.hash_password(password_)
-    verification_code = os.urandom(24).hex()
+        cur.execute("SELECT id, last_attempt_time, attempts FROM captcha_attempts WHERE ip_address = %s", (user_ip,))
+        attempt_record = cur.fetchone()
 
-    if captcha_ != result:  
-        utils.add_form_data_in_session(form_data)
-        new_attempts = attempts + 1
+        attempts = 0
+        max_attempts = int(utils.get_captcha_setting_by_name(cur, 'max_captcha_attempts'))
+        timeout_minutes = int(utils.get_captcha_setting_by_name(cur,'captcha_timeout_minutes'))
+
         if attempt_record:
-            cur.execute("UPDATE captcha_attempts SET attempts = %s, last_attempt_time = CURRENT_TIMESTAMP WHERE id = %s", (new_attempts, attempt_id))
+            attempt_id, last_attempt_time, attempts = attempt_record
+            time_since_last_attempt = datetime.now() - last_attempt_time
+            utils.AssertUser(not(attempts >= max_attempts and time_since_last_attempt < timedelta(minutes=timeout_minutes)), "You typed wrong captcha several times, now you have timeout " + str(timeout_minutes) + " minutes")
+            if time_since_last_attempt >= timedelta(minutes=timeout_minutes):
+                attempts = 0
+                
+        captcha_id = session.get("captcha_id")
+        cur.execute("SELECT result FROM captcha WHERE id = %s", (captcha_id,))
+        result = cur.fetchone()[0]
+
+        hashed_password = utils.hash_password(password_)
+        verification_code = os.urandom(24).hex()
+
+        if captcha_ != result:  
+            utils.add_form_data_in_session(form_data)
+            new_attempts = attempts + 1
+            if attempt_record:
+                cur.execute("UPDATE captcha_attempts SET attempts = %s, last_attempt_time = CURRENT_TIMESTAMP WHERE id = %s", (new_attempts, attempt_id))
+            else:
+                cur.execute("INSERT INTO captcha_attempts (ip_address, attempts, last_attempt_time) VALUES (%s, 1, CURRENT_TIMESTAMP)", (user_ip,))
+            raise exception.WrongUserInputException("Invalid CAPTCHA. Please try again")
         else:
-            cur.execute("INSERT INTO captcha_attempts (ip_address, attempts, last_attempt_time) VALUES (%s, 1, CURRENT_TIMESTAMP)", (user_ip,))
-        raise exception.WrongUserInputException("Invalid CAPTCHA. Please try again")
-    else:
-        if attempt_record:
-            cur.execute("DELETE FROM captcha_attempts WHERE id = %s", (attempt_id,))
+            if attempt_record:
+                cur.execute("DELETE FROM captcha_attempts WHERE id = %s", (attempt_id,))
 
-    utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
-    utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
+        utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
+        utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
+            
+        regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
+        utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
         
-    regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-    utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
-    
-    cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-    is_email_present_in_database = cur.fetchone()
-    cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
-    is_email_verified = cur.fetchone()
+        cur.execute("SELECT email FROM users WHERE email = %s", (email,))
+        is_email_present_in_database = cur.fetchone()
+        cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
+        is_email_verified = cur.fetchone()
 
-    if is_email_present_in_database != None:
-        utils.AssertUser(not(is_email_present_in_database[0] and is_email_verified[0]), "There is already registration with this email")
-        utils.AssertUser(not(is_email_present_in_database[0] and not is_email_verified[0]), "Account was already registered with this email, but it's not verified")
+        if is_email_present_in_database != None:
+            utils.AssertUser(not(is_email_present_in_database[0] and is_email_verified[0]), "There is already registration with this email")
+            utils.AssertUser(not(is_email_present_in_database[0] and not is_email_verified[0]), "Account was already registered with this email, but it's not verified")
 
-    cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", (first_name, last_name, email, hashed_password, verification_code))
+        cur.execute("SELECT id FROM country_codes WHERE code = %s", (country_code,))
+        country_code_id = cur.fetchone()[0]
 
-    send_verification_email(email, verification_code, cur)
+        cur.execute("""
+            INSERT INTO users 
+                (first_name, last_name, email, password, verification_code, address, gender, phone, country_code_id) 
+            VALUES 
+                (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, 
+            (first_name, last_name, email, hashed_password, verification_code, address, gender, phone,country_code_id))
 
-    session['verification_message'] = 'Successful registration, we send you a verification code on the provided email'
-    return redirect("/verify")
+        send_verification_email(email, verification_code, cur)
+
+        session['verification_message'] = 'Successful registration, we send you a verification code on the provided email'
+        return redirect("/verify")
+
+    else:
+        utils.AssertUser(False, "Invalid method")
 
 def send_verification_email(user_email, verification_code, cur):
 

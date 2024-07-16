@@ -4,7 +4,52 @@
     <meta charset="UTF-8">
     <title>Register</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet"/>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
 </head>
+<style>
+/* Custom styling for Select2 container */
+.select2-container--default .select2-selection--single {
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    height: calc(2.25rem + 2px); /* Align height with Bootstrap's form controls */
+    padding: 0.375rem 0.75rem;
+}
+
+/* Style for the dropdown arrow */
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: calc(2.25rem + 2px);
+    right: 1.25rem; /* Adjust to fit the design better */
+}
+
+/* Customize the search input field inside the dropdown */
+.select2-container--default .select2-search--dropdown .select2-search__field {
+    border: none;
+}
+
+/* Customizing the dropdown items */
+.select2-container--default .select2-results>.select2-results__options {
+    max-height: 200px; /* Control the max height of dropdown */
+    overflow-y: auto;
+}
+
+/* Styles for highlighting selected and hovered items */
+.select2-container--default .select2-results__option[aria-selected=true],
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #007bff; /* Bootstrap primary color */
+    color: white;
+}
+
+/* Style adjustments for focus state */
+.select2-container--default .select2-selection--single:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+</style>
 <body>
     {% if 'registration_error' in session %}
         <div class="alert alert-danger" id="homeAlert">
@@ -14,26 +59,61 @@
     <div class="container">
         <h2>Register</h2>
         <form  id="myForm" method="POST" action="/registration">
+
             <div class="form-group">
                 <label for="first_name">First Name</label>
                 <input type="text" class="form-control" id="first_name" name="first_name" value="{{form_data['first_name'] if form_data else ''}}" required>
             </div>
+
             <div class="form-group">
                 <label for="last_name">Last Name</label>
                 <input type="text" class="form-control" id="last_name" name="last_name" value="{{form_data['last_name'] if form_data else ''}}" required>
             </div>
+
             <div class="form-group">
                 <label for="email">Email</label>
                 <input type="email" class="form-control" id="email" name="email" value="{{form_data['email'] if form_data else ''}}" required>
             </div>
+
             <div class="form-group">
                 <label for="password">Password</label>
                 <input type="password" class="form-control" id="password" name="password" required>
             </div>
+
             <div class="form-group">
                 <label for="password">Confirm Password</label>
                 <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
             </div>
+
+            <div class="form-group">
+                <label for="address">Address</label>
+                <input type="text" class="form-control" id="address" name="address" value="{{form_data['address'] if form_data else ''}}" required>
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Phone Number: select country code e.g(+359), type phone number in format 894703986</label>
+                <div class="input-group">
+
+                    <select class="custom-select" id="country_code" name="country_code" value="{{form_data['country_code'] if form_data else ''}}" required>
+                        <option value="">Select a country</option>
+                        {% for code in country_codes %}
+                            <option value="{{ code[2] }}">{{ code[1] }} ({{ code[2] }})</option>
+                        {% endfor %}
+                    </select>
+
+                    <input type="tel" class="form-control" id="phone" name="phone" placeholder="Enter phone number without the country code" value="{{form_data['phone'] if form_data else ''}}" required>
+
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="gender">Gender:</label>
+                <select name="gender" id="gender">
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                </select>
+            </div>
+
             <div class="form-group">
                 <label for="captcha">Captcha</label>
                 <p>Solve the following: <span id="first_number">{{ captcha['first'] }}</span> + <span id="second_number">{{ captcha['second'] }}</span> = ?</p>
@@ -42,11 +122,14 @@
                 <br>
                 <input type="text" class="form-control" id="captcha" name="captcha" placeholder="Enter the sum" required>
             </div>
+
             <button type="submit" class="btn btn-primary">Register</button>
         </form>
     </div>
 </body>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
 <script>
 $(document).ready(function() { // Ensures that the entire page is fully loaded
     $('#refresh_captcha').click(function() { // Binds a click event to the element with the ID 'refresh_captcha'
@@ -61,6 +144,12 @@ $(document).ready(function() { // Ensures that the entire page is fully loaded
 });
 </script>
 <script>
+    $(document).ready(function() {
+    $('#country_code').select2({
+        placeholder: "Select a country",
+        allowClear: true
+    });
+});
        window.onload = function() {
         setTimeout(function() {
             let homeAlert = document.getElementById('homeAlert');

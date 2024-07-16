@@ -105,6 +105,10 @@ class User(db.Model):
     carts = db.relationship('Cart', backref='user', lazy=True)
     orders = db.relationship('Order', backref='user', lazy=True)
     last_active = db.Column(db.DateTime, default=db.func.current_timestamp())
+    address = db.Column(db.String(255))
+    gender = db.Column(db.String(10))
+    phone = db.Column(db.String(20))
+    country_code_id = db.Column(db.Integer, db.ForeignKey('country_codes.id'))
 
     def update_last_active(self):
         self.last_active = db.func.current_timestamp()
