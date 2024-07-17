@@ -1,9 +1,16 @@
+from project import utils
+
 def create_session(os, datetime, timedelta, session_data, cur, conn):
     session_id = os.urandom(20).hex()
     expires_at = datetime.now() + timedelta(hours=1)
 
-    cur.execute("INSERT INTO custom_sessions (session_id, data, expires_at, is_active) VALUES (%s, %s, %s, %s) RETURNING id", (session_id, session_data, expires_at, True))
-    _id = cur.fetchone()['id']
+    # cur.execute("SELECT id FROM users WHERE email = %s", (session_data,))
+    # userr_id = cur.fetchone()['id']
+
+    # cur.execute("INSERT INTO custom_sessions (session_id, data, expires_at, is_active, user_id) VALUES (%s, %s, %s, %s, %s) RETURNING id", (session_id, session_data, expires_at, True, userr_id))
+    # _id = cur.fetchone()['id']
+
+    _id = _map_tables(session_data, cur, session_id, expires_at)
 
     return session_id
 
@@ -44,3 +51,37 @@ def update_current_user_session_data(cur, conn, new_data, session_id):
 
 def get_user_session_id(request):
     return request.cookies.get('session_id')
+
+def _map_tables(session_data, cur, session_id, expires_at):
+
+    flag = False
+
+    if '@' in session_data:
+        cur.execute("SELECT id FROM users WHERE email = %s", (session_data,))
+        flag = True
+    else:
+        cur.execute("SELECT id FROM staff WHERE username = %s", (session_data,))
+    
+    userr_id = cur.fetchone()['id']
+
+    if flag:
+        cur.execute("INSERT INTO custom_sessions (session_id, data, expires_at, is_active, user_id) VALUES (%s, %s, %s, %s, %s) RETURNING id", (session_id, session_data, expires_at, True, userr_id))
+    else:
+        cur.execute("INSERT INTO custom_sessions (session_id, data, expires_at, is_active, staff_id) VALUES (%s, %s, %s, %s, %s) RETURNING id", (session_id, session_data, expires_at, True, userr_id))
+
+    return cur.fetchone()['id']
+
+def get_session_cookie_type(request, cur):
+
+    session_id = request.cookies.get('session_id')
+
+    cur.execute("SELECT user_id, staff_id FROM custom_sessions WHERE session_id = %s AND is_active = True", (session_id,))
+    user_id, staff_id = cur.fetchone()
+
+    utils.trace(user_id)
+    utils.trace(staff_id)
+
+    if user_id:
+        return True
+    else:
+        return False

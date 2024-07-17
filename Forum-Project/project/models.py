@@ -34,6 +34,8 @@ class CustomSession(db.Model):
     data = db.Column(db.Text)
     expires_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now() + timedelta(hours=1))
     is_active = db.Column(db.Boolean, default=False, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    staff_id = db.Column(db.Integer, db.ForeignKey('staff.id'))
 
 class CartItem(db.Model):
     __tablename__ = 'cart_items'

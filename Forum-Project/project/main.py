@@ -2414,7 +2414,11 @@ url_to_function_map_back_office = [
     (r'/(crud_products_edit_picture|error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users|template_email|update_report_limitation_rows)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 
-# (?:/[A-z]+)?
+def map_function(map_route):
+    for pattern, function in map_route:
+        match = re.match(pattern, request.path)
+        if match:
+            return function
 
 @app.endpoint("handle_request")
 def handle_request(username=None, path=''):
@@ -2430,35 +2434,31 @@ def handle_request(username=None, path=''):
         #TODO Validaciq na cookie prez bazata + req.args
         is_auth_user = sessions.get_current_user(request, cur)
 
-        #TODO print da se izvede v custom finkciq
         print("is_auth_user", flush=True)
         print(is_auth_user, flush=True)
 
         funtion_to_call = None
         match = None
         flag_front_office = False
+        # True for front office, false for back office
+        flag_office = None
 
-        #TODO foreign key
-        #TODO refactor
-        if is_auth_user == None or "@" in is_auth_user:
-            for pattern, function in url_to_function_map_front_office:
-                print("Entered front office loop",flush=True)
+        if is_auth_user is not None:
+            flag_office = sessions.get_session_cookie_type(request, cur)
 
-                match = re.match(pattern, request.path)
-                if match:
-                    funtion_to_call = function
-                    flag_front_office = True
-                    break
+        if is_auth_user == None or flag_office == True:
 
-        #TODO da se mahne == False -> not
-        if is_auth_user == None or (flag_front_office == False or "@" not in is_auth_user):
-            for pattern, function in url_to_function_map_back_office:
-                print("Entered back office loop",flush=True)
+            utils.trace("Entered front office loop")
+            funtion_to_call = map_function(url_to_function_map_front_office)
 
-                match = re.match(pattern, request.path)
-                if match:
-                    funtion_to_call = function
-                    break
+            if funtion_to_call is not None:
+                flag_front_office = True
+
+
+        if (is_auth_user == None and not flag_front_office) or flag_office == False or request.path == '/staff_login':
+
+            utils.trace("Entered back office loop")
+            funtion_to_call = map_function(url_to_function_map_back_office)
 
         if flag_front_office == True and is_auth_user != None:
             cur.execute("SELECT last_active FROM users WHERE email = %s", (is_auth_user,))
