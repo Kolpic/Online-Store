@@ -605,7 +605,7 @@ def profile(conn, cur):
     user_details = cur.fetchone()
 
     if user_details:
-        return render_template('profile.html', user_details=user_details)
+        return render_template('profile.html', user_details=user_details, first_name=user_details[0], last_name=user_details[1], email=user_details[2])
     
     return render_template('profile.html')
 
@@ -958,116 +958,129 @@ def cart(conn, cur):
         user_id = cur.fetchone()[0]
         items = view_cart(conn, cur, user_id)
 
-        print(items, flush=True)
 
         total_sum = sum(item[1] * item[2] for item in items)
         cur.execute("SELECT * FROM country_codes")
         country_codes = cur.fetchall()
-        return render_template('cart.html', items=items, total_sum=total_sum, country_codes=country_codes, form_data=form_data)
+
+        cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (is_auth_user,))
+        user_details = cur.fetchone()
+
+        return render_template('cart.html', items=items, total_sum=total_sum, country_codes=country_codes, form_data=form_data, first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
    
-    form_data = request.form.to_dict()
-    session['form_data'] = form_data
-    email = request.form['email'].strip()
-    first_name = request.form['first_name'].strip()
-    last_name = request.form['last_name'].strip()
-    town = request.form['town'].strip()
-    address = request.form['address'].strip()
-    country_code = request.form['country_code']
-    phone = request.form['phone'].strip()
+    elif request.method == 'POST':
 
-    cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,))
-    user_id = cur.fetchone()[0]
-    regexx = r'^\d{7,15}$'
+        form_data = request.form.to_dict()
+        session['form_data'] = form_data
+        email = request.form['email'].strip()
+        first_name = request.form['first_name'].strip()
+        last_name = request.form['last_name'].strip()
+        town = request.form['town'].strip()
+        address = request.form['address'].strip()
+        country_code = request.form['country_code']
+        phone = request.form['phone'].strip()
 
-    # Check fields
-    utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
-    utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
-    regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-    utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
-    utils.AssertUser(re.fullmatch(regexx, phone), "Phone number format is not valid. The number should be between 7 and 15 digits")
-    utils.AssertUser(phone[0] != "0", "Phone number format is not valid.")
+        cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,))
+        user_id = cur.fetchone()[0]
+        regexx = r'^\d{7,15}$'
 
-    # Retrieve cart items for the user
-    cur.execute("""
-                SELECT c.cart_id FROM users AS u 
-                JOIN carts AS c ON u.id = c.user_id
-                WHERE u.id = %s
-                """, (user_id,))
-    cart_id = cur.fetchone()[0]
+        # Check fields
+        utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
+        utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
+        regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
+        utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
+        utils.AssertUser(re.fullmatch(regexx, phone), "Phone number format is not valid. The number should be between 7 and 15 digits")
+        utils.AssertUser(phone[0] != "0", "Phone number format is not valid.")
 
-    cur.execute("""
-                SELECT ci.product_id, p.name, ci.quantity, p.price, currencies.symbol 
-                FROM cart_itmes     AS ci
-                    JOIN products   AS p          ON ci.product_id = p.id
-                    JOIN currencies AS currencies ON p.currency_id = currencies.id
-                WHERE ci.cart_id = %s
-                """, (cart_id,))
-    cart_items = cur.fetchall()
+        # Retrieve cart items for the user
+        cur.execute("""
+                    SELECT c.cart_id FROM users AS u 
+                    JOIN carts AS c ON u.id = c.user_id
+                    WHERE u.id = %s
+                    """, (user_id,))
+        cart_id = cur.fetchone()[0]
 
-    cur.execute("SELECT quantity FROM products WHERE id = %s", (cart_items[0][0],))
-    quantity_db = cur.fetchone()[0]
+        cur.execute("""
+                    SELECT ci.product_id, p.name, ci.quantity, p.price, currencies.symbol 
+                    FROM cart_itmes     AS ci
+                        JOIN products   AS p          ON ci.product_id = p.id
+                        JOIN currencies AS currencies ON p.currency_id = currencies.id
+                    WHERE ci.cart_id = %s
+                    """, (cart_id,))
+        cart_items = cur.fetchall()
 
-    # Check and change quantity 
-    for item in cart_items:
-        product_id_, name, quantity, price, symbol = item
-        if quantity > quantity_db:
-            session['cart_error'] = "We don't have " + str(quantity) + " from product: " + str(name) + " in our store. You can purchase less or to remove the product from your cart"
-            utils.add_form_data_in_session(session.get('form_data'))
-            return redirect('/cart')
-        cur.execute("UPDATE products SET quantity = quantity - %s WHERE id = %s", (quantity, product_id_))
+        cur.execute("SELECT quantity FROM products WHERE id = %s", (cart_items[0][0],))
+        quantity_db = cur.fetchone()[0]
 
-    # current_prices = {item['poroduct_id']: item['price'] for item in cart_items}
-    price_mismatch = False
-    for item in cart_items:
-        product_id, name, quantity, cart_price, symbol = item
-        cur.execute("SELECT price FROM products WHERE id = %s", (product_id,))
-        current_price = cur.fetchone()[0]
-        if current_price != cart_price:
-            # Price can be updated here
-            price_mismatch = True
-            break
-    utils.AssertUser(not price_mismatch, "The price on some of your product's in the cart has been changed, you can't make the purchase")
-    # Build JSON object of cart items if no mismatch
-    products_json = [{"product_id": item[0], "name": item[1], "quantity": item[2], "price": str(item[3])} for item in cart_items]
+        # Check and change quantity 
+        for item in cart_items:
+            product_id_, name, quantity, price, symbol = item
+            if quantity > quantity_db:
+                session['cart_error'] = "We don't have " + str(quantity) + " from product: " + str(name) + " in our store. You can purchase less or to remove the product from your cart"
+                utils.add_form_data_in_session(session.get('form_data'))
+                return redirect('/cart')
+            cur.execute("UPDATE products SET quantity = quantity - %s WHERE id = %s", (quantity, product_id_))
 
-    # First make order, then make shipping_details #
-    formatted_datetime = datetime.now().strftime('%Y-%m-%d')
-    # cur.execute("INSERT INTO orders (user_id, status, product_details, order_date) VALUES (%s, %s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", json.dumps(products_json), formatted_datetime))
-    # order_id = cur.fetchone()[0]
-    # #
-    cur.execute("INSERT INTO orders (user_id, status, order_date) VALUES (%s, %s, CURRENT_TIMESTAMP) RETURNING order_id", (user_id, "Ready for Paying")) #formatted_datetime
-    order_id = cur.fetchone()[0]
+        # current_prices = {item['poroduct_id']: item['price'] for item in cart_items}
+        price_mismatch = False
+        for item in cart_items:
+            product_id, name, quantity, cart_price, symbol = item
+            cur.execute("SELECT price FROM products WHERE id = %s", (product_id,))
+            current_price = cur.fetchone()[0]
+            if current_price != cart_price:
+                # Price can be updated here
+                price_mismatch = True
+                break
+        utils.AssertUser(not price_mismatch, "The price on some of your product's in the cart has been changed, you can't make the purchase")
+        # Build JSON object of cart items if no mismatch
+        products_json = [{"product_id": item[0], "name": item[1], "quantity": item[2], "price": str(item[3])} for item in cart_items]
 
-    # Insert order items into order_items table
-    for item in cart_items:
-        cur.execute("INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (%s, %s, %s, %s)", (order_id, item[0], item[2], item[3]))
+        # First make order, then make shipping_details #
+        formatted_datetime = datetime.now().strftime('%Y-%m-%d')
+        # cur.execute("INSERT INTO orders (user_id, status, product_details, order_date) VALUES (%s, %s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", json.dumps(products_json), formatted_datetime))
+        # order_id = cur.fetchone()[0]
+        # #
+        cur.execute("INSERT INTO orders (user_id, status, order_date) VALUES (%s, %s, CURRENT_TIMESTAMP) RETURNING order_id", (user_id, "Ready for Paying")) #formatted_datetime
+        order_id = cur.fetchone()[0]
 
-    cur.execute("SELECT id FROM country_codes WHERE code = %s", (country_code,))
-    country_code_id = cur.fetchone()[0]
-    cur.execute("INSERT INTO shipping_details (order_id, email, first_name, last_name, town, address, phone, country_code_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (order_id, email, first_name, last_name, town, address, phone, country_code_id))
+        # Insert order items into order_items table
+        for item in cart_items:
+            cur.execute("INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (%s, %s, %s, %s)", (order_id, item[0], item[2], item[3]))
 
-    # Total sum to be passed to the payment.html
-    items = view_cart(conn, cur, user_id)
-    total_sum = sum(item[1] * item[2] for item in items)
+        cur.execute("SELECT id FROM country_codes WHERE code = %s", (country_code,))
+        country_code_id = cur.fetchone()[0]
+        cur.execute("INSERT INTO shipping_details (order_id, email, first_name, last_name, town, address, phone, country_code_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (order_id, email, first_name, last_name, town, address, phone, country_code_id))
 
-    # When the purchase is made we empty the user cart 
-    cur.execute("SELECT cart_id FROM carts WHERE user_id = %s", (user_id,))
-    cart_id = cur.fetchone()[0]
-    cur.execute("DELETE FROM cart_itmes WHERE cart_id = %s", (cart_id,))
+        # Total sum to be passed to the payment.html
+        items = view_cart(conn, cur, user_id)
+        total_sum = sum(item[1] * item[2] for item in items)
 
-    cur.execute("""
-                SELECT shd.shipping_id, shd.order_id, shd.email, shd.first_name, shd.last_name, shd.town, shd.address, shd.phone, cc.code 
-                FROM shipping_details AS shd 
-                JOIN orders AS o ON shd.order_id=o.order_id 
-                JOIN country_codes AS cc ON shd.country_code_id = cc.id 
-                WHERE o.order_id = %s
-                """, (order_id,))
-    shipping_details = cur.fetchall()
+        # When the purchase is made we empty the user cart 
+        cur.execute("SELECT cart_id FROM carts WHERE user_id = %s", (user_id,))
+        cart_id = cur.fetchone()[0]
+        cur.execute("DELETE FROM cart_itmes WHERE cart_id = %s", (cart_id,))
 
-    send_purchase_email(cart_items, shipping_details, is_auth_user, cur)
+        cur.execute("""
+                    SELECT shd.shipping_id, shd.order_id, shd.email, shd.first_name, shd.last_name, shd.town, shd.address, shd.phone, cc.code 
+                    FROM shipping_details AS shd 
+                    JOIN orders AS o ON shd.order_id=o.order_id 
+                    JOIN country_codes AS cc ON shd.country_code_id = cc.id 
+                    WHERE o.order_id = %s
+                    """, (order_id,))
+        shipping_details = cur.fetchall()
 
-    session['payment_message'] = "You successful made an order with id = " + str(order_id)
-    return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum=total_sum)
+        send_purchase_email(cart_items, shipping_details, is_auth_user, cur)
+
+        session['payment_message'] = "You successful made an order with id = " + str(order_id)
+
+        cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (is_auth_user,))
+        user_details = cur.fetchone()
+
+        return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum=total_sum, first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
+
+    else:
+        utils.AssertUser(False, "Invalid method")
+
 
 def send_purchase_email(cart_items, shipping_details, user_email, cur):
 
@@ -1355,22 +1368,7 @@ def user_orders(conn, cur):
             # o.order_id
             query += " GROUP BY o.order_id, o.status, o_date, oi.product_id, oi.price, oi.quantity, p.name, c.symbol"
 
-        # TODO  o.order_{sort_by} {sort_order}
-        query += f" ORDER BY o.order_{sort_by} {sort_order}  LIMIT 100; " # LIMIT %s OFFSET %s; params += [per_page, (page - 1) * per_page]
-        # params += [per_page, offset]
-
-        # cur.execute(query, params)
-        # rows = cur.fetchall()
-
-        # if not rows:
-        #     return jsonify([])
-
-        # column_names = ["order_id", "status", "order_date", "product_id", "product_name", "price", "quantity", "total_price", "currency_symbol"]
-        # orders = [{column: row[idx] for idx, column in enumerate(column_names)} for row in rows]
-
-        # return jsonify(orders)
-
-        # print(jsonify(orders), flush=True)
+        query += f" ORDER BY o.order_{sort_by} {sort_order}  LIMIT 100; "
 
         cur_name = "order_cursor"
         cur.execute(f"DECLARE {cur_name} SCROLL CURSOR FOR {query}", params)
@@ -1396,9 +1394,10 @@ def user_orders(conn, cur):
 
         orders = list(orders_generator)
 
-        utils.trace(orders)
+        cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (is_auth_user,))
+        user_details = cur.fetchone()
 
-        return render_template('user_orders.html', orders = orders, statuses = statuses, price_min=price_min, price_max=price_max, date_from=date_from, date_to=date_to, order_by_id=order_by_id)
+        return render_template('user_orders.html', orders = orders, statuses = statuses, price_min=price_min, price_max=price_max, date_from=date_from, date_to=date_to, order_by_id=order_by_id, first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
     else:
         utils.AssertUser(False, "Invalid method")
 

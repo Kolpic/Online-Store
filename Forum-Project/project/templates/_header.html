@@ -1,22 +1,26 @@
+<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.4.0/font/bootstrap-icons.min.css">
 <div class="container">
     <div class="row">
-        <div class="col text-right">
+        <div >
             <p>Welcome, {{ first_name }} {{ last_name }}!</p>
             <p>{{ email }}</p>
-                <a href="/logout" class="btn btn-danger">Logout</a>
         </div>
     </div>
-    <div class="float-right">
-    <a href="/profile"><i class="bi bi-gear" style="margin-right: 5px;font-size: 2rem; color: black;"></i></a>
-    <a href="/user_orders" class="position-relative" style="font-size: 2rem; color: black;">
-    <i class="bi bi-clipboard-check"></i>
-    <a href="/cart" class="position-relative" style="margin-right: 5px;">
-    <i class="bi bi-cart3" style="font-size: 2rem; color: black;"></i>
-    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success cart-badge">
-        {{ cart_count }}
-        <span class="visually-hidden">items in cart</span>
-    </span>
-</a>
-</div>
+    <div class="d-flex justify-content-between align-items-center">
+        <!-- <div class="text-center"> -->
+        <a href="/logout" class="btn btn-danger">Logout</a>
+        <div class="text-center">
+            <a href="/profile"><i class="bi bi-gear" style="margin-right: 5px;font-size: 2rem; color: black;"></i></a>
+            <a href="/user_orders" class="position-relative" style="font-size: 2rem; color: black;">
+            <i class="bi bi-clipboard-check"></i>
+            <a href="/cart" class="position-relative" style="margin-right: 5px;">
+            <i class="bi bi-cart3" style="font-size: 2rem; color: black;"></i>
+            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success cart-badge">
+                {{ cart_count }}
+            </span>
+            </a>
+        </div>
+    </div>
 </div>
 
