@@ -161,6 +161,11 @@ FIELD_CONFIG = {
             'body': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},
             'sender': {'type': str, 'required': True, 'conditions': [(lambda x: '@' in x, "Invalid email")]},
         }
+    },
+    'Template email purchase': {
+        'edit': {
+            'body_purchase': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},
+        }
     }
 }
 
@@ -1059,8 +1064,57 @@ def cart(conn, cur):
                 """, (order_id,))
     shipping_details = cur.fetchall()
 
+    send_purchase_email(cart_items, shipping_details, is_auth_user, cur)
+
     session['payment_message'] = "You successful made an order with id = " + str(order_id)
     return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum=total_sum)
+
+def send_purchase_email(cart_items, shipping_details, user_email, cur):
+
+    cart_html = "<table><tr><th>Product</th><th>Quantity</th><th>Price</th><th>Total Product Price</th></tr>"
+    total_price = 0
+
+    for item in cart_items:
+        product_id, product_name, quantity, price, currency = item
+        price_total = float(price) * int(quantity)
+        total_price += price_total
+        cart_html += f"<tr><th>{product_name}</th><th class=\"text-right\">{quantity}</th><th class=\"text-right\">{price} {currency}</th><th  class=\"text-right\">{price_total} {currency}</th></tr>"
+    
+    _total_price = round(total_price, 2)
+    cart_html += f"<tr><td colspan='3'>Total Order Price</td><td>{_total_price} {currency}</td></tr></table>"
+
+    shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code = shipping_details[0]
+    shipping_html = f"""
+    <table>
+        <tr><th>Recipient</th><td>{first_name} {last_name}</td></tr>
+        <tr><th>Email</th><td>{email}</td></tr>
+        <tr><th>Address</th><td>{address}, {town}</td></tr>
+        <tr><th>Country code</th><td>{country_code}</td></tr>
+        <tr><th>Phone</th><td>{phone}</td></tr>
+    </table>
+    """
+
+    cur.execute("SELECT subject, sender, body FROM email_template WHERE name = 'Purchase Email'")
+    values = cur.fetchone()
+
+    utils.trace(values)
+
+    if values:
+        subject, sender, body = values
+
+        body_filled = body.format(
+            cart=cart_html,
+            shipping_details=shipping_html,
+        )
+
+        with app.app_context():
+            msg = Message(subject,
+                    sender = sender,
+                    recipients = [user_email])
+        msg.html = body_filled
+        mail.send(msg)
+    else:
+        utils.AssertDev(False, "No information in the database")
 
 def remove_from_cart_meth(conn, cur):
     is_auth_user =  sessions.get_current_user(request, cur)
@@ -2318,16 +2372,18 @@ def back_office_manager(conn, cur, *params):
             cur.execute("SELECT name, subject, body, sender FROM email_template WHERE name = 'Verification Email'")
             values = cur.fetchone()
 
-            if values:
-                name, subject, body, sender = values
+            cur.execute("SELECT name, subject, body FROM email_template WHERE name = 'Purchase Email'")
+            values_purchase = cur.fetchone()
 
-                return render_template('template_email.html', name=name, subject=subject, body=body, sender=sender)
+            if values and values_purchase:
+                name, subject, body, sender = values
+                name_purchase, subject_purchase, body_purchase = values_purchase
+
+                return render_template('template_email.html', name=name, subject=subject, body=body, sender=sender, tepmplate_name_purchase=name_purchase, tepmplate_subject_purchase=subject_purchase, tepmplate_body_purchase=body_purchase)
 
         elif request.method == 'POST':
             
             data = process_form('Template email', 'edit')
-
-            utils.trace(data)
 
             cur.execute("""
                 UPDATE email_template 
@@ -2344,6 +2400,26 @@ def back_office_manager(conn, cur, *params):
 
         else:
             utils.AssertUser(False, "Invalid method")
+
+    elif request.path == f'/template_email_purchase':
+
+        if request.method == 'POST':
+
+            data_purchase = process_form('Template email purchase', 'edit')
+
+            utils.trace(data_purchase)
+
+            cur.execute("""
+                UPDATE email_template 
+                SET 
+                    body = %s 
+                WHERE id = 4""", (data_purchase['values'][0],))
+            session['staff_message'] = "You successfully updated template for sending purchase email"
+
+            return redirect(f'/staff_portal')
+
+        else:
+           utils.AssertUser(False, "Invalid method") 
 
     else:
         utils.AssertUser(False, "Invalid url")

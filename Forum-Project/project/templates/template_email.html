@@ -10,7 +10,7 @@
 <body>
 {% block content %}
 <div class="container mt-5">
-    <h2>Edit Email Template</h2>
+    <h2>Edit Verification Email Template</h2>
     <form action="/template_email" method="POST">
 
         <div class="form-group">
@@ -20,12 +20,12 @@
 
         <div class="form-group">
             <label for="subject">Subject</label>
-            <input type="text" class="form-control" id="subject" name="subject" value="{{ subject }}">
+            <input type="text" class="form-control" id="subject" name="subject" value="{{ subject }}" readonly>
         </div>
 
         <div class="form-group">
             <label for="sender_email">Sender Email</label>
-            <input type="email" class="form-control" id="sender" name="sender" value="{{ sender }}">
+            <input type="email" class="form-control" id="sender" name="sender" value="{{ sender }}" readonly>
         </div>
 
         <div class="form-group">
@@ -44,6 +44,35 @@
         <button type="submit" class="btn btn-primary">Save Changes</button>
     </form>
 </div>
+
+<div class="container mt-5">
+    <h2>Edit Purchase Email Template</h2>
+    <form action="/template_email_purchase" method="POST">
+
+        <div class="form-group">
+            <label for="name">Template Name</label>
+            <input type="text" class="form-control" id="name_purchase" name="name_purchase" value="{{ tepmplate_name_purchase }}" readonly>
+        </div>
+
+        <div class="form-group">
+            <label for="subject">Subject</label>
+            <input type="text" class="form-control" id="subject_purchase" name="subject_purchase" value="{{ tepmplate_subject_purchase }}" readonly>
+        </div>
+
+        <div class="form-group">
+            <label for="sender_email">Sender Email</label>
+            <input type="email" class="form-control" id="sender" name="sender" value="{{ sender }}"readonly>
+        </div>
+
+        <div class="form-group">
+            <label for="body_purchase">Email Body: variables to insert - {cart}, {shipping_details}</label>
+            <textarea class="form-control" id="body_purchase" name="body_purchase" rows="10">{{ tepmplate_body_purchase }}</textarea>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Save Changes</button>
+    </form>
+</div>
+
 <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
