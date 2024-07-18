@@ -1739,6 +1739,13 @@ def back_office_manager(conn, cur, *params):
 
             query += "GROUP BY 1, 2, 3, 4, 5 ORDER BY order_date DESC LIMIT %s"
 
+            query_for_total_rows = query[:len(query)-8]
+            cur.execute(query_for_total_rows, params)
+            total_records = len(cur.fetchall())
+
+            utils.trace(query_for_total_rows)
+            utils.trace(query)
+
             params.append(limitation_rows)
 
             cur.execute(query, params)
@@ -1747,7 +1754,7 @@ def back_office_manager(conn, cur, *params):
 
             utils.AssertUser(report[0][0] != None and report[0][1] != None and report[0][2] != None and report[0][3] != None, "No result with this filter")
 
-            total_records = len(report)
+            # total_records = len(report)
 
             total_price = sum(row[5] for row in report)
 
