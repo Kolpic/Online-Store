@@ -166,6 +166,11 @@ FIELD_CONFIG = {
         'edit': {
             'body_purchase': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},
         }
+    },
+    'Template email payment': {
+        'edit': {
+            'body_payment': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},
+        }
     }
 }
 
@@ -1165,40 +1170,104 @@ def finish_payment(conn, cur):
 
         return render_template('payment.html', order_products=order_products, shipping_details=shipping_details, total_sum=total_sum)
 
-    order_id = request.form.get('order_id')
-    if order_id == "":
-        order_id = session.get('order_id')
-    utils.AssertUser(isinstance(float(request.form.get('payment_amount')), float), "You must enter a number")
-    payment_amountt = float(request.form.get('payment_amount'))
-    payment_amount = round(Decimal(payment_amountt), 2)
+    elif request.method == 'POST':
 
-    cur.execute("SELECT quantity, price FROM order_items WHERE order_id = %s", (order_id,))
-    all_products_from_the_order = cur.fetchall()
-    total = 0
-    for product in all_products_from_the_order:
-        total += int(product[0]) * Decimal(product[1])
+        order_id = request.form.get('order_id')
 
-    # cur.execute("SELECT SUM((product_detail->>'price')::numeric * (product_detail->>'quantity')::numeric) FROM orders, json_array_elements(product_details) AS product_detail WHERE order_id = %s", (order_id,))
-    # total = cur.fetchone()[0]
+        if order_id == "":
+            order_id = session.get('order_id')
+
+        utils.AssertUser(isinstance(float(request.form.get('payment_amount')), float), "You must enter a number")
+
+        payment_amountt = float(request.form.get('payment_amount'))
+        payment_amount = round(Decimal(payment_amountt), 2)
+
+        cur.execute("SELECT quantity, price FROM order_items WHERE order_id = %s", (order_id,))
+        all_products_from_the_order = cur.fetchall()
+
+        total = 0
+        for product in all_products_from_the_order:
+            total += int(product[0]) * Decimal(product[1])
+        
+        cur.execute("SELECT status FROM orders WHERE order_id= %s", (order_id,))
+        order_status = cur.fetchone()[0]
+
+        utils.AssertUser(order_status == 'Ready for Paying', "This order is not ready for payment or has already been paid")
+
+        if payment_amount < total:
+            session['order_id'] = order_id
+            session['payment_error'] = "You entered amout, which is less than the order you have"
+            return redirect('/finish_payment')
+        if payment_amount > total:
+            session['order_id'] = order_id
+            session['payment_error'] = "You entered amout, which is bigger than the order you have"
+            return redirect('/finish_payment')
+
+        # formatted_datetime = datetime.now().strftime('%Y-%m-%d')
+        cur.execute("UPDATE orders SET status = 'Paid' WHERE order_id = %s", (order_id,))
+
+        cur.execute("SELECT * FROM shipping_details WHERE order_id = %s", (order_id,))
+        shipping_details = cur.fetchone()
+
+        cur.execute("SELECT products.name, oi.quantity, oi.price FROM order_items AS oi JOIN products ON oi.product_id=products.id WHERE order_id = %s", (order_id,))
+        products_from_order = cur.fetchall()
+
+        send_compleated_payment_email(products_from_order, shipping_details, total, payment_amount, is_auth_user, cur)
+
+        session['home_message'] = "You paid the order successful"
+
+        return redirect('/home')
+
+    else:
+        utils.AssertUser(False, "Invalid method")
+
+def send_compleated_payment_email(products, shipping_details, total_sum, provided_sum, user_email, cur):
+
+    products_html = "<table><tr><th>Product</th><th>Quantity</th><th>Price</th><th>Total Product Price</th></tr>"
+    total_price = 0
+
+    for item in products:
+        product_name, quantity, price = item
+        price_total = float(price) * int(quantity)
+        total_price += price_total
+        products_html += f"<tr><th>{product_name}</th><th class=\"text-right\">{quantity}</th><th class=\"text-right\">{price}</th><th  class=\"text-right\">{price_total}</th></tr>"
     
-    cur.execute("SELECT status FROM orders WHERE order_id= %s", (order_id,))
-    order_status = cur.fetchone()[0]
+    _total_price = round(total_price, 2)
+    products_html += f"<tr><td colspan='3'>Total Order Price:</td><td>{_total_price}</td></tr></table>"
+    products_html += f"<tr><td colspan='3'>You payed:</td><td>{provided_sum}</td></tr></table>"
 
-    utils.AssertUser(order_status == 'Ready for Paying', "This order is not ready for payment or has already been paid")
+    utils.trace(shipping_details)
+    shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code_id = shipping_details
+    shipping_html = f"""
+    <table>
+        <tr><th>Recipient</th><td>{first_name} {last_name}</td></tr>
+        <tr><th>Email</th><td>{email}</td></tr>
+        <tr><th>Address</th><td>{address}, {town}</td></tr>
+        <tr><th>Phone</th><td>{phone}</td></tr>
+    </table>
+    """
 
-    if payment_amount < total:
-        session['order_id'] = order_id
-        session['payment_error'] = "You entered amout, which is less than the order you have"
-        return redirect('/finish_payment')
-    if payment_amount > total:
-        session['order_id'] = order_id
-        session['payment_error'] = "You entered amout, which is bigger than the order you have"
-        return redirect('/finish_payment')
-    # formatted_datetime = datetime.now().strftime('%Y-%m-%d')
-    cur.execute("UPDATE orders SET status = 'Paid' WHERE order_id = %s", (order_id,))
+    cur.execute("SELECT subject, sender, body FROM email_template WHERE name = 'Payment Email'")
+    values = cur.fetchone()
 
-    session['home_message'] = "You paid the order successful"
-    return redirect('/home')
+    utils.trace(values)
+
+    if values:
+        subject, sender, body = values
+
+        body_filled = body.format(
+            products=products_html,
+            shipping_details=shipping_html,
+        )
+
+        with app.app_context():
+            msg = Message(subject,
+                    sender = sender,
+                    recipients = [user_email])
+        msg.html = body_filled
+        mail.send(msg)
+    else:
+        utils.AssertDev(False, "No information in the database")
 
 def staff_login(conn, cur):
 
@@ -2374,11 +2443,15 @@ def back_office_manager(conn, cur, *params):
             cur.execute("SELECT name, subject, body FROM email_template WHERE name = 'Purchase Email'")
             values_purchase = cur.fetchone()
 
-            if values and values_purchase:
+            cur.execute("SELECT name, subject, body FROM email_template WHERE name = 'Payment Email'")
+            values_payment = cur.fetchone()
+
+            if values and values_purchase and values_payment:
                 name, subject, body, sender = values
                 name_purchase, subject_purchase, body_purchase = values_purchase
+                name_payment, subject_payment, body_payment = values_payment
 
-                return render_template('template_email.html', name=name, subject=subject, body=body, sender=sender, tepmplate_name_purchase=name_purchase, tepmplate_subject_purchase=subject_purchase, tepmplate_body_purchase=body_purchase)
+                return render_template('template_email.html', name=name, subject=subject, body=body, sender=sender, tepmplate_name_purchase=name_purchase, tepmplate_subject_purchase=subject_purchase, tepmplate_body_purchase=body_purchase, tepmplate_name_payment=name_payment, tepmplate_subject_payment=subject_payment, tepmplate_body_payment=body_payment)
 
         elif request.method == 'POST':
             
@@ -2418,7 +2491,27 @@ def back_office_manager(conn, cur, *params):
             return redirect(f'/staff_portal')
 
         else:
-           utils.AssertUser(False, "Invalid method") 
+           utils.AssertUser(False, "Invalid method")
+
+    elif request.path == f'/template_email_payment':
+
+        if request.method == 'POST':
+
+            data_payment = process_form('Template email payment', 'edit')
+
+            utils.trace(data_payment)
+
+            cur.execute("""
+                UPDATE email_template 
+                SET 
+                    body = %s 
+                WHERE id = 6""", (data_payment['values'][0],))
+            session['staff_message'] = "You successfully updated template for sending payment email"
+
+            return redirect(f'/staff_portal')
+
+        else:
+           utils.AssertUser(False, "Invalid method")  
 
     else:
         utils.AssertUser(False, "Invalid url")
