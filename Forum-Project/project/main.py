@@ -1115,12 +1115,17 @@ def send_purchase_email(cart_items, shipping_details, user_email, cur):
     cur.execute("SELECT subject, sender, body FROM email_template WHERE name = 'Purchase Email'")
     values = cur.fetchone()
 
+    cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (user_email,))
+    first_name, last_name = cur.fetchone()
+
     utils.trace(values)
 
     if values:
         subject, sender, body = values
 
         body_filled = body.format(
+            first_name=first_name,
+            last_name=last_name,
             cart=cart_html,
             shipping_details=shipping_html,
         )
@@ -1250,12 +1255,17 @@ def send_compleated_payment_email(products, shipping_details, total_sum, provide
     cur.execute("SELECT subject, sender, body FROM email_template WHERE name = 'Payment Email'")
     values = cur.fetchone()
 
+    cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (user_email,))
+    first_name, last_name = cur.fetchone()
+
     utils.trace(values)
 
     if values:
         subject, sender, body = values
 
         body_filled = body.format(
+            first_name=first_name,
+            last_name=last_name,
             products=products_html,
             shipping_details=shipping_html,
         )

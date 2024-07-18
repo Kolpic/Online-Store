@@ -29,16 +29,8 @@
         </div>
 
         <div class="form-group">
-            <label for="body">Email Body</label>
+            <label for="body">Email Body: variables to insert - {first_name}, {last_name}, {verification_code}</label>
             <textarea class="form-control" id="body" name="body" rows="10">{{ body }}</textarea>
-        </div>
-
-        <!-- Placeholder Variables Dropdown -->
-        <div class="form-group">
-            <label for="variables">Insert Variables:</label>
-            <select id="variables" class="selectpicker" multiple data-live-search="true" data-actions-box="true">
-                <!-- Options will be populated here -->
-            </select>
         </div>
 
         <button type="submit" class="btn btn-primary">Save Changes</button>
@@ -65,7 +57,7 @@
         </div>
 
         <div class="form-group">
-            <label for="body_purchase">Email Body: variables to insert - {cart}, {shipping_details}</label>
+            <label for="body_purchase">Email Body: variables to insert - {first_name}, {last_name}, {cart}, {shipping_details}</label>
             <textarea class="form-control" id="body_purchase" name="body_purchase" rows="10">{{ tepmplate_body_purchase }}</textarea>
         </div>
 
@@ -93,7 +85,7 @@
         </div>
 
         <div class="form-group">
-            <label for="body_payment">Email Body: variables to insert - {products}, {shipping_details}</label>
+            <label for="body_payment">Email Body: variables to insert - {first_name}, {last_name}, {products}, {shipping_details}</label>
             <textarea class="form-control" id="body_payment" name="body_payment" rows="10">{{ tepmplate_body_payment }}</textarea>
         </div>
 
@@ -106,47 +98,6 @@
 <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-select/1.13.18/js/bootstrap-select.min.js"></script>
 <script>
-$(document).ready(function() {
-    // Example data - replace with actual data fetching logic
-    let variables = ['{first_name}', '{last_name}', '{verification_code}'];
-    variables.forEach(function(variable) {
-        $('#variables').append($('<option>', {
-            value: variable,
-            text: variable
-        }));
-    });
-    $('.selectpicker').selectpicker('refresh');
-
-    // When the selection changes, update the textarea
-    $('#variables').on('changed.bs.select', function (e, clickedIndex, isSelected, previousValue) {
-        let selectedVars = $(this).val();
-        let bodyText = "Hello ";
-        
-        // Filter out verification code if present and store it separately
-        let verificationCode = '';
-        let otherVars = selectedVars.filter(varName => {
-            if (varName === '{verification_code}') {
-                verificationCode = varName;
-                return false; // Do not include in the otherVars array
-            }
-            return true;
-        });
-
-        // Append all other variables except verification code
-        otherVars.forEach(function(varName) {
-            bodyText += varName + " ";
-        });
-
-        bodyText += "Please insert the verification code in the form web 2: "
-
-        // Append the verification code last if it was selected
-        if (verificationCode) {
-            bodyText += verificationCode;
-        }
-
-        $('#body').val(bodyText);
-    });
-});
 </script>
 </body>
 {% endblock %}
