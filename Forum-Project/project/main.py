@@ -2193,8 +2193,8 @@ def back_office_manager(conn, cur, *params):
 
         query += f" ORDER BY o.order_{sort_by} {sort_order} "
 
-        cur.execute(query, params)
-        total_length_query = len(cur.fetchall())
+        cur.execute("SELECT count(*) FROM orders")
+        total_length_query = cur.fetchone()[0]
 
         query += "LIMIT %s OFFSET %s"
         params.extend([per_page, offset])
