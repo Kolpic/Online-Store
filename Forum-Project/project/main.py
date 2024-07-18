@@ -2444,9 +2444,10 @@ def back_office_manager(conn, cur, *params):
 
         user_id = request.path.split('/')[3]
 
-        cur.execute("UPDATE users SET verification_status = False WHERE id = %s", (user_id,))
+        cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        # cur.execute("UPDATE users SET verification_status = False WHERE id = %s", (user_id,))
 
-        session['crud_message'] = "You successfully made user with id: " + str(user_id) + " unverified"
+        session['crud_message'] = "You successfully deleted user with id: " + str(user_id)
 
         return redirect(f'/crud_users')
 
