@@ -1089,26 +1089,60 @@ def cart(conn, cur):
 
 def send_purchase_email(cart_items, shipping_details, user_email, cur):
 
-    cart_html = "<table><tr><th>Product</th><th>Quantity</th><th>Price</th><th>Total Product Price</th></tr>"
+    cart_html = """
+    <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse;">
+        <tr>
+            <th style="background-color: #f2f2f2;">Product</th>
+            <th style="background-color: #f2f2f2;">Quantity</th>
+            <th style="background-color: #f2f2f2;">Price</th>
+            <th style="background-color: #f2f2f2;">Total Product Price</th>
+        </tr>
+    """
+
     total_price = 0
 
     for item in cart_items:
         product_id, product_name, quantity, price, currency = item
         price_total = float(price) * int(quantity)
         total_price += price_total
-        cart_html += f"<tr><th>{product_name}</th><th class=\"text-right\">{quantity}</th><th class=\"text-right\">{price} {currency}</th><th  class=\"text-right\">{price_total} {currency}</th></tr>"
-    
+        cart_html += f"""
+        <tr>
+            <td>{product_name}</td>
+            <td style="text-align: right;">{quantity}</td>
+            <td style="text-align: right;">{price} {currency}</td>
+            <td style="text-align: right;">{price_total} {currency}</td>
+        </tr>
+        """
+
     _total_price = round(total_price, 2)
-    cart_html += f"<tr><td colspan='3'>Total Order Price</td><td>{_total_price} {currency}</td></tr></table>"
+    cart_html += f"""
+
+        <tr>
+            <td colspan='3' style="text-align: right;">Total Order Price</td>
+            <td style="text-align: right;">{_total_price} {currency}</td>
+        </tr>
+    </table>
+    """
 
     shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code = shipping_details[0]
     shipping_html = f"""
-    <table>
-        <tr><th>Recipient</th><td>{first_name} {last_name}</td></tr>
-        <tr><th>Email</th><td>{email}</td></tr>
-        <tr><th>Address</th><td>{address}, {town}</td></tr>
-        <tr><th>Country code</th><td>{country_code}</td></tr>
-        <tr><th>Phone</th><td>{phone}</td></tr>
+
+    <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse;">
+        <tr>
+            <th style="background-color: #f2f2f2;">Recipient</th><td>{first_name} {last_name}</td>
+        </tr>
+        <tr>
+            <th style="background-color: #f2f2f2;">Email</th><td>{email}</td>
+        </tr>
+        <tr>
+            <th style="background-color: #f2f2f2;">Address</th><td>{address}, {town}</td>
+        </tr>
+        <tr>
+            <th style="background-color: #f2f2f2;">Country code</th><td>{country_code}</td>
+        </tr>
+        <tr>
+            <th style="background-color: #f2f2f2;">Phone</th><td>{phone}</td>
+        </tr>
     </table>
     """
 
@@ -1214,7 +1248,19 @@ def finish_payment(conn, cur):
         cur.execute("SELECT * FROM shipping_details WHERE order_id = %s", (order_id,))
         shipping_details = cur.fetchone()
 
-        cur.execute("SELECT products.name, oi.quantity, oi.price FROM order_items AS oi JOIN products ON oi.product_id=products.id WHERE order_id = %s", (order_id,))
+        cur.execute("""
+
+            SELECT 
+                p.name, 
+                oi.quantity, 
+                oi.price,
+                c.symbol 
+            FROM order_items AS oi 
+            JOIN products    AS p ON oi.product_id=p.id
+            JOIN currencies  AS c ON p.currency_id=c.id
+            WHERE order_id = %s
+
+            """, (order_id,))
         products_from_order = cur.fetchall()
 
         send_compleated_payment_email(products_from_order, shipping_details, total, payment_amount, is_auth_user, cur)
@@ -1228,27 +1274,62 @@ def finish_payment(conn, cur):
 
 def send_compleated_payment_email(products, shipping_details, total_sum, provided_sum, user_email, cur):
 
-    products_html = "<table><tr><th>Product</th><th>Quantity</th><th>Price</th><th>Total Product Price</th></tr>"
+    products_html = """
+    <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse;">
+        <tr>
+            <th style="background-color: #f2f2f2;">Product</th>
+            <th style="background-color: #f2f2f2;">Quantity</th>
+            <th style="background-color: #f2f2f2;">Price</th>
+            <th style="background-color: #f2f2f2;">Total Product Price</th>
+        </tr>
+    """
     total_price = 0
 
     for item in products:
-        product_name, quantity, price = item
+
+        product_name, quantity, price, symbol = item
+
         price_total = float(price) * int(quantity)
         total_price += price_total
-        products_html += f"<tr><th>{product_name}</th><th class=\"text-right\">{quantity}</th><th class=\"text-right\">{price}</th><th  class=\"text-right\">{price_total}</th></tr>"
+        products_html += f"""
+        <tr>
+            <td>{product_name}</td>
+            <td style="text-align: right;">{quantity}</td>
+            <td style="text-align: right;">{price} {symbol}</td>
+            <td style="text-align: right;">{price_total} {symbol}</td>
+        </tr>
+        """
     
     _total_price = round(total_price, 2)
-    products_html += f"<tr><td colspan='3'>Total Order Price:</td><td>{_total_price}</td></tr></table>"
-    products_html += f"<tr><td colspan='3'>You payed:</td><td>{provided_sum}</td></tr></table>"
+    products_html += f"""
+        <tr>
+            <td colspan='3' style="text-align: right;">Total Order Price:</td>
+            <td style="text-align: right;">{_total_price}</td>
+        </tr>
+    """
+    products_html += f"""
+        <tr>
+            <td colspan='3' style="text-align: right;">You paid:</td>
+            <td style="text-align: right;">{provided_sum}</td>
+        </tr>
+    </table>
+    """
 
-    utils.trace(shipping_details)
     shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code_id = shipping_details
     shipping_html = f"""
-    <table>
-        <tr><th>Recipient</th><td>{first_name} {last_name}</td></tr>
-        <tr><th>Email</th><td>{email}</td></tr>
-        <tr><th>Address</th><td>{address}, {town}</td></tr>
-        <tr><th>Phone</th><td>{phone}</td></tr>
+    <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse;">
+        <tr>
+            <th style="background-color: #f2f2f2;">Recipient</th><td>{first_name} {last_name}</td>
+        </tr>
+        <tr>
+            <th style="background-color: #f2f2f2;">Email</th><td>{email}</td>
+        </tr>
+        <tr>
+            <th style="background-color: #f2f2f2;">Address</th><td>{address}, {town}</td>
+        </tr>
+        <tr>
+            <th style="background-color: #f2f2f2;">Phone</th><td>{phone}</td>
+        </tr>
     </table>
     """
 
@@ -1257,8 +1338,6 @@ def send_compleated_payment_email(products, shipping_details, total_sum, provide
 
     cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (user_email,))
     first_name, last_name = cur.fetchone()
-
-    utils.trace(values)
 
     if values:
         subject, sender, body = values
