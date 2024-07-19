@@ -6,11 +6,13 @@
         {{ session.pop('staff_error') }}
     </div>
     {% endif %}
+
     {% if 'staff_message' in session %}
     <div class="alert alert-success" id="homeAlert">
         {{ session.pop('staff_message') }}
     </div>
     {% endif %}
+    
     <meta charset="UTF-8">
     <title>Staff Portal</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">

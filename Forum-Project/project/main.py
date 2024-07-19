@@ -1646,12 +1646,8 @@ def back_office_manager(conn, cur, *params):
             return "No image found"
 
     elif request.path == f'/crud_products/upload_products':
-        print("Entered /crud_products/upload_products cucessfully", flush=True)
 
         file = request.files['productFile']
-
-        print("file", flush=True)
-        print(file, flush=True)
 
         if file and  '.' in file.filename and file.filename.rsplit('.', 1)[1].lower() in ['csv']:
 
@@ -1668,7 +1664,8 @@ def back_office_manager(conn, cur, *params):
             except Exception as e:
                 session['crud_error'] = "Something went wrong with the upload"
         else:
-            session['crud_error'] = "Invalid file or file type extension."
+            utils.trace("Invalid file or file type extension. The extension needs to be .csv")
+            session['crud_error'] = "Invalid file or file type extension. The extension needs to be .csv"
 
         return redirect(f'/crud_products')
 
@@ -2711,7 +2708,7 @@ def handle_request(username=None, path=''):
         if is_auth_user is not None:
 
             flag_office = sessions.get_session_cookie_type(request, cur)
-            
+
         else:
 
             flag_office = True
