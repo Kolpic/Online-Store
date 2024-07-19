@@ -78,7 +78,9 @@ def get_session_cookie_type(request, cur):
     cur.execute("SELECT user_id, staff_id FROM custom_sessions WHERE session_id = %s AND is_active = True", (session_id,))
     user_id, staff_id = cur.fetchone()
 
+    utils.trace("user_id")
     utils.trace(user_id)
+    utils.trace("staff_id")
     utils.trace(staff_id)
 
     if user_id:

@@ -2693,43 +2693,49 @@ def handle_request(username=None, path=''):
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor()
 
-        print("request.path", flush=True)
-        print(request.path, flush=True)
+        utils.trace("request.path")
+        utils.trace(request.path)
 
         #TODO Validaciq na cookie prez bazata + req.args
         is_auth_user = sessions.get_current_user(request, cur)
 
-        print("is_auth_user", flush=True)
-        print(is_auth_user, flush=True)
+        utils.trace("is_auth_user")
+        utils.trace(is_auth_user)
 
         funtion_to_call = None
         match = None
-        flag_front_office = False
 
         # True for front office, false for back office
         flag_office = None
 
         if is_auth_user is not None:
+
             flag_office = sessions.get_session_cookie_type(request, cur)
+            
+        else:
 
-        if is_auth_user == None or flag_office == True:
+            flag_office = True
 
-            utils.trace("Entered front office loop")
-            funtion_to_call = map_function(url_to_function_map_front_office)
-
-            if funtion_to_call is not None:
-                flag_front_office = True
-
-
-        if (is_auth_user == None and not flag_front_office) or flag_office == False or request.path == '/staff_login':
+        if not flag_office or request.path == '/staff_login':
 
             utils.trace("Entered back office loop")
             funtion_to_call = map_function(url_to_function_map_back_office)
 
-        if flag_front_office == True and is_auth_user != None:
+        else:
+
+            utils.trace("Entered front office loop")
+            funtion_to_call = map_function(url_to_function_map_front_office)
+
+     
+        if flag_office and is_auth_user is not None:
+
             cur.execute("SELECT last_active FROM users WHERE email = %s", (is_auth_user,))
             current_user_last_active = cur.fetchone()[0]
             cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (is_auth_user,))
+
+        else:
+
+            pass
 
         # TODO: for next code rev
         utils.AssertUser(funtion_to_call is not None, "Invalid URL")
