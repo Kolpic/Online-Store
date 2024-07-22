@@ -8,7 +8,7 @@ class Settings(db.Model):
     __tablename__ = 'settings'
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False, unique=True)
-    value = db.Column(db.Integer, nullable=False)
+    value = db.Column(db.String(255), nullable=False)
 
 class EmailTemplate(db.Model):
     __tablename__ = 'email_template'

@@ -1089,13 +1089,21 @@ def cart(conn, cur):
 
 def send_purchase_email(cart_items, shipping_details, user_email, cur):
 
-    cart_html = """
-    <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse;">
+    cur.execute("SELECT value FROM settings WHERE id = %s OR id = %s OR id = %s OR id = %s", (2, 3, 4, 5))
+    values = cur.fetchall()
+
+    background_color = values[0][0]
+    text_align = values[1][0]
+    border = values[2][0]
+    border_collapse = [3][0]
+
+    cart_html = f"""
+    <table border="{border}" cellpadding="5" cellspacing="0" style="border-collapse: {border_collapse};">
         <tr>
-            <th style="background-color: #f2f2f2;">Product</th>
-            <th style="background-color: #f2f2f2;">Quantity</th>
-            <th style="background-color: #f2f2f2;">Price</th>
-            <th style="background-color: #f2f2f2;">Total Product Price</th>
+            <th style="background-color: {background_color};">Product</th>
+            <th style="background-color: {background_color};">Quantity</th>
+            <th style="background-color: {background_color};">Price</th>
+            <th style="background-color: {background_color};">Total Product Price</th>
         </tr>
     """
 
@@ -1108,9 +1116,9 @@ def send_purchase_email(cart_items, shipping_details, user_email, cur):
         cart_html += f"""
         <tr>
             <td>{product_name}</td>
-            <td style="text-align: right;">{quantity}</td>
-            <td style="text-align: right;">{price} {currency}</td>
-            <td style="text-align: right;">{price_total} {currency}</td>
+            <td style="text-align: {text_align};">{quantity}</td>
+            <td style="text-align: {text_align};">{price} {currency}</td>
+            <td style="text-align: {text_align};">{price_total} {currency}</td>
         </tr>
         """
 
@@ -1118,8 +1126,8 @@ def send_purchase_email(cart_items, shipping_details, user_email, cur):
     cart_html += f"""
 
         <tr>
-            <td colspan='3' style="text-align: right;">Total Order Price</td>
-            <td style="text-align: right;">{_total_price} {currency}</td>
+            <td colspan='3' style="text-align: {text_align};">Total Order Price</td>
+            <td style="text-align: {text_align};">{_total_price} {currency}</td>
         </tr>
     </table>
     """
@@ -1127,21 +1135,21 @@ def send_purchase_email(cart_items, shipping_details, user_email, cur):
     shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code = shipping_details[0]
     shipping_html = f"""
 
-    <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse;">
+    <table border="{border}" cellpadding="5" cellspacing="0" style="border-collapse: {border_collapse};">
         <tr>
-            <th style="background-color: #f2f2f2;">Recipient</th><td>{first_name} {last_name}</td>
+            <th style="background-color: {background_color};">Recipient</th><td>{first_name} {last_name}</td>
         </tr>
         <tr>
-            <th style="background-color: #f2f2f2;">Email</th><td>{email}</td>
+            <th style="background-color: {background_color};">Email</th><td>{email}</td>
         </tr>
         <tr>
-            <th style="background-color: #f2f2f2;">Address</th><td>{address}, {town}</td>
+            <th style="background-color: {background_color};">Address</th><td>{address}, {town}</td>
         </tr>
         <tr>
-            <th style="background-color: #f2f2f2;">Country code</th><td>{country_code}</td>
+            <th style="background-color: {background_color};">Country code</th><td>{country_code}</td>
         </tr>
         <tr>
-            <th style="background-color: #f2f2f2;">Phone</th><td>{phone}</td>
+            <th style="background-color: {background_color};">Phone</th><td>{phone}</td>
         </tr>
     </table>
     """
@@ -1274,13 +1282,21 @@ def finish_payment(conn, cur):
 
 def send_compleated_payment_email(products, shipping_details, total_sum, provided_sum, user_email, cur):
 
-    products_html = """
-    <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse;">
+    cur.execute("SELECT value FROM settings WHERE id = %s OR id = %s OR id = %s OR id = %s", (2, 3, 4, 5))
+    values = cur.fetchall()
+
+    background_color = values[0][0]
+    text_align = values[1][0]
+    border = values[2][0]
+    border_collapse = [3][0]
+
+    products_html = f"""
+    <table border="{border}" cellpadding="5" cellspacing="0" style="border-collapse: {border_collapse};">
         <tr>
-            <th style="background-color: #f2f2f2;">Product</th>
-            <th style="background-color: #f2f2f2;">Quantity</th>
-            <th style="background-color: #f2f2f2;">Price</th>
-            <th style="background-color: #f2f2f2;">Total Product Price</th>
+            <th style="background-color: {background_color};">Product</th>
+            <th style="background-color: {background_color};">Quantity</th>
+            <th style="background-color: {background_color};">Price</th>
+            <th style="background-color: {background_color};">Total Product Price</th>
         </tr>
     """
     total_price = 0
@@ -1294,41 +1310,41 @@ def send_compleated_payment_email(products, shipping_details, total_sum, provide
         products_html += f"""
         <tr>
             <td>{product_name}</td>
-            <td style="text-align: right;">{quantity}</td>
-            <td style="text-align: right;">{price} {symbol}</td>
-            <td style="text-align: right;">{price_total} {symbol}</td>
+            <td style="text-align: {text_align};">{quantity}</td>
+            <td style="text-align: {text_align};">{price} {symbol}</td>
+            <td style="text-align: {text_align};">{price_total} {symbol}</td>
         </tr>
         """
     
     _total_price = round(total_price, 2)
     products_html += f"""
         <tr>
-            <td colspan='3' style="text-align: right;">Total Order Price:</td>
-            <td style="text-align: right;">{_total_price}</td>
+            <td colspan='3' style="text-align: {text_align};">Total Order Price:</td>
+            <td style="text-align: {text_align};">{_total_price}</td>
         </tr>
     """
     products_html += f"""
         <tr>
-            <td colspan='3' style="text-align: right;">You paid:</td>
-            <td style="text-align: right;">{provided_sum}</td>
+            <td colspan='3' style="text-align: {text_align};">You paid:</td>
+            <td style="text-align: {text_align};">{provided_sum}</td>
         </tr>
     </table>
     """
 
     shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code_id = shipping_details
     shipping_html = f"""
-    <table border="1" cellpadding="5" cellspacing="0" style="border-collapse: collapse;">
+    <table border="{border}" cellpadding="5" cellspacing="0" style="border-collapse: {border_collapse};">
         <tr>
-            <th style="background-color: #f2f2f2;">Recipient</th><td>{first_name} {last_name}</td>
+            <th style="background-color: {background_color};">Recipient</th><td>{first_name} {last_name}</td>
         </tr>
         <tr>
-            <th style="background-color: #f2f2f2;">Email</th><td>{email}</td>
+            <th style="background-color: {background_color};">Email</th><td>{email}</td>
         </tr>
         <tr>
-            <th style="background-color: #f2f2f2;">Address</th><td>{address}, {town}</td>
+            <th style="background-color: {background_color};">Address</th><td>{address}, {town}</td>
         </tr>
         <tr>
-            <th style="background-color: #f2f2f2;">Phone</th><td>{phone}</td>
+            <th style="background-color: {background_color};">Phone</th><td>{phone}</td>
         </tr>
     </table>
     """
@@ -1693,6 +1709,7 @@ def back_office_manager(conn, cur, *params):
         return render_template('logs.html', log_exceptions = log_exceptions, sort_by=sort_by, sort_order=sort_order)
     
     elif request.path == f'/update_captcha_settings':
+
         utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'read', is_auth_user), "You don't have permission to this resource")
 
         if request.method == 'GET':
@@ -1702,7 +1719,16 @@ def back_office_manager(conn, cur, *params):
             cur.execute("SELECT value FROM settings WHERE name = %s", ("report_limitation_rows",))
             limitation_rows = cur.fetchone()[0]
 
-            return render_template('captcha_settings.html', limitation_rows=limitation_rows, **current_settings)
+            cur.execute("SELECT value FROM settings WHERE name = %s OR name = %s OR name = %s OR name = %s", ("email_template_background_color", "email_template_text_align", "email_template_border", "email_template_border_collapse"))
+            values = cur.fetchall()
+            # utils.trace(cur.fetchall())
+
+            background_color = values[0][0]
+            text_align = values[1][0]
+            border = values[2][0]
+            border_collapse = values[3][0]
+
+            return render_template('captcha_settings.html', limitation_rows=limitation_rows, border_collapse=border_collapse,border=border,text_align=text_align,background_color=background_color,**current_settings)
 
         utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', is_auth_user), "You don't have permission to this resource")
 
@@ -1733,9 +1759,7 @@ def back_office_manager(conn, cur, *params):
 
             limitation_rows = int(request.form['report_limitation_rows'])
 
-            if limitation_rows <= 0 or limitation_rows >= 50000:
-                utils.AssertUser(False, "You can't enter zero or negative number. The maximum number is 50000")
-
+            utils.AssertUser(limitation_rows >= 0 and limitation_rows <= 50000, "You can't enter zero or negative number. The maximum number is 50000")
 
             query = ("UPDATE settings SET value = %s WHERE name = %s")
             cur.execute(query, (limitation_rows, 'report_limitation_rows'))
@@ -1743,7 +1767,37 @@ def back_office_manager(conn, cur, *params):
             session['staff_message'] = "You changed the limitation number of every report to: " + str(limitation_rows)
 
             return redirect(f'/staff_portal')
+        else:
+            utils.AssertUser(False, "Invalid method") 
 
+    elif request.path == f'/update_email_templates_table':
+
+        if request.method == 'POST':
+            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', is_auth_user), "You don't have permission to this resource")
+
+            background_color = request.form['background_color']
+            text_align = request.form['text_align']
+            border = request.form['border']
+            border_collapse = request.form['border_collapse']
+
+            utils.AssertUser(int(border) <= 10 and int(border) >= 1, "Border can be between 1 and 10")
+
+            cur.execute("SELECT id FROM settings WHERE name = %s OR name = %s OR name = %s OR name = %s", ("email_template_background_color", "email_template_text_align", "email_template_border", "email_template_border_collapse"))
+            values = cur.fetchall()
+
+            background_color_id = values[0][0]
+            text_align_id = values[1][0]
+            border_id = values[2][0]
+            border_collapse_id = values[3][0]
+
+            cur.execute("UPDATE settings SET value = %s WHERE id = %s", (background_color, background_color_id))
+            cur.execute("UPDATE settings SET value = %s WHERE id = %s", (text_align, text_align_id))
+            cur.execute("UPDATE settings SET value = %s WHERE id = %s", (border , border_id))
+            cur.execute("UPDATE settings SET value = %s WHERE id = %s", (border_collapse, border_collapse_id))
+
+            session['staff_message'] = "You changed the email template table look successfully"
+
+            return redirect(f'/staff_portal')
         else:
             utils.AssertUser(False, "Invalid method")        
 
@@ -2673,7 +2727,7 @@ url_to_function_map_back_office = [
     (r'/staff_login', staff_login),
     (r'/staff_portal', staff_portal),
     (r'/logout_staff', logout_staff),
-    (r'/(crud_products_edit_picture|error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users|template_email|update_report_limitation_rows)(?:/[\w\d\-_/]*)?', back_office_manager),
+    (r'/(crud_products_edit_picture|error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users|template_email|update_report_limitation_rows|update_email_templates_table)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 
 def map_function(map_route):
