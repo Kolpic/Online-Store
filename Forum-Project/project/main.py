@@ -571,7 +571,7 @@ def home(conn, cur, page = 1):
         price_filter = " AND price BETWEEN %s AND %s"
         query_params.extend([price_min, price_max])
 
-    query = f"SELECT p.id, p.name, p.price, p.quantity, p.category, c.symbol FROM products AS p JOIN currencies AS c ON p.currency_id=c.id WHERE TRUE{name_filter}{category_filter}{price_filter} ORDER BY {order_by_clause} LIMIT %s OFFSET %s"
+    query = f"SELECT p.id, p.name, p.price, p.quantity, p.category, c.symbol, p.vat FROM products AS p JOIN currencies AS c ON p.currency_id=c.id WHERE TRUE{name_filter}{category_filter}{price_filter} ORDER BY {order_by_clause} LIMIT %s OFFSET %s"
     query_params.extend([products_per_page, offset])
 
     cur.execute(query,tuple(query_params))
@@ -882,14 +882,19 @@ def validate_image_size(image_stream):
     utils.AssertUser(file_size < MAX_FILE_SIZE, "The image file size must not exceed 10MB.")
     return image_stream.read()
 
-def serve_image(conn, cur, product_id):
-    cur.execute("SELECT image FROM products WHERE id = %s", (product_id,))
+def serve_image(product_id, cur):
+    pr_id = request.path.split("/")[2]
+    cur.execute("SELECT image FROM products WHERE id = %s", (pr_id,))
     image_blob = cur.fetchone()[0]
     return Response(image_blob, mimetype='jpeg')
 
 def add_to_cart(conn, cur, user_id, product_id, quantity):
+    cur.execute("SELECT vat FROM products WHERE id = %s", (product_id,))
+    vat = cur.fetchone()[0]
+
     cur.execute("SELECT cart_id FROM carts WHERE user_id = %s", (user_id,))
     result = cur.fetchone()
+
     if result:
         cart_id = result[0]
     else:
@@ -898,15 +903,17 @@ def add_to_cart(conn, cur, user_id, product_id, quantity):
     
     cur.execute("SELECT id FROM cart_itmes WHERE cart_id = %s AND product_id = %s", (cart_id, product_id))
     item = cur.fetchone()
+
     if item:
         cur.execute("UPDATE cart_itmes SET quantity = quantity + %s WHERE id = %s", (quantity, item[0]))
     else:
-        cur.execute("INSERT INTO cart_itmes (cart_id, product_id, quantity) VALUES (%s, %s, %s)", (cart_id, product_id, quantity))
+        cur.execute("INSERT INTO cart_itmes (cart_id, product_id, quantity, vat) VALUES (%s, %s, %s, %s)", (cart_id, product_id, quantity, vat))
+
     return "You successfully added item."
 
 def view_cart(conn, cur, user_id):
     cur.execute("""
-                SELECT p.name, p.price, ci.quantity, p.id, currencies.symbol
+                SELECT p.name, p.price, ci.quantity, p.id, currencies.symbol, ci.vat
                 FROM     CARTS      AS c 
                     JOIN cart_itmes AS ci ON c.cart_id     = ci.cart_id 
                     JOIN products   AS p  ON ci.product_id = p.id
@@ -964,14 +971,23 @@ def cart(conn, cur):
         items = view_cart(conn, cur, user_id)
 
 
-        total_sum = sum(item[1] * item[2] for item in items)
+        # total_sum = sum(item[1] * item[2] for item in items)
+
+        total_sum_with_vat = 0
+
+        for item in items:
+            vat_float = (Decimal(item[5]) / 100)
+            items_sum_without_vat = item[1] * item[2]
+            vat = items_sum_without_vat * vat_float
+            total_sum_with_vat += items_sum_without_vat + vat
+
         cur.execute("SELECT * FROM country_codes")
         country_codes = cur.fetchall()
 
         cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (is_auth_user,))
         user_details = cur.fetchone()
 
-        return render_template('cart.html', items=items, total_sum=total_sum, country_codes=country_codes, form_data=form_data, first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
+        return render_template('cart.html', items=items, total_sum_with_vat=round(total_sum_with_vat, 2), country_codes=country_codes, form_data=form_data, first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
    
     elif request.method == 'POST':
 
@@ -1006,7 +1022,7 @@ def cart(conn, cur):
         cart_id = cur.fetchone()[0]
 
         cur.execute("""
-                    SELECT ci.product_id, p.name, ci.quantity, p.price, currencies.symbol 
+                    SELECT ci.product_id, p.name, ci.quantity, p.price, currencies.symbol, ci.vat 
                     FROM cart_itmes     AS ci
                         JOIN products   AS p          ON ci.product_id = p.id
                         JOIN currencies AS currencies ON p.currency_id = currencies.id
@@ -1019,7 +1035,7 @@ def cart(conn, cur):
 
         # Check and change quantity 
         for item in cart_items:
-            product_id_, name, quantity, price, symbol = item
+            product_id_, name, quantity, price, symbol, vat = item
             if quantity > quantity_db:
                 session['cart_error'] = "We don't have " + str(quantity) + " from product: " + str(name) + " in our store. You can purchase less or to remove the product from your cart"
                 utils.add_form_data_in_session(session.get('form_data'))
@@ -1029,14 +1045,16 @@ def cart(conn, cur):
         # current_prices = {item['poroduct_id']: item['price'] for item in cart_items}
         price_mismatch = False
         for item in cart_items:
-            product_id, name, quantity, cart_price, symbol = item
+            product_id, name, quantity, cart_price, symbol, vat = item
             cur.execute("SELECT price FROM products WHERE id = %s", (product_id,))
             current_price = cur.fetchone()[0]
             if current_price != cart_price:
                 # Price can be updated here
                 price_mismatch = True
                 break
+
         utils.AssertUser(not price_mismatch, "The price on some of your product's in the cart has been changed, you can't make the purchase")
+
         # Build JSON object of cart items if no mismatch
         products_json = [{"product_id": item[0], "name": item[1], "quantity": item[2], "price": str(item[3])} for item in cart_items]
 
@@ -1050,7 +1068,7 @@ def cart(conn, cur):
 
         # Insert order items into order_items table
         for item in cart_items:
-            cur.execute("INSERT INTO order_items (order_id, product_id, quantity, price) VALUES (%s, %s, %s, %s)", (order_id, item[0], item[2], item[3]))
+            cur.execute("INSERT INTO order_items (order_id, product_id, quantity, price, vat) VALUES (%s, %s, %s, %s, %s)", (order_id, item[0], item[2], item[3], item[5]))
 
         cur.execute("SELECT id FROM country_codes WHERE code = %s", (country_code,))
         country_code_id = cur.fetchone()[0]
@@ -1059,6 +1077,15 @@ def cart(conn, cur):
         # Total sum to be passed to the payment.html
         items = view_cart(conn, cur, user_id)
         total_sum = sum(item[1] * item[2] for item in items)
+
+        # Total sum with vat to be passed to the payment.html
+        total_sum_with_vat = 0
+
+        for item in items:
+            vat_float = (float(item[5]) / 100)
+            items_sum_without_vat = float(item[1] * item[2])
+            vatt = items_sum_without_vat * vat_float
+            total_sum_with_vat += items_sum_without_vat + vatt
 
         # When the purchase is made we empty the user cart 
         cur.execute("SELECT cart_id FROM carts WHERE user_id = %s", (user_id,))
@@ -1074,20 +1101,22 @@ def cart(conn, cur):
                     """, (order_id,))
         shipping_details = cur.fetchall()
 
-        send_purchase_email(cart_items, shipping_details, is_auth_user, cur)
+        send_purchase_email(cart_items, shipping_details, is_auth_user, cur, total_sum_with_vat)
 
         session['payment_message'] = "You successful made an order with id = " + str(order_id)
 
         cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (is_auth_user,))
         user_details = cur.fetchone()
 
-        return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum=total_sum, first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
+        utils.trace(round(total_sum_with_vat, 2))
+
+        return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum_with_vat=round(total_sum_with_vat, 2), total_sum=round(total_sum, 2), first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
 
     else:
         utils.AssertUser(False, "Invalid method")
 
 
-def send_purchase_email(cart_items, shipping_details, user_email, cur):
+def send_purchase_email(cart_items, shipping_details, user_email, cur, total_sum_with_vat):
 
     cur.execute("SELECT value FROM settings WHERE id = %s OR id = %s OR id = %s OR id = %s", (2, 3, 4, 5))
     values = cur.fetchall()
@@ -1110,7 +1139,7 @@ def send_purchase_email(cart_items, shipping_details, user_email, cur):
     total_price = 0
 
     for item in cart_items:
-        product_id, product_name, quantity, price, currency = item
+        product_id, product_name, quantity, price, currency, vat = item
         price_total = float(price) * int(quantity)
         total_price += price_total
         cart_html += f"""
@@ -1126,8 +1155,12 @@ def send_purchase_email(cart_items, shipping_details, user_email, cur):
     cart_html += f"""
 
         <tr>
-            <td colspan='3' style="text-align: {text_align};">Total Order Price</td>
+            <td colspan='3' style="text-align: {text_align};">Total Order Price Without VAT</td>
             <td style="text-align: {text_align};">{_total_price} {currency}</td>
+        </tr>
+        <tr>
+            <td colspan='3' style="text-align: {text_align};">Total Order Price With VAT</td>
+            <td style="text-align: {text_align};">{total_sum_with_vat} {currency}</td>
         </tr>
     </table>
     """
@@ -1159,8 +1192,6 @@ def send_purchase_email(cart_items, shipping_details, user_email, cur):
 
     cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (user_email,))
     first_name, last_name = cur.fetchone()
-
-    utils.trace(values)
 
     if values:
         subject, sender, body = values
@@ -1202,20 +1233,25 @@ def finish_payment(conn, cur):
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         order_id = session.get('order_id')
 
-        cur.execute("SELECT oi.product_id, p.name, oi.quantity, oi.price, currencies.symbol FROM order_items AS oi JOIN products AS p ON oi.product_id=p.id JOIN currencies ON p.currency_id=currencies.id WHERE order_id = %s", (order_id,))
+        cur.execute("SELECT oi.product_id, p.name, oi.quantity, oi.price, currencies.symbol, oi.vat FROM order_items AS oi JOIN products AS p ON oi.product_id=p.id JOIN currencies ON p.currency_id=currencies.id WHERE order_id = %s", (order_id,))
         order_products = cur.fetchall()
-
-        print(order_products, flush=True)
 
         total_summ = sum(int(product[2]) * Decimal(product[3]) for product in order_products)
         total_sum = round(total_summ, 2)
+
+        total_with_vat = 0
+        for product in order_products:
+
+            utils.trace(product)
+
+            total_with_vat += (int(product[2]) * float(product[3])) + (((float(product[5]) / 100)) * (int(product[2]) * float(product[3])))
 
         cur.execute("SELECT * FROM shipping_details WHERE order_id = %s", (order_id,))
         shipping_details = cur.fetchone()
 
         session['order_id'] = order_id
 
-        return render_template('payment.html', order_products=order_products, shipping_details=shipping_details, total_sum=total_sum)
+        return render_template('payment.html', order_products=order_products, shipping_details=shipping_details, total_sum=total_sum, total_sum_with_vat=round(total_with_vat, 2))
 
     elif request.method == 'POST':
 
@@ -1227,25 +1263,29 @@ def finish_payment(conn, cur):
         utils.AssertUser(isinstance(float(request.form.get('payment_amount')), float), "You must enter a number")
 
         payment_amountt = float(request.form.get('payment_amount'))
-        payment_amount = round(Decimal(payment_amountt), 2)
+        payment_amount = round(float(payment_amountt), 2)
 
-        cur.execute("SELECT quantity, price FROM order_items WHERE order_id = %s", (order_id,))
+        cur.execute("SELECT quantity, price, vat FROM order_items WHERE order_id = %s", (order_id,))
         all_products_from_the_order = cur.fetchall()
 
         total = 0
         for product in all_products_from_the_order:
             total += int(product[0]) * Decimal(product[1])
-        
+
+        total_with_vat = 0
+        for product in all_products_from_the_order:
+            total_with_vat += (int(product[0]) * float(product[1])) + (((float(product[2]) / 100)) * (int(product[0]) * float(product[1])))
+
         cur.execute("SELECT status FROM orders WHERE order_id= %s", (order_id,))
         order_status = cur.fetchone()[0]
 
         utils.AssertUser(order_status == 'Ready for Paying', "This order is not ready for payment or has already been paid")
 
-        if payment_amount < total:
+        if payment_amount < round(total_with_vat, 2):
             session['order_id'] = order_id
             session['payment_error'] = "You entered amout, which is less than the order you have"
             return redirect('/finish_payment')
-        if payment_amount > total:
+        if payment_amount > round(total_with_vat, 2):
             session['order_id'] = order_id
             session['payment_error'] = "You entered amout, which is bigger than the order you have"
             return redirect('/finish_payment')
@@ -1271,7 +1311,7 @@ def finish_payment(conn, cur):
             """, (order_id,))
         products_from_order = cur.fetchall()
 
-        send_compleated_payment_email(products_from_order, shipping_details, total, payment_amount, is_auth_user, cur)
+        send_compleated_payment_email(products_from_order, shipping_details, total, total_with_vat,payment_amount, is_auth_user, cur)
 
         session['home_message'] = "You paid the order successful"
 
@@ -1280,7 +1320,7 @@ def finish_payment(conn, cur):
     else:
         utils.AssertUser(False, "Invalid method")
 
-def send_compleated_payment_email(products, shipping_details, total_sum, provided_sum, user_email, cur):
+def send_compleated_payment_email(products, shipping_details, total_sum, total_with_vat,provided_sum, user_email, cur):
 
     cur.execute("SELECT value FROM settings WHERE id = %s OR id = %s OR id = %s OR id = %s", (2, 3, 4, 5))
     values = cur.fetchall()
@@ -1319,8 +1359,12 @@ def send_compleated_payment_email(products, shipping_details, total_sum, provide
     _total_price = round(total_price, 2)
     products_html += f"""
         <tr>
-            <td colspan='3' style="text-align: {text_align};">Total Order Price:</td>
-            <td style="text-align: {text_align};">{_total_price}</td>
+            <td colspan='3' style="text-align: {text_align};">Total Order Price Without VAT:</td>
+            <td style="text-align: {text_align};">{total_sum}</td>
+        </tr>
+        <tr>
+            <td colspan='3' style="text-align: {text_align};">Total Order Price With VAT:</td>
+            <td style="text-align: {text_align};">{total_with_vat}</td>
         </tr>
     """
     products_html += f"""
@@ -1457,13 +1501,13 @@ def update_cart_quantity(conn, cur):
     quantity_ = int(quantity)
     utils.AssertUser(quantity_ > 0, "You can't enter quantity zero or below")
 
-    cur.execute("SELECT price FROM products WHERE id = %s", (item_id,))
-    price = cur.fetchone()[0]
+    cur.execute("SELECT price, vat FROM products WHERE id = %s", (item_id,))
+    price, vat_rate = cur.fetchone()
     new_total = price * quantity_
 
     cur.execute("UPDATE cart_itmes SET quantity = %s WHERE product_id = %s", (quantity_, item_id))
 
-    return jsonify(success=True, new_total=new_total)
+    return jsonify(success=True, new_total=new_total, vat_rate=vat_rate)
 
 # def serve_image_crud_products_edit(conn, cur, product_id):
 #     print("Entered get image for edit product", flush=True)
@@ -1721,14 +1765,16 @@ def back_office_manager(conn, cur, *params):
 
             cur.execute("SELECT value FROM settings WHERE name = %s OR name = %s OR name = %s OR name = %s", ("email_template_background_color", "email_template_text_align", "email_template_border", "email_template_border_collapse"))
             values = cur.fetchall()
-            # utils.trace(cur.fetchall())
+
+            cur.execute("SELECT value FROM settings WHERE name = %s", ('VAT',))
+            vat = cur.fetchone()[0]
 
             background_color = values[0][0]
             text_align = values[1][0]
             border = values[2][0]
             border_collapse = values[3][0]
 
-            return render_template('captcha_settings.html', limitation_rows=limitation_rows, border_collapse=border_collapse,border=border,text_align=text_align,background_color=background_color,**current_settings)
+            return render_template('captcha_settings.html', vat=vat,limitation_rows=limitation_rows, border_collapse=border_collapse,border=border,text_align=text_align,background_color=background_color,**current_settings)
 
         utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', is_auth_user), "You don't have permission to this resource")
 
@@ -1799,7 +1845,27 @@ def back_office_manager(conn, cur, *params):
 
             return redirect(f'/staff_portal')
         else:
-            utils.AssertUser(False, "Invalid method")        
+            utils.AssertUser(False, "Invalid method")
+
+    elif request.path == f'/update_vat_for_all_products':
+
+        if request.method == 'POST':
+            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', is_auth_user), "You don't have permission to this resource")
+            vat_for_all_products = request.form['vat_for_all_products']
+
+            try:
+                vat_for_all_products = int(vat_for_all_products)
+            except:
+                utils.AssertUser(False,"Enter a number !!!")
+
+            cur.execute("UPDATE settings SET value = %s WHERE name = %s", (vat_for_all_products,'VAT'))
+            cur.execute("UPDATE products SET vat = %s", (vat_for_all_products,))
+
+            session['staff_message'] = "You changed the VAT for all products successfully"
+
+            return redirect(f'/staff_portal')
+        else:
+            utils.AssertUser(False, "Invalid method")      
 
     elif request.path == f'/report_sales':
         utils.AssertUser(utils.has_permission(cur, request, 'Report sales', 'read', is_auth_user), "You don't have permission to this resource")
@@ -2727,7 +2793,7 @@ url_to_function_map_back_office = [
     (r'/staff_login', staff_login),
     (r'/staff_portal', staff_portal),
     (r'/logout_staff', logout_staff),
-    (r'/(crud_products_edit_picture|error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users|template_email|update_report_limitation_rows|update_email_templates_table)(?:/[\w\d\-_/]*)?', back_office_manager),
+    (r'/(crud_products_edit_picture|error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users|template_email|update_report_limitation_rows|update_email_templates_table|update_vat_for_all_products)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
 
 def map_function(map_route):

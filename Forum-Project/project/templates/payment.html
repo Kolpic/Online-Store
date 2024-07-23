@@ -26,7 +26,9 @@
                     <th>Product Name</th>
                     <th>Quantity</th>
                     <th class="text-right">Price (Per Item)</th>
-                    <th class="text-right">Total Price</th>
+                    <th class="text-right">VAT</th>
+                    <th class="text-right">Total Price With VAT</th>
+                    <th class="text-right">Total Price Without VAT</th>
                 </tr>
             </thead>
             <tbody>
@@ -35,13 +37,17 @@
                         <td>{{ product[1]}}</td>
                         <td>{{ product[2] }}</td>
                         <td class="text-right">{{ product[3] }} {{ product[4] }}</td>
+                        <td class="text-right">{{ ((product[5]|float / 100) *  (product[3]|float * product[2]))|round(2) }} {{ product[4] }} </td>
+                        <td class="text-right">{{ ((product[3]|float * product[2]) + ((product[5]|float / 100) *  (product[3]|float * product[2])))|round(2) }} {{ product[4] }} </td>
                         <td class="text-right">{{ (product[3] * product[2])}} {{ product[4] }}</td>
                     </tr>
                 {% endfor %}
             </tbody>
             <tr>
-                <td colspan="3" class="text-right"><strong>Total Sum:</strong></td>
+                <td colspan="3" class="text-right"><strong>Total Sum Without VAT:</strong></td>
                 <td class="text-right">{{ total_sum }} {{"лв."}}</td>
+                <td colspan="3" class="text-right"><strong>Total Sum With VAT:</strong></td>
+                <td class="text-right">{{ total_sum_with_vat }} {{"лв."}}</td>
             </tr>
         </table>
         <div>

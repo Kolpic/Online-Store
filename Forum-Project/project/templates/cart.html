@@ -73,7 +73,8 @@
                         <th>Product Name</th>
                         <th>Quantity</th>
                         <th class="text-right">Price (Per Item)</th>
-                        <th class="text-right">Total Price</th>
+                        <th class="text-right">VAT</th>
+                        <th class="text-right">Total Price Without VAT</th>
                         <th>Remove</th>
                     </tr>
                 </thead>
@@ -86,6 +87,7 @@
                             <input type="number" min="1" class="form-control quantity" data-item-id="{{ item[3] }}" data-old-quantity="{{ item[2] }}" value="{{ item[2] }}">
                         </td>
                         <td class="text-right" id="price-per-item-{{ item[3] }}">{{ item[1] }} {{ item[4] }}</td>
+                        <td class="text-right" id="vat-{{ item[3] }}">{{ (item[5]|float / 100) * (item[1]|float * item[2])|round(2) }} {{ item[4] }}</td>
                         <td class="text-right"><span id="total-{{ item[3] }}">{{ (item[1] * item[2]) }}</span> {{ item[4] }}</td>
                         <td>
                             <form action="/remove_from_cart" method="post" style="display:inline;">
@@ -96,8 +98,8 @@
                     </tr>
                     {% endfor %}
                     <tr>
-                        <td colspan="4" class="text-right"><strong>Total Sum:</strong></td>
-                        <td class="text-right" id="total-sum">{{ total_sum }} лв.</td>
+                        <td colspan="4" class="text-right"><strong>Total Sum With VAT:</strong></td>
+                        <td class="text-right" id="total-sum-vat">{{ total_sum_with_vat }} лв.</td>
                         <td></td>
                     </tr>
                 </tbody>
@@ -177,17 +179,30 @@ $(document).ready(function() {
                     console.log('AJAX response:', response);
                     if (response.success) {
                         const pricePerItemText = $(`#price-per-item-${itemId}`).text();
+                        console.log(pricePerItemText + " pricePerItemText")
                         const pricePerItem = parseFloat(pricePerItemText.replace(/[^\d.-]/g, ''));
+                        console.log(pricePerItem + " pricePerItem")
                         const newLineTotal = newQuantity * pricePerItem;
+                        console.log(newLineTotal + " newLineTotal")
                         $(`#total-${itemId}`).text(newLineTotal.toFixed(2));
 
-                        const difference = (newQuantity - oldQuantity) * pricePerItem;
-                        const totalSumText = $('#total-sum').text();
-                        let totalSum = parseFloat(totalSumText.replace(/[^\d.-]/g, ''));
-                        totalSum += difference;
-                        $('#total-sum').text(totalSum.toFixed(2) + ' лв.');
+                        // Calculate new VAT 
+                        const vatRate = parseFloat(response.vat_rate) / 100;
+                        const newVAT = (pricePerItem * newQuantity) * vatRate;
+                        $(`#vat-${itemId}`).text(newVAT.toFixed(2));
+
+                        totalSumWithoutVAT = 0;
+                        $('span[id^="total-"]').each(function() { // selects all <span> elements with id starting with totoal and iterates over each
+                            const itemTotal = parseFloat($(this).text()); // for every element, taks it's text context and parse it to float
+                            totalSumWithoutVAT += itemTotal;
+                        });
+
+
+                        let totalSumVAT = totalSumWithoutVAT + (totalSumWithoutVAT * vatRate)
 
                         $(`.quantity[data-item-id=${itemId}]`).data('old-quantity', newQuantity); // Update the old quantity data attribute.
+                        $('#total-sum-vat').text(totalSumVAT.toFixed(2) + ' лв.');
+
                     } else {
                         alert('Failed to update cart. Please try again! (Quantity can\'t be zero or below)');
                         inputField.val(oldQuantity);
