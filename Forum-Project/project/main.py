@@ -2168,34 +2168,37 @@ def back_office_manager(conn, cur, *params):
         print("Enterd crud_products read successfully", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read', is_auth_user), "You don't have permission to this resource")
 
-        sort_by = request.args.get('sort', 'id')
-        sort_order = request.args.get('order', 'asc')
-        price_min = request.args.get('price_min', None, type=float)
-        price_max = request.args.get('price_max', None, type=float)
+        validated_request_args_fields = utils.check_request_arg_fields(cur=cur, request=request, datetime=datetime)
 
-        valid_sort_columns = {'id', 'name', 'price', 'quantity', 'category'}
-        valid_sort_orders = {'asc', 'desc'}
+        sort_by = validated_request_args_fields['sort_by']
+        sort_order = validated_request_args_fields['sort_order']
+        price_min = validated_request_args_fields['price_min']
+        price_max = validated_request_args_fields['price_max']
 
-        if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
-            sort_by = 'id'
-            sort_order = 'asc'
-        
-        base_query = sql.SQL("SELECT p.id, p.name, p.price, p.quantity, p.category, currencies.symbol FROM products AS p JOIN currencies ON p.currency_id = currencies.id")
-        conditions = []
+        base_query = """
+                        SELECT 
+                            products.id, 
+                            products.name, 
+                            products.price, 
+                            products.quantity, 
+                            products.category, 
+                            currencies.symbol,
+                            settings.value,
+                            products.price + (products.price * (CAST(settings.value AS numeric) / 100)) AS product_vat_price
+                        FROM products 
+                            JOIN currencies ON products.currency_id = currencies.id
+                            JOIN settings   ON products.vat_id      = settings.id
+                        WHERE 1=1
+                    """
         query_params = []
 
-        if price_min is not None and price_max is not None:
-            conditions.append(sql.SQL("price BETWEEN %s AND %s"))
+        if price_min is not '' and price_max is not '':
+            base_query += " AND products.price + (products.price * (CAST(settings.value AS numeric) / 100)) BETWEEN %s AND %s"
             query_params.extend([price_min, price_max])
         
-        if conditions:
-            base_query = base_query + sql.SQL(" WHERE ") + sql.SQL(" AND ").join(conditions)
-        
-        base_query = base_query + sql.SQL(" ORDER BY ") + sql.Identifier(sort_by) + sql.SQL(f" {sort_order}")
-        
-        base_query = base_query + sql.SQL(" LIMIT 100")
+        base_query += f"ORDER BY {sort_by} {sort_order} LIMIT 100"
 
-        cur.execute(base_query.as_string(conn), query_params)
+        cur.execute(base_query, query_params)
         products = cur.fetchall()
 
         return render_template('crud.html', products=products, sort_by=sort_by, sort_order=sort_order, price_min=price_min or '', price_max=price_max or '')
