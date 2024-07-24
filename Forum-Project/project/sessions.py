@@ -22,6 +22,7 @@ def get_current_user(request, cur):
     else:
         return _get_user_by_session(session_id, cur)
 
+#TODO: da vrushtam celiq red ot tablicata vmesto otdelna kolkonka, da go pravq v cqloto prilojenie
 def _get_user_by_session(session_id, cur):
     cur.execute("SELECT id FROM custom_sessions WHERE session_id = %s", (session_id,))
     _id = cur.fetchone()
@@ -43,6 +44,7 @@ def clear_expired_sessions(cur, conn):
     conn.commit()
 
 def update_current_user_session_data(cur, conn, new_data, session_id):
+    #TODO: samo edna sql zaqvka select + update- vuzmojno nai-prosta
     cur.execute("SELECT id FROM custom_sessions WHERE session_id = %s", (session_id, ))
     _id = cur.fetchone()[0]
 
@@ -52,6 +54,7 @@ def update_current_user_session_data(cur, conn, new_data, session_id):
 def get_user_session_id(request):
     return request.cookies.get('session_id')
 
+#TODO: da podavam flag v koi office sme i da propusna proverkata
 def _map_tables(session_data, cur, session_id, expires_at):
 
     flag = False

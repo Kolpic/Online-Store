@@ -439,6 +439,7 @@ def send_verification_email(user_email, verification_code, cur):
             verification_code=verification_code
         )
 
+        #TODO: Mail Server kak raboti
         with app.app_context():
             msg = Message(subject,
                     sender = sender,
@@ -889,8 +890,17 @@ def serve_image(product_id, cur):
     return Response(image_blob, mimetype='jpeg')
 
 def add_to_cart(conn, cur, user_id, product_id, quantity):
-    cur.execute("SELECT vat FROM products WHERE id = %s", (product_id,))
+    # cur.execute("SELECT vat FROM products WHERE id = %s", (product_id,))
+    # vat = cur.fetchone()[0]
+    cur.execute("""
+                SELECT s.value 
+                FROM products      AS p
+                    JOIN settings  AS s ON p.vat_id = s.id
+                WHERE p.id = %s AND s.name = %s  
+        """, (product_id, 'VAT'))
     vat = cur.fetchone()[0]
+    utils.trace("VAT with join")
+    utils.trace(vat)
 
     cur.execute("SELECT cart_id FROM carts WHERE user_id = %s", (user_id,))
     result = cur.fetchone()
@@ -911,21 +921,25 @@ def add_to_cart(conn, cur, user_id, product_id, quantity):
 
     return "You successfully added item."
 
+#TODO: cart_itmes REFACTOR
+#TODO: na vsichki fetchall da ima assertDev za duljina na redove ot bazata | assertPeer na post na cart
 def view_cart(conn, cur, user_id):
     cur.execute("""
-                SELECT p.name, p.price, ci.quantity, p.id, currencies.symbol, ci.vat
+                SELECT p.name, p.price, ci.quantity, p.id, currencies.symbol, s.value
                 FROM     CARTS      AS c 
                     JOIN cart_itmes AS ci ON c.cart_id     = ci.cart_id 
                     JOIN products   AS p  ON ci.product_id = p.id
                     JOIN currencies AS currencies  ON p.currency_id = currencies.id
-                WHERE c.user_id = %s
+                    JOIN settings   AS s  ON p.vat_id      = s.id
+                WHERE c.user_id = %s AND s.name = 'VAT'
                 """, (user_id,))
     items = cur.fetchall()
     return items
 
 def get_cart_items_count(conn, cur, user_id):
     cur.execute("""
-                SELECT p.name, p.price, ci.quantity, p.id FROM CARTS AS c 
+                SELECT p.name, p.price, ci.quantity, p.id 
+                FROM CARTS AS c 
                 JOIN cart_itmes AS ci ON c.cart_id=ci.cart_id 
                 JOIN products AS p ON ci.product_id=p.id 
                 WHERE c.user_id = %s
@@ -961,6 +975,7 @@ def cart(conn, cur):
        return redirect('/login')
     
     if request.method == 'GET':
+        #TODO: na nqkolko reda i imenata - form_data
         form_data = session.get('form_data_stack', []).pop() if 'form_data_stack' in session and len(session['form_data_stack']) > 0 else None
 
         if form_data:
@@ -970,8 +985,8 @@ def cart(conn, cur):
         user_id = cur.fetchone()[0]
         items = view_cart(conn, cur, user_id)
 
-
-        # total_sum = sum(item[1] * item[2] for item in items)
+        #TODO: da ne e tuple
+        total_sum = sum(item[1] * item[2] for item in items)
 
         total_sum_with_vat = 0
 
@@ -987,7 +1002,7 @@ def cart(conn, cur):
         cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (is_auth_user,))
         user_details = cur.fetchone()
 
-        return render_template('cart.html', items=items, total_sum_with_vat=round(total_sum_with_vat, 2), country_codes=country_codes, form_data=form_data, first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
+        return render_template('cart.html', items=items, total_sum_with_vat=round(total_sum_with_vat, 2), total_sum=total_sum,country_codes=country_codes, form_data=form_data, first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
    
     elif request.method == 'POST':
 
@@ -1101,6 +1116,7 @@ def cart(conn, cur):
                     """, (order_id,))
         shipping_details = cur.fetchall()
 
+        #TODO: send_purchase_email(cart_items=cart_items, shipping_details=shipping_details, is_auth_user, cur, total_sum_with_vat)
         send_purchase_email(cart_items, shipping_details, is_auth_user, cur, total_sum_with_vat)
 
         session['payment_message'] = "You successful made an order with id = " + str(order_id)
@@ -1126,6 +1142,7 @@ def send_purchase_email(cart_items, shipping_details, user_email, cur, total_sum
     border = values[2][0]
     border_collapse = [3][0]
 
+    #TODO: da procheta i da se zamislq XSS
     cart_html = f"""
     <table border="{border}" cellpadding="5" cellspacing="0" style="border-collapse: {border_collapse};">
         <tr>
@@ -1150,7 +1167,7 @@ def send_purchase_email(cart_items, shipping_details, user_email, cur, total_sum
             <td style="text-align: {text_align};">{price_total} {currency}</td>
         </tr>
         """
-
+    #   TODO: total_price_rounded
     _total_price = round(total_price, 2)
     cart_html += f"""
 
@@ -1501,7 +1518,7 @@ def update_cart_quantity(conn, cur):
     quantity_ = int(quantity)
     utils.AssertUser(quantity_ > 0, "You can't enter quantity zero or below")
 
-    cur.execute("SELECT price, vat FROM products WHERE id = %s", (item_id,))
+    cur.execute("SELECT price, settings.value FROM products JOIN settings ON products.vat_id=settings.id WHERE products.id = %s AND settings.name=%s", (item_id,'VAT'))
     price, vat_rate = cur.fetchone()
     new_total = price * quantity_
 
@@ -1956,7 +1973,10 @@ def back_office_manager(conn, cur, *params):
 
             report_json = utils.serialize_report(report)
 
-            return render_template('report.html', limitation_rows=limitation_rows, filter_by_status=filter_by_status,report=report, total_records=total_records, total_price=total_price, report_json=report_json, default_to_date=date_to, default_from_date=date_from)
+            utils.trace(type(total_records))
+            utils.trace(type(limitation_rows))
+
+            return render_template('report.html', limitation_rows=int(limitation_rows), filter_by_status=filter_by_status,report=report, total_records=total_records, total_price=total_price, report_json=report_json, default_to_date=date_to, default_from_date=date_from)
         else:
             utils.AssertUser(False, "Invalid url")
 
@@ -2825,36 +2845,30 @@ def handle_request(username=None, path=''):
         # True for front office, false for back office
         flag_office = None
 
+        #TODO: Chanege "is_auth_user" -> "authenticated_user" 
         if is_auth_user is not None:
-
             flag_office = sessions.get_session_cookie_type(request, cur)
-
         else:
-
             flag_office = True
 
         if not flag_office or request.path == '/staff_login':
-
             utils.trace("Entered back office loop")
             funtion_to_call = map_function(url_to_function_map_back_office)
-
         else:
-
             utils.trace("Entered front office loop")
             funtion_to_call = map_function(url_to_function_map_front_office)
 
      
         if flag_office and is_auth_user is not None:
-
             cur.execute("SELECT last_active FROM users WHERE email = %s", (is_auth_user,))
             current_user_last_active = cur.fetchone()[0]
             cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (is_auth_user,))
 
         else:
-
             pass
 
         # TODO: for next code rev
+        # TODO: asserPeer 
         utils.AssertUser(funtion_to_call is not None, "Invalid URL")
         utils.AssertDev(callable(funtion_to_call), "You are trying to invoke something that is not a function")
 
@@ -2877,7 +2891,7 @@ def handle_request(username=None, path=''):
             message = 'Internal error'
             print(f"User message: {message}", flush=True)
 
-        # TODO: Change url for QA
+        # TODO: Change url for QA + remove
         if request.url == 'http://127.0.0.1:5000/staff_login':
             session['staff_login'] = "Yes"
 

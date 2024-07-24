@@ -72,9 +72,8 @@
                         <th>Product Id</th>
                         <th>Product Name</th>
                         <th>Quantity</th>
-                        <th class="text-right">Price (Per Item)</th>
-                        <th class="text-right">VAT</th>
-                        <th class="text-right">Total Price Without VAT</th>
+                        <th class="text-right">Price (Per Item with VAT)</th>
+                        <th class="text-right">Total Price With VAT</th>
                         <th>Remove</th>
                     </tr>
                 </thead>
@@ -86,19 +85,29 @@
                         <td>
                             <input type="number" min="1" class="form-control quantity" data-item-id="{{ item[3] }}" data-old-quantity="{{ item[2] }}" value="{{ item[2] }}">
                         </td>
-                        <td class="text-right" id="price-per-item-{{ item[3] }}">{{ item[1] }} {{ item[4] }}</td>
-                        <td class="text-right" id="vat-{{ item[3] }}">{{ (item[5]|float / 100) * (item[1]|float * item[2])|round(2) }} {{ item[4] }}</td>
-                        <td class="text-right"><span id="total-{{ item[3] }}">{{ (item[1] * item[2]) }}</span> {{ item[4] }}</td>
+                        <td class="text-right" id="price-per-item-{{ item[3] }}">{{ (item[1]|float + (item[1]|float * (item[5]|float / 100)))|round(2) }} {{ item[4] }}</td>
+                        <td class="text-right"><span id="total-{{ item[3] }}">{{ ((item[1]|float * item[2]) + ((item[1]|float * item[2]) * (item[5]|float / 100)))|round(2) }}</span> {{ item[4] }}</td>
                         <td>
                             <form action="/remove_from_cart" method="post" style="display:inline;">
                                 <input type="hidden" name="item_id" value="{{ item[3] }}">
                                 <button type="submit" class="btn btn-danger btn-sm">Remove</button>
                             </form>
                         </td>
+                        <td id="price-without-vat-{{ item[3] }}" style="display:;">{{ item[1] * item[2]}}</td>
                     </tr>
                     {% endfor %}
                     <tr>
-                        <td colspan="4" class="text-right"><strong>Total Sum With VAT:</strong></td>
+                        <td colspan="4" class="text-right"><strong>VAT:</strong></td>
+                        <td class="text-right" id="vat">{{ total_sum_with_vat - total_sum}} лв.</td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td colspan="4" class="text-right"><strong>Total Sum Without VAT:</strong></td>
+                        <td class="text-right" id="total-sum">{{ total_sum }} лв.</td>
+                        <td></td>
+                    </tr>
+                    <tr>
+                        <td colspan="4" class="text-right"><strong>Total :</strong></td>
                         <td class="text-right" id="total-sum-vat">{{ total_sum_with_vat }} лв.</td>
                         <td></td>
                     </tr>
@@ -177,31 +186,43 @@ $(document).ready(function() {
                 },
                 success: function(response) {
                     console.log('AJAX response:', response);
+                    let new_total_sum_without_vat = 0;
                     if (response.success) {
+                        new_total_sum_without_vat = response['new_total']
+                        console.log(response['new_total']);
+
                         const pricePerItemText = $(`#price-per-item-${itemId}`).text();
-                        console.log(pricePerItemText + " pricePerItemText")
+                        // console.log(pricePerItemText + " pricePerItemText")
                         const pricePerItem = parseFloat(pricePerItemText.replace(/[^\d.-]/g, ''));
-                        console.log(pricePerItem + " pricePerItem")
+                        // console.log(pricePerItem + " pricePerItem")
                         const newLineTotal = newQuantity * pricePerItem;
-                        console.log(newLineTotal + " newLineTotal")
+                        // console.log(newLineTotal + " newLineTotal")
                         $(`#total-${itemId}`).text(newLineTotal.toFixed(2));
+                        $(`#price-without-vat-${itemId}`).text(parseFloat(new_total_sum_without_vat).toFixed(2));
 
                         // Calculate new VAT 
-                        const vatRate = parseFloat(response.vat_rate) / 100;
-                        const newVAT = (pricePerItem * newQuantity) * vatRate;
-                        $(`#vat-${itemId}`).text(newVAT.toFixed(2));
+                        // const vatRate = parseFloat(response.vat_rate) / 100;
+                        // const newVAT = (pricePerItem * newQuantity) * vatRate;
+                        // $(`#vat-${itemId}`).text(newVAT.toFixed(2));
 
-                        totalSumWithoutVAT = 0;
+                        totalSumWithVAT = 0;
                         $('span[id^="total-"]').each(function() { // selects all <span> elements with id starting with totoal and iterates over each
                             const itemTotal = parseFloat($(this).text()); // for every element, taks it's text context and parse it to float
-                            totalSumWithoutVAT += itemTotal;
+                            totalSumWithVAT += itemTotal;
                         });
 
+                        totalSumWithoutVAT = 0;
+                        $('[id^="price-without-vat"]').each(function() { 
+                            const itemTotal = parseFloat($(this).text()); 
+                            totalSumWithoutVAT += itemTotal;
+                        });
+                        console.log(totalSumWithoutVAT + "  totalSumWithoutVAT")
 
-                        let totalSumVAT = totalSumWithoutVAT + (totalSumWithoutVAT * vatRate)
 
                         $(`.quantity[data-item-id=${itemId}]`).data('old-quantity', newQuantity); // Update the old quantity data attribute.
-                        $('#total-sum-vat').text(totalSumVAT.toFixed(2) + ' лв.');
+                        $('#vat').text((totalSumWithVAT.toFixed(2) - totalSumWithoutVAT.toFixed(2)) + ' лв.')
+                        $('#total-sum').text(totalSumWithoutVAT.toFixed(2) + ' лв.')
+                        $('#total-sum-vat').text(totalSumWithVAT.toFixed(2) + ' лв.');
 
                     } else {
                         alert('Failed to update cart. Please try again! (Quantity can\'t be zero or below)');
