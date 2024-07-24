@@ -1126,7 +1126,7 @@ def cart(conn, cur):
 
         utils.trace(round(total_sum_with_vat, 2))
 
-        return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum_with_vat=round(total_sum_with_vat, 2), total_sum=round(total_sum, 2), first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
+        return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum_with_vat=round(total_sum_with_vat, 2 ),total_sum=round(total_sum, 2), first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
 
     else:
         utils.AssertUser(False, "Invalid method")

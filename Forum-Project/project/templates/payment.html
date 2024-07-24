@@ -25,10 +25,8 @@
                 <tr>
                     <th>Product Name</th>
                     <th>Quantity</th>
-                    <th class="text-right">Price (Per Item)</th>
-                    <th class="text-right">VAT</th>
+                    <th class="text-right">Price (Per Item with VAT)</th>
                     <th class="text-right">Total Price With VAT</th>
-                    <th class="text-right">Total Price Without VAT</th>
                 </tr>
             </thead>
             <tbody>
@@ -36,18 +34,25 @@
                     <tr>
                         <td>{{ product[1]}}</td>
                         <td>{{ product[2] }}</td>
-                        <td class="text-right">{{ product[3] }} {{ product[4] }}</td>
-                        <td class="text-right">{{ ((product[5]|float / 100) *  (product[3]|float * product[2]))|round(2) }} {{ product[4] }} </td>
-                        <td class="text-right">{{ ((product[3]|float * product[2]) + ((product[5]|float / 100) *  (product[3]|float * product[2])))|round(2) }} {{ product[4] }} </td>
-                        <td class="text-right">{{ (product[3] * product[2])}} {{ product[4] }}</td>
+                        <td class="text-right">{{ (product[3]|float + (product[3]|float * (product[5]|float / 100)))|round(2) }} {{ product[4] }}</td>
+                        <td class="text-right">{{ ((product[3]|float * product[2]) + ((product[3]|float * product[2]) * (product[5]|float / 100)))|round(2) }}</td>
                     </tr>
                 {% endfor %}
             </tbody>
             <tr>
+                <td colspan="3" class="text-right"><strong>VAT:</strong></td>
+                <td class="text-right" id="vat">{{ (total_sum_with_vat|float - total_sum|float)|round(2) }} лв.</td>
+                <td></td>
+            </tr>
+            <tr>
                 <td colspan="3" class="text-right"><strong>Total Sum Without VAT:</strong></td>
-                <td class="text-right">{{ total_sum }} {{"лв."}}</td>
-                <td colspan="3" class="text-right"><strong>Total Sum With VAT:</strong></td>
-                <td class="text-right">{{ total_sum_with_vat }} {{"лв."}}</td>
+                <td class="text-right" id="total-sum">{{ total_sum }} лв.</td>
+                <td></td>
+            </tr>
+            <tr>
+                <td colspan="3" class="text-right"><strong>Total :</strong></td>
+                <td class="text-right" id="total-sum-vat">{{ total_sum_with_vat }} лв.</td>
+                <td></td>
             </tr>
         </table>
         <div>
