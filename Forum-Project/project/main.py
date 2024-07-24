@@ -1930,7 +1930,9 @@ def back_office_manager(conn, cur, *params):
             elif status != '' and group_by != '':
                 query += "orders.status, "
 
-            query += "sum(order_items.price * order_items.quantity) As total "
+            query += "sum(order_items.price * order_items.quantity) As total, "
+            query += "round(sum(order_items.price * order_items.quantity * (CAST(order_items.vat as numeric) / 100)),2) as vat, "
+            query += "round(sum(order_items.price * order_items.quantity) + sum(order_items.price * order_items.quantity * (cast(order_items.vat as numeric) / 100)),2) as total_with_vat "
 
             query += """
                     FROM orders 
