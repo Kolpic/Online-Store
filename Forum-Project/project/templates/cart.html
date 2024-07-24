@@ -93,7 +93,7 @@
                                 <button type="submit" class="btn btn-danger btn-sm">Remove</button>
                             </form>
                         </td>
-                        <td id="price-without-vat-{{ item[3] }}" style="display:;">{{ item[1] * item[2]}}</td>
+                        <td id="price-without-vat-{{ item[3] }}" style="display:none;">{{ item[1] * item[2]}}</td>
                     </tr>
                     {% endfor %}
                     <tr>
@@ -185,25 +185,15 @@ $(document).ready(function() {
                     quantity: newQuantity
                 },
                 success: function(response) {
-                    console.log('AJAX response:', response);
                     let new_total_sum_without_vat = 0;
                     if (response.success) {
                         new_total_sum_without_vat = response['new_total']
-                        console.log(response['new_total']);
 
                         const pricePerItemText = $(`#price-per-item-${itemId}`).text();
-                        // console.log(pricePerItemText + " pricePerItemText")
                         const pricePerItem = parseFloat(pricePerItemText.replace(/[^\d.-]/g, ''));
-                        // console.log(pricePerItem + " pricePerItem")
                         const newLineTotal = newQuantity * pricePerItem;
-                        // console.log(newLineTotal + " newLineTotal")
                         $(`#total-${itemId}`).text(newLineTotal.toFixed(2));
                         $(`#price-without-vat-${itemId}`).text(parseFloat(new_total_sum_without_vat).toFixed(2));
-
-                        // Calculate new VAT 
-                        // const vatRate = parseFloat(response.vat_rate) / 100;
-                        // const newVAT = (pricePerItem * newQuantity) * vatRate;
-                        // $(`#vat-${itemId}`).text(newVAT.toFixed(2));
 
                         totalSumWithVAT = 0;
                         $('span[id^="total-"]').each(function() { // selects all <span> elements with id starting with totoal and iterates over each
@@ -216,11 +206,9 @@ $(document).ready(function() {
                             const itemTotal = parseFloat($(this).text()); 
                             totalSumWithoutVAT += itemTotal;
                         });
-                        console.log(totalSumWithoutVAT + "  totalSumWithoutVAT")
-
 
                         $(`.quantity[data-item-id=${itemId}]`).data('old-quantity', newQuantity); // Update the old quantity data attribute.
-                        $('#vat').text((totalSumWithVAT.toFixed(2) - totalSumWithoutVAT.toFixed(2)) + ' лв.')
+                        $('#vat').text((totalSumWithVAT.toFixed(2) - totalSumWithoutVAT.toFixed(2)).toFixed(2) + ' лв.')
                         $('#total-sum').text(totalSumWithoutVAT.toFixed(2) + ' лв.')
                         $('#total-sum-vat').text(totalSumWithVAT.toFixed(2) + ' лв.');
 
