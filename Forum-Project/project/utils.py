@@ -49,6 +49,9 @@ def AssertDev(boolean, str):
 def AssertUser(boolean, str):
     if not boolean: raise exception.WrongUserInputException(str)
 
+def AssertPeer(boolean, str):
+    if not boolean: raise exception.PeerException(str)
+
 def trace(str):
     print(str, flush=True)
 

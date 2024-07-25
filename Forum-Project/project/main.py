@@ -523,9 +523,9 @@ def login(conn, cur):
     return response
 
 def home(conn, cur, page = 1):
-    is_auth_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request, cur)
 
-    if is_auth_user == None:
+    if authenticated_user == None:
        return redirect('/login') 
 
     page = request.args.get('page', 1, type=int)
@@ -533,7 +533,7 @@ def home(conn, cur, page = 1):
     cur.execute("SELECT DISTINCT(category) FROM products")
     categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
 
-    first_name, last_name, email__ = utils.getUserNamesAndEmail(conn, cur, is_auth_user)
+    first_name, last_name, email__ = utils.getUserNamesAndEmail(conn, cur, authenticated_user)
 
     prodcuts_user_wants = request.args.get('products_per_page', 10)
     if prodcuts_user_wants == '':
@@ -586,7 +586,7 @@ def home(conn, cur, page = 1):
     # total_pages = int(total_products / products_per_page) + 1
     total_pages = (total_products // products_per_page) + (1 if total_products % products_per_page > 0 else 0)
 
-    cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,))
+    cur.execute("SELECT id FROM users WHERE email = %s", (authenticated_user,))
     user_id = cur.fetchone()[0]
 
     cart_count = get_cart_items_count(conn, cur, user_id)
@@ -602,12 +602,12 @@ def logout(conn, cur):
     return response
 
 def profile(conn, cur):
-    is_auth_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request, cur)
 
-    if is_auth_user == None:
+    if authenticated_user == None:
        return redirect('/login') 
     
-    cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (is_auth_user,))
+    cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (authenticated_user,))
     user_details = cur.fetchone()
 
     if user_details:
@@ -616,9 +616,9 @@ def profile(conn, cur):
     return render_template('profile.html')
 
 def update_profile(conn, cur):
-    is_auth_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request, cur)
 
-    if is_auth_user == None:
+    if authenticated_user == None:
        return redirect('/login')
 
     first_name = request.form['first-name']
@@ -684,12 +684,12 @@ def update_profile(conn, cur):
     return redirect('/home')
 
 def delete_account(conn, cur):
-    is_auth_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request, cur)
 
-    if is_auth_user == None:
+    if authenticated_user == None:
        return redirect('/login')
 
-    cur.execute("DELETE FROM users WHERE email = %s", (is_auth_user,))
+    cur.execute("DELETE FROM users WHERE email = %s", (authenticated_user,))
 
     cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (session_id,))
     response = make_response(redirect('/login'))
@@ -841,9 +841,9 @@ def log_exception(exception_type, message ,email = None):
     cur_new.close()
 
 def add_product(conn, cur):
-    is_auth_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request, cur)
 
-    if is_auth_user == None:
+    if authenticated_user == None:
        return redirect('/login')
 
     if request.method == 'GET':
@@ -952,12 +952,12 @@ def remove_from_cart(conn, cur, item_id):
     return "You successfully deleted item."
 
 def add_to_cart_meth(conn, cur):
-    is_auth_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request, cur)
 
-    if is_auth_user == None:
+    if authenticated_user == None:
        return redirect('/login')
 
-    cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,))
+    cur.execute("SELECT id FROM users WHERE email = %s", (authenticated_user,))
     user_id = cur.fetchone()[0]
 
     product_id = request.form['product_id']
@@ -969,9 +969,9 @@ def add_to_cart_meth(conn, cur):
     return jsonify({'message':response, 'newCartCount': newCartCount})
 
 def cart(conn, cur):
-    is_auth_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request, cur)
 
-    if is_auth_user == None:
+    if authenticated_user == None:
        return redirect('/login')
     
     if request.method == 'GET':
@@ -981,7 +981,7 @@ def cart(conn, cur):
         if form_data:
             session.modified = True
 
-        cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,))
+        cur.execute("SELECT id FROM users WHERE email = %s", (authenticated_user,))
         user_id = cur.fetchone()[0]
         items = view_cart(conn, cur, user_id)
 
@@ -999,10 +999,10 @@ def cart(conn, cur):
         cur.execute("SELECT * FROM country_codes")
         country_codes = cur.fetchall()
 
-        cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (is_auth_user,))
+        cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (authenticated_user,))
         user_details = cur.fetchone()
 
-        return render_template('cart.html', items=items, total_sum_with_vat=round(total_sum_with_vat, 2), total_sum=total_sum,country_codes=country_codes, form_data=form_data, first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
+        return render_template('cart.html', items=items, total_sum_with_vat=round(total_sum_with_vat, 2), total_sum=total_sum,country_codes=country_codes, form_data=form_data, first_name=user_details[0], last_name=user_details[1], email=authenticated_user)
    
     elif request.method == 'POST':
 
@@ -1016,7 +1016,7 @@ def cart(conn, cur):
         country_code = request.form['country_code']
         phone = request.form['phone'].strip()
 
-        cur.execute("SELECT id FROM users WHERE email = %s", (is_auth_user,))
+        cur.execute("SELECT id FROM users WHERE email = %s", (authenticated_user,))
         user_id = cur.fetchone()[0]
         regexx = r'^\d{7,15}$'
 
@@ -1116,17 +1116,17 @@ def cart(conn, cur):
                     """, (order_id,))
         shipping_details = cur.fetchall()
 
-        #TODO: send_purchase_email(cart_items=cart_items, shipping_details=shipping_details, is_auth_user, cur, total_sum_with_vat)
-        send_purchase_email(cart_items, shipping_details, is_auth_user, cur, total_sum_with_vat)
+        #TODO: send_purchase_email(cart_items=cart_items, shipping_details=shipping_details, authenticated_user, cur, total_sum_with_vat)
+        send_purchase_email(cart_items, shipping_details, authenticated_user, cur, total_sum_with_vat)
 
         session['payment_message'] = "You successful made an order with id = " + str(order_id)
 
-        cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (is_auth_user,))
+        cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (authenticated_user,))
         user_details = cur.fetchone()
 
         utils.trace(round(total_sum_with_vat, 2))
 
-        return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum_with_vat=round(total_sum_with_vat, 2 ),total_sum=round(total_sum, 2), first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
+        return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum_with_vat=round(total_sum_with_vat, 2 ),total_sum=round(total_sum, 2), first_name=user_details[0], last_name=user_details[1], email=authenticated_user)
 
     else:
         utils.AssertUser(False, "Invalid method")
@@ -1230,9 +1230,9 @@ def send_purchase_email(cart_items, shipping_details, user_email, cur, total_sum
         utils.AssertDev(False, "No information in the database")
 
 def remove_from_cart_meth(conn, cur):
-    is_auth_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request, cur)
 
-    if is_auth_user == None:
+    if authenticated_user == None:
        return redirect('/login')
 
     item_id = request.form['item_id']
@@ -1241,9 +1241,9 @@ def remove_from_cart_meth(conn, cur):
     return redirect('/cart')
 
 def finish_payment(conn, cur):
-    is_auth_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request, cur)
 
-    if is_auth_user == None:
+    if authenticated_user == None:
        return redirect('/login')
     
     if request.method == 'GET':
@@ -1328,7 +1328,7 @@ def finish_payment(conn, cur):
             """, (order_id,))
         products_from_order = cur.fetchall()
 
-        send_compleated_payment_email(products_from_order, shipping_details, total, total_with_vat,payment_amount, is_auth_user, cur)
+        send_compleated_payment_email(products_from_order, shipping_details, total, total_with_vat,payment_amount, authenticated_user, cur)
 
         session['home_message'] = "You paid the order successful"
 
@@ -1461,9 +1461,9 @@ def staff_login(conn, cur):
         utils.AssertUser(False, "Invalid method")
 
 def staff_portal(conn, cur):
-    is_auth_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request, cur)
 
-    if is_auth_user == None:
+    if authenticated_user == None:
        return redirect('/staff_login')
 
     if 'visited' not in session:
@@ -1540,9 +1540,9 @@ def update_cart_quantity(conn, cur):
 #         return "No image found"
 
 def user_orders(conn, cur):
-    is_auth_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request, cur)
 
-    if is_auth_user == None:
+    if authenticated_user == None:
        return redirect('/login')
 
     if request.method == 'GET':
@@ -1581,7 +1581,7 @@ def user_orders(conn, cur):
             WHERE u.email = %s 
             """
 
-        params.append(is_auth_user)
+        params.append(authenticated_user)
 
         if order_by_id:
             query += " AND o.order_id = %s"
@@ -1629,10 +1629,10 @@ def user_orders(conn, cur):
 
         orders = list(orders_generator)
 
-        cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (is_auth_user,))
+        cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (authenticated_user,))
         user_details = cur.fetchone()
 
-        return render_template('user_orders.html', orders = orders, statuses = statuses, price_min=price_min, price_max=price_max, date_from=date_from, date_to=date_to, order_by_id=order_by_id, first_name=user_details[0], last_name=user_details[1], email=is_auth_user)
+        return render_template('user_orders.html', orders = orders, statuses = statuses, price_min=price_min, price_max=price_max, date_from=date_from, date_to=date_to, order_by_id=order_by_id, first_name=user_details[0], last_name=user_details[1], email=authenticated_user)
     else:
         utils.AssertUser(False, "Invalid method")
 
@@ -1664,12 +1664,12 @@ def get_active_users(sort_by='id', sort_order='desc', name=None, email=None, use
     return active_users
 
 def back_office_manager(conn, cur, *params):
-    is_auth_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request, cur)
 
-    if is_auth_user == None:
+    if authenticated_user == None:
        return redirect('/staff_login')
 
-    # username = is_auth_user
+    # username = authenticated_user
     # username_from_url = request.path.split('/')[1]
     # back_office = request.path.split('/')[2]
 
@@ -1747,7 +1747,7 @@ def back_office_manager(conn, cur, *params):
         return redirect(f'/crud_products')
 
     elif request.path == f'/error_logs':     
-        utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read', authenticated_user), "You don't have permission to this resource")
 
         sort_by = request.args.get('sort','time')
         sort_order = request.args.get('order','asc')
@@ -1771,7 +1771,7 @@ def back_office_manager(conn, cur, *params):
     
     elif request.path == f'/update_captcha_settings':
 
-        utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'read', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'read', authenticated_user), "You don't have permission to this resource")
 
         if request.method == 'GET':
 
@@ -1793,7 +1793,7 @@ def back_office_manager(conn, cur, *params):
 
             return render_template('captcha_settings.html', vat=vat,limitation_rows=limitation_rows, border_collapse=border_collapse,border=border,text_align=text_align,background_color=background_color,**current_settings)
 
-        utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
 
         new_max_attempts = request.form['max_captcha_attempts']
         new_timeout_minutes = request.form['captcha_timeout_minutes']
@@ -1818,7 +1818,7 @@ def back_office_manager(conn, cur, *params):
     elif request.path == f'/update_report_limitation_rows':
 
         if request.method == 'POST':
-            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', is_auth_user), "You don't have permission to this resource")
+            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
 
             limitation_rows = int(request.form['report_limitation_rows'])
 
@@ -1836,7 +1836,7 @@ def back_office_manager(conn, cur, *params):
     elif request.path == f'/update_email_templates_table':
 
         if request.method == 'POST':
-            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', is_auth_user), "You don't have permission to this resource")
+            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
 
             background_color = request.form['background_color']
             text_align = request.form['text_align']
@@ -1867,7 +1867,7 @@ def back_office_manager(conn, cur, *params):
     elif request.path == f'/update_vat_for_all_products':
 
         if request.method == 'POST':
-            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', is_auth_user), "You don't have permission to this resource")
+            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
             vat_for_all_products = request.form['vat_for_all_products']
 
             try:
@@ -1885,7 +1885,7 @@ def back_office_manager(conn, cur, *params):
             utils.AssertUser(False, "Invalid method")      
 
     elif request.path == f'/report_sales':
-        utils.AssertUser(utils.has_permission(cur, request, 'Report sales', 'read', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Report sales', 'read', authenticated_user), "You don't have permission to this resource")
 
         default_to_date = datetime.now()
         dafault_from_date = default_to_date - timedelta(days=90)
@@ -2115,7 +2115,7 @@ def back_office_manager(conn, cur, *params):
             utils.AssertDev(False, "Invalid download format")
 
     elif request.path == f'/role_permissions':
-        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read', authenticated_user), "You don't have permission to this resource")
 
         # interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles', 'CRUD Orders', 'CRUD Users']
 
@@ -2146,7 +2146,7 @@ def back_office_manager(conn, cur, *params):
 
             return render_template('role_permissions.html', roles=roles,interfaces=interfaces, role_permissions=role_permissions, selected_role=selected_role, role_to_display=role)
     
-        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'update', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'update', authenticated_user), "You don't have permission to this resource")
 
         role_id = request.form['role']
         cur.execute('DELETE FROM role_permissions WHERE role_id = %s', (role_id,))
@@ -2168,7 +2168,7 @@ def back_office_manager(conn, cur, *params):
     elif request.path == f'/crud_products' and len(request.path.split('/')) == 2:
 
         print("Enterd crud_products read successfully", flush=True)
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read', authenticated_user), "You don't have permission to this resource")
 
         validated_request_args_fields = utils.check_request_arg_fields(cur=cur, request=request, datetime=datetime)
 
@@ -2208,7 +2208,7 @@ def back_office_manager(conn, cur, *params):
     elif request.path == f'/crud_products/add_product' and len(request.path.split('/')) == 3:
 
         print("Enterd crud_products add successfully", flush=True)
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'create', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'create', authenticated_user), "You don't have permission to this resource")
 
         if request.method == 'GET':
 
@@ -2235,7 +2235,7 @@ def back_office_manager(conn, cur, *params):
     elif re.match(r'^/crud_products/edit_product/\d+$', request.path) and len(request.path.split('/')) == 4:
 
         print("Enterd crud_products edit successfully", flush=True)
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'update', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'update', authenticated_user), "You don't have permission to this resource")
 
         product_id = request.path.split('/')[3]
 
@@ -2269,7 +2269,7 @@ def back_office_manager(conn, cur, *params):
 
         print("Enterd crud_products delete successfully", flush=True)
         
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'delete', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'delete', authenticated_user), "You don't have permission to this resource")
 
         product_id = request.path.split('/')[3]
         cur.execute("UPDATE products SET quantity = 0 WHERE id = %s", (product_id,))
@@ -2281,7 +2281,7 @@ def back_office_manager(conn, cur, *params):
     elif request.path == f'/crud_staff' and len(request.path.split('/')) == 2:
 
         print("Enterd crud_staff read successfully", flush=True)
-        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read', authenticated_user), "You don't have permission to this resource")
 
         cur.execute("SELECT s.username, r.role_name, sr.staff_id, sr.role_id FROM staff_roles sr JOIN staff s ON s.id = sr.staff_id JOIN roles r ON r.role_id = sr.role_id")
         relations = cur.fetchall()
@@ -2291,7 +2291,7 @@ def back_office_manager(conn, cur, *params):
     elif request.path == f'/crud_staff/add_role_staff' and len(request.path.split('/')) == 3:
 
         print("Enterd crud_staff add successfully", flush=True)
-        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create', authenticated_user), "You don't have permission to this resource")
 
         if request.method == 'GET':
             cur.execute("SELECT id, username FROM staff")
@@ -2321,7 +2321,7 @@ def back_office_manager(conn, cur, *params):
     elif request.path == f'/crud_staff/add_staff' and len(request.path.split('/')) == 3:
 
         print("Enterd crud_staff add staff successfully", flush=True)
-        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create', authenticated_user), "You don't have permission to this resource")
 
         if request.method == 'GET':
 
@@ -2342,7 +2342,7 @@ def back_office_manager(conn, cur, *params):
     elif re.match(r'/crud_staff/delete_role/\d+/\d+$', request.path) and len(request.path.split('/')) == 5:
 
         print("Enterd crud_staff delete successfully", flush=True)
-        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'delete', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'delete', authenticated_user), "You don't have permission to this resource")
 
         staff_id = request.path.split('/')[3]
         role_id = request.path.split('/')[4]
@@ -2355,7 +2355,7 @@ def back_office_manager(conn, cur, *params):
 
         print("Enterd crud_orders read successful", flush=True)
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read', is_auth_user), "You don't have permission for this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read', authenticated_user), "You don't have permission for this resource")
 
         validated_fields = utils.check_request_arg_fields(cur, request, datetime)
 
@@ -2436,7 +2436,7 @@ def back_office_manager(conn, cur, *params):
     elif request.path == f'/crud_orders/add_order' and len(request.path.split('/')) == 3:
 
         print("Enterd crud_orders add successful", flush=True)
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'create', is_auth_user), "You don't have permission for this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'create', authenticated_user), "You don't have permission for this resource")
 
         if request.method == 'GET':
             cur.execute("SELECT DISTINCT status FROM orders")
@@ -2477,7 +2477,7 @@ def back_office_manager(conn, cur, *params):
     elif re.match(r'/crud_orders/edit_order/\d+$', request.path) and len(request.path.split('/')) == 4:
 
         print("Enterd crud_orders edit successful", flush=True)
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'update', is_auth_user), "You don't have permission for this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'update', authenticated_user), "You don't have permission for this resource")
 
         order_id = request.path.split('/')[3]
 
@@ -2533,7 +2533,7 @@ def back_office_manager(conn, cur, *params):
 
         print("Enterd crud_orders delete successful", flush=True)
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'delete', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'delete', authenticated_user), "You don't have permission to this resource")
 
         order_id = request.path.split('/')[3]
 
@@ -2547,7 +2547,7 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/crud_users' and len(request.path.split('/')) == 2:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'read', is_auth_user), "You don't have permission for this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'read', authenticated_user), "You don't have permission for this resource")
 
         if request.method == 'GET':
 
@@ -2598,7 +2598,7 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/crud_users/add_user' and len(request.path.split('/')) == 3:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'create', is_auth_user), "You don't have permission for this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'create', authenticated_user), "You don't have permission for this resource")
 
         if request.method == 'GET':
 
@@ -2627,7 +2627,7 @@ def back_office_manager(conn, cur, *params):
 
     elif re.match(r'/crud_users/edit_user/\d+$', request.path) and len(request.path.split('/')) == 4:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'update', is_auth_user), "You don't have permission for this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'update', authenticated_user), "You don't have permission for this resource")
 
         if request.method == 'GET':
 
@@ -2661,7 +2661,7 @@ def back_office_manager(conn, cur, *params):
 
     elif re.match(r'/crud_users/delete_user/\d+$', request.path) and len(request.path.split('/')) == 4:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'delete', is_auth_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'delete', authenticated_user), "You don't have permission to this resource")
 
         user_id = request.path.split('/')[3]
 
@@ -2753,7 +2753,7 @@ def back_office_manager(conn, cur, *params):
            utils.AssertUser(False, "Invalid method")  
 
     else:
-        utils.AssertUser(False, "Invalid url")
+        utils.AssertPeer(False, "Invalid url")
 
 @app.route('/favicon.ico')
 def favicon():
@@ -2839,10 +2839,10 @@ def handle_request(username=None, path=''):
         utils.trace(request.path)
 
         #TODO Validaciq na cookie prez bazata + req.args
-        is_auth_user = sessions.get_current_user(request, cur)
+        authenticated_user = sessions.get_current_user(request, cur)
 
-        utils.trace("is_auth_user")
-        utils.trace(is_auth_user)
+        utils.trace("authenticated_user")
+        utils.trace(authenticated_user)
 
         funtion_to_call = None
         match = None
@@ -2850,8 +2850,7 @@ def handle_request(username=None, path=''):
         # True for front office, false for back office
         flag_office = None
 
-        #TODO: Chanege "is_auth_user" -> "authenticated_user" 
-        if is_auth_user is not None:
+        if authenticated_user is not None:
             flag_office = sessions.get_session_cookie_type(request, cur)
         else:
             flag_office = True
@@ -2864,17 +2863,14 @@ def handle_request(username=None, path=''):
             funtion_to_call = map_function(url_to_function_map_front_office)
 
      
-        if flag_office and is_auth_user is not None:
-            cur.execute("SELECT last_active FROM users WHERE email = %s", (is_auth_user,))
+        if flag_office and authenticated_user is not None:
+            cur.execute("SELECT last_active FROM users WHERE email = %s", (authenticated_user,))
             current_user_last_active = cur.fetchone()[0]
-            cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (is_auth_user,))
+            cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (authenticated_user,))
 
         else:
             pass
 
-        # TODO: for next code rev
-        # TODO: asserPeer 
-        utils.AssertUser(funtion_to_call is not None, "Invalid URL")
         utils.AssertDev(callable(funtion_to_call), "You are trying to invoke something that is not a function")
 
         if match:
