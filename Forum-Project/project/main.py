@@ -2400,6 +2400,12 @@ def back_office_manager(conn, cur, *params):
         if date_from and date_to:
             query += " AND o.order_date >= %s AND o.order_date <= %s"
             params.extend([date_from, date_to])
+        else:
+            default_to_date = datetime.now()
+            dafault_from_date = default_to_date - timedelta(days=30)
+
+            query += " AND o.order_date >= %s AND o.order_date <= %s"
+            params.extend([dafault_from_date, default_to_date])
 
         if status:
             query += " AND o.status = %s"
@@ -2424,12 +2430,6 @@ def back_office_manager(conn, cur, *params):
         orders = cur.fetchall()
 
         loaded_orders = len(orders)
-
-        print("total_length_query", flush=True)
-        print(total_length_query, flush=True)
-
-        print("total_length_query // per_page + 1", flush=True)
-        print(total_length_query // per_page + 1, flush=True)
 
         return render_template('crud_orders.html', page=page,total_pages=total_length_query // per_page ,orders=orders, statuses=statuses, current_status=status, price_min=price_min, price_max=price_max, order_by_id=order_by_id, date_from=date_from, date_to=date_to, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
 
