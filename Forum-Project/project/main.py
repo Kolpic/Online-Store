@@ -21,6 +21,7 @@ from flask_session_captcha import FlaskSessionCaptcha
 # from flask_sessionstore import Session
 from flask_session import Session
 from project import utils
+from project import send_mail
 from project import sessions
 from .models import User
 from sqlalchemy import or_
@@ -1116,8 +1117,7 @@ def cart(conn, cur):
                     """, (order_id,))
         shipping_details = cur.fetchall()
 
-        #TODO: send_purchase_email(cart_items=cart_items, shipping_details=shipping_details, authenticated_user, cur, total_sum_with_vat)
-        send_purchase_email(cart_items=cart_items, shipping_details=shipping_details, user_email=authenticated_user, cur=cur, total_sum_with_vat=total_sum_with_vat, conn=conn)
+        send_mail.send_mail(products=cart_items, shipping_details=shipping_details[0], total_sum=total_sum, total_with_vat=total_sum_with_vat, provided_sum=0, user_email=authenticated_user, cur=cur, conn=conn, email_type='purchase_mail', app=app, mail=mail)
 
         session['payment_message'] = "You successful made an order with id = " + str(order_id)
 
@@ -1130,120 +1130,6 @@ def cart(conn, cur):
 
     else:
         utils.AssertUser(False, "Invalid method")
-
-
-def send_purchase_email(cart_items, shipping_details, user_email, cur, total_sum_with_vat, conn):
-    cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-    query = """
-            SELECT
-                s1.value               AS background_color,
-                s2.value               AS text_align,
-                s3.value               AS border,
-                s4.value               AS border_collapse,
-                email_template.subject AS subject,
-                email_template.sender  AS sender,
-                email_template.body    AS body,
-                users.first_name       AS first_name,
-                users.last_name        AS last_name
-            FROM settings              AS s1 
-                JOIN settings          AS s2 ON s2.name             = 'email_template_text_align'
-                JOIN settings          AS s3 ON s3.name             = 'email_template_border'
-                JOIN settings          AS s4 ON s4.name             = 'email_template_border_collapse'
-                JOIN email_template          ON email_template.name = 'Purchase Email'
-                JOIN users                   ON users.email         = %s
-            WHERE s1.name = 'email_template_background_color'
-        """
-
-    cur_dict.execute(query, (user_email,))
-    query_results = cur_dict.fetchone()
-
-    utils.AssertDev(query_results, "No information in database")
-
-    background_color = query_results['background_color']
-    text_align = query_results['text_align']
-    border = query_results['border']
-    border_collapse = query_results['border_collapse']
-    first_name = query_results['first_name']
-    last_name = query_results['last_name']
-    subject = query_results['subject']
-    sender = query_results['sender']
-    body = query_results['body']
-
-    cart_html = f"""
-    <table border="{border}" cellpadding="5" cellspacing="0" style="border-collapse: {border_collapse};">
-        <tr>
-            <th style="background-color: {background_color};">Product</th>
-            <th style="background-color: {background_color};">Quantity</th>
-            <th style="background-color: {background_color};">Price</th>
-            <th style="background-color: {background_color};">Total Product Price</th>
-        </tr>
-    """
-
-    total_price = 0
-
-    for item in cart_items:
-        product_id, product_name, quantity, price, currency, vat = item
-        price_total = float(price) * int(quantity)
-        total_price += price_total
-        cart_html += f"""
-        <tr>
-            <td>{product_name}</td>
-            <td style="text-align: {text_align};">{quantity}</td>
-            <td style="text-align: {text_align};">{price} {currency}</td>
-            <td style="text-align: {text_align};">{price_total} {currency}</td>
-        </tr>
-        """
-
-    total_price_rounded = round(total_price, 2)
-    cart_html += f"""
-
-        <tr>
-            <td colspan='3' style="text-align: {text_align};">Total Order Price Without VAT</td>
-            <td style="text-align: {text_align};">{total_price_rounded} {currency}</td>
-        </tr>
-        <tr>
-            <td colspan='3' style="text-align: {text_align};">Total Order Price With VAT</td>
-            <td style="text-align: {text_align};">{total_sum_with_vat} {currency}</td>
-        </tr>
-    </table>
-    """
-
-    shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code = shipping_details[0]
-    shipping_html = f"""
-
-    <table border="{border}" cellpadding="5" cellspacing="0" style="border-collapse: {border_collapse};">
-        <tr>
-            <th style="background-color: {background_color};">Recipient</th><td>{first_name} {last_name}</td>
-        </tr>
-        <tr>
-            <th style="background-color: {background_color};">Email</th><td>{email}</td>
-        </tr>
-        <tr>
-            <th style="background-color: {background_color};">Address</th><td>{address}, {town}</td>
-        </tr>
-        <tr>
-            <th style="background-color: {background_color};">Country code</th><td>{country_code}</td>
-        </tr>
-        <tr>
-            <th style="background-color: {background_color};">Phone</th><td>{phone}</td>
-        </tr>
-    </table>
-    """
-
-    body_filled = body.format(
-        first_name=first_name,
-        last_name=last_name,
-        cart=cart_html,
-        shipping_details=shipping_html,
-    )
-
-    with app.app_context():
-        msg = Message(subject,
-                sender = sender,
-                recipients = [user_email])
-    msg.html = body_filled
-    mail.send(msg)
 
 def remove_from_cart_meth(conn, cur):
     authenticated_user =  sessions.get_current_user(request, cur)
@@ -1344,7 +1230,7 @@ def finish_payment(conn, cur):
             """, (order_id,))
         products_from_order = cur.fetchall()
 
-        send_compleated_payment_email(products=products_from_order, shipping_details=shipping_details, total_sum=total, total_with_vat=total_with_vat, provided_sum=payment_amount, user_email=authenticated_user, cur=cur, conn=conn)
+        send_mail.send_mail(products=products_from_order, shipping_details=shipping_details, total_sum=total, total_with_vat=total_with_vat, provided_sum=payment_amount, user_email=authenticated_user, cur=cur, conn=conn, email_type='payment_mail', app=app, mail=mail)
 
         session['home_message'] = "You paid the order successful"
 
@@ -1352,121 +1238,6 @@ def finish_payment(conn, cur):
 
     else:
         utils.AssertUser(False, "Invalid method")
-
-def send_compleated_payment_email(products, shipping_details, total_sum, total_with_vat,provided_sum, user_email, cur, conn):
-    cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-    query = """
-            SELECT
-                s1.value               AS background_color,
-                s2.value               AS text_align,
-                s3.value               AS border,
-                s4.value               AS border_collapse,
-                email_template.subject AS subject,
-                email_template.sender  AS sender,
-                email_template.body    AS body,
-                users.first_name       AS first_name,
-                users.last_name        AS last_name
-            FROM settings              AS s1 
-                JOIN settings          AS s2 ON s2.name             = 'email_template_text_align'
-                JOIN settings          AS s3 ON s3.name             = 'email_template_border'
-                JOIN settings          AS s4 ON s4.name             = 'email_template_border_collapse'
-                JOIN email_template          ON email_template.name = 'Payment Email'
-                JOIN users                   ON users.email         = %s
-            WHERE s1.name = 'email_template_background_color'
-        """
-
-    cur_dict.execute(query, (user_email,))
-    query_results = cur_dict.fetchone()
-
-    utils.AssertDev(query_results, "No information in database")
-
-    background_color = query_results['background_color']
-    text_align = query_results['text_align']
-    border = query_results['border']
-    border_collapse = query_results['border_collapse']
-    first_name = query_results['first_name']
-    last_name = query_results['last_name']
-    subject = query_results['subject']
-    sender = query_results['sender']
-    body = query_results['body']
-
-    products_html = f"""
-    <table border="{border}" cellpadding="5" cellspacing="0" style="border-collapse: {border_collapse};">
-        <tr>
-            <th style="background-color: {background_color};">Product</th>
-            <th style="background-color: {background_color};">Quantity</th>
-            <th style="background-color: {background_color};">Price</th>
-            <th style="background-color: {background_color};">Total Product Price</th>
-        </tr>
-    """
-    total_price = 0
-
-    for item in products:
-
-        product_name, quantity, price, symbol = item
-
-        price_total = float(price) * int(quantity)
-        total_price += price_total
-        products_html += f"""
-        <tr>
-            <td>{product_name}</td>
-            <td style="text-align: {text_align};">{quantity}</td>
-            <td style="text-align: {text_align};">{price} {symbol}</td>
-            <td style="text-align: {text_align};">{price_total} {symbol}</td>
-        </tr>
-        """
-    
-    _total_price = round(total_price, 2)
-    products_html += f"""
-        <tr>
-            <td colspan='3' style="text-align: {text_align};">Total Order Price Without VAT:</td>
-            <td style="text-align: {text_align};">{total_sum}</td>
-        </tr>
-        <tr>
-            <td colspan='3' style="text-align: {text_align};">Total Order Price With VAT:</td>
-            <td style="text-align: {text_align};">{total_with_vat}</td>
-        </tr>
-    """
-    products_html += f"""
-        <tr>
-            <td colspan='3' style="text-align: {text_align};">You paid:</td>
-            <td style="text-align: {text_align};">{provided_sum}</td>
-        </tr>
-    </table>
-    """
-
-    shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code_id = shipping_details
-    shipping_html = f"""
-    <table border="{border}" cellpadding="5" cellspacing="0" style="border-collapse: {border_collapse};">
-        <tr>
-            <th style="background-color: {background_color};">Recipient</th><td>{first_name} {last_name}</td>
-        </tr>
-        <tr>
-            <th style="background-color: {background_color};">Email</th><td>{email}</td>
-        </tr>
-        <tr>
-            <th style="background-color: {background_color};">Address</th><td>{address}, {town}</td>
-        </tr>
-        <tr>
-            <th style="background-color: {background_color};">Phone</th><td>{phone}</td>
-        </tr>
-    </table>
-    """
-
-    body_filled = body.format(
-        first_name=first_name,
-        last_name=last_name,
-        products=products_html,
-        shipping_details=shipping_html,
-    )
-
-    with app.app_context():
-        msg = Message(subject,
-                sender = sender,
-                recipients = [user_email])
-    msg.html = body_filled
-    mail.send(msg)
 
 def staff_login(conn, cur):
 
