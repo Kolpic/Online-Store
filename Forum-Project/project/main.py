@@ -1117,7 +1117,7 @@ def cart(conn, cur):
         shipping_details = cur.fetchall()
 
         #TODO: send_purchase_email(cart_items=cart_items, shipping_details=shipping_details, authenticated_user, cur, total_sum_with_vat)
-        send_purchase_email(cart_items, shipping_details, authenticated_user, cur, total_sum_with_vat)
+        send_purchase_email(cart_items=cart_items, shipping_details=shipping_details, user_email=authenticated_user, cur=cur, total_sum_with_vat=total_sum_with_vat, conn=conn)
 
         session['payment_message'] = "You successful made an order with id = " + str(order_id)
 
@@ -1132,17 +1132,44 @@ def cart(conn, cur):
         utils.AssertUser(False, "Invalid method")
 
 
-def send_purchase_email(cart_items, shipping_details, user_email, cur, total_sum_with_vat):
+def send_purchase_email(cart_items, shipping_details, user_email, cur, total_sum_with_vat, conn):
+    cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT value FROM settings WHERE id = %s OR id = %s OR id = %s OR id = %s", (2, 3, 4, 5))
-    values = cur.fetchall()
+    query = """
+            SELECT
+                s1.value               AS background_color,
+                s2.value               AS text_align,
+                s3.value               AS border,
+                s4.value               AS border_collapse,
+                email_template.subject AS subject,
+                email_template.sender  AS sender,
+                email_template.body    AS body,
+                users.first_name       AS first_name,
+                users.last_name        AS last_name
+            FROM settings              AS s1 
+                JOIN settings          AS s2 ON s2.name             = 'email_template_text_align'
+                JOIN settings          AS s3 ON s3.name             = 'email_template_border'
+                JOIN settings          AS s4 ON s4.name             = 'email_template_border_collapse'
+                JOIN email_template          ON email_template.name = 'Purchase Email'
+                JOIN users                   ON users.email         = %s
+            WHERE s1.name = 'email_template_background_color'
+        """
 
-    background_color = values[0][0]
-    text_align = values[1][0]
-    border = values[2][0]
-    border_collapse = [3][0]
+    cur_dict.execute(query, (user_email,))
+    query_results = cur_dict.fetchone()
 
-    #TODO: da procheta i da se zamislq XSS
+    utils.AssertDev(query_results, "No information in database")
+
+    background_color = query_results['background_color']
+    text_align = query_results['text_align']
+    border = query_results['border']
+    border_collapse = query_results['border_collapse']
+    first_name = query_results['first_name']
+    last_name = query_results['last_name']
+    subject = query_results['subject']
+    sender = query_results['sender']
+    body = query_results['body']
+
     cart_html = f"""
     <table border="{border}" cellpadding="5" cellspacing="0" style="border-collapse: {border_collapse};">
         <tr>
@@ -1167,13 +1194,13 @@ def send_purchase_email(cart_items, shipping_details, user_email, cur, total_sum
             <td style="text-align: {text_align};">{price_total} {currency}</td>
         </tr>
         """
-    #   TODO: total_price_rounded
-    _total_price = round(total_price, 2)
+
+    total_price_rounded = round(total_price, 2)
     cart_html += f"""
 
         <tr>
             <td colspan='3' style="text-align: {text_align};">Total Order Price Without VAT</td>
-            <td style="text-align: {text_align};">{_total_price} {currency}</td>
+            <td style="text-align: {text_align};">{total_price_rounded} {currency}</td>
         </tr>
         <tr>
             <td colspan='3' style="text-align: {text_align};">Total Order Price With VAT</td>
@@ -1204,30 +1231,19 @@ def send_purchase_email(cart_items, shipping_details, user_email, cur, total_sum
     </table>
     """
 
-    cur.execute("SELECT subject, sender, body FROM email_template WHERE name = 'Purchase Email'")
-    values = cur.fetchone()
+    body_filled = body.format(
+        first_name=first_name,
+        last_name=last_name,
+        cart=cart_html,
+        shipping_details=shipping_html,
+    )
 
-    cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (user_email,))
-    first_name, last_name = cur.fetchone()
-
-    if values:
-        subject, sender, body = values
-
-        body_filled = body.format(
-            first_name=first_name,
-            last_name=last_name,
-            cart=cart_html,
-            shipping_details=shipping_html,
-        )
-
-        with app.app_context():
-            msg = Message(subject,
-                    sender = sender,
-                    recipients = [user_email])
-        msg.html = body_filled
-        mail.send(msg)
-    else:
-        utils.AssertDev(False, "No information in the database")
+    with app.app_context():
+        msg = Message(subject,
+                sender = sender,
+                recipients = [user_email])
+    msg.html = body_filled
+    mail.send(msg)
 
 def remove_from_cart_meth(conn, cur):
     authenticated_user =  sessions.get_current_user(request, cur)
@@ -1328,7 +1344,7 @@ def finish_payment(conn, cur):
             """, (order_id,))
         products_from_order = cur.fetchall()
 
-        send_compleated_payment_email(products_from_order, shipping_details, total, total_with_vat,payment_amount, authenticated_user, cur)
+        send_compleated_payment_email(products=products_from_order, shipping_details=shipping_details, total_sum=total, total_with_vat=total_with_vat, provided_sum=payment_amount, user_email=authenticated_user, cur=cur, conn=conn)
 
         session['home_message'] = "You paid the order successful"
 
@@ -1337,15 +1353,43 @@ def finish_payment(conn, cur):
     else:
         utils.AssertUser(False, "Invalid method")
 
-def send_compleated_payment_email(products, shipping_details, total_sum, total_with_vat,provided_sum, user_email, cur):
+def send_compleated_payment_email(products, shipping_details, total_sum, total_with_vat,provided_sum, user_email, cur, conn):
+    cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
-    cur.execute("SELECT value FROM settings WHERE id = %s OR id = %s OR id = %s OR id = %s", (2, 3, 4, 5))
-    values = cur.fetchall()
+    query = """
+            SELECT
+                s1.value               AS background_color,
+                s2.value               AS text_align,
+                s3.value               AS border,
+                s4.value               AS border_collapse,
+                email_template.subject AS subject,
+                email_template.sender  AS sender,
+                email_template.body    AS body,
+                users.first_name       AS first_name,
+                users.last_name        AS last_name
+            FROM settings              AS s1 
+                JOIN settings          AS s2 ON s2.name             = 'email_template_text_align'
+                JOIN settings          AS s3 ON s3.name             = 'email_template_border'
+                JOIN settings          AS s4 ON s4.name             = 'email_template_border_collapse'
+                JOIN email_template          ON email_template.name = 'Payment Email'
+                JOIN users                   ON users.email         = %s
+            WHERE s1.name = 'email_template_background_color'
+        """
 
-    background_color = values[0][0]
-    text_align = values[1][0]
-    border = values[2][0]
-    border_collapse = [3][0]
+    cur_dict.execute(query, (user_email,))
+    query_results = cur_dict.fetchone()
+
+    utils.AssertDev(query_results, "No information in database")
+
+    background_color = query_results['background_color']
+    text_align = query_results['text_align']
+    border = query_results['border']
+    border_collapse = query_results['border_collapse']
+    first_name = query_results['first_name']
+    last_name = query_results['last_name']
+    subject = query_results['subject']
+    sender = query_results['sender']
+    body = query_results['body']
 
     products_html = f"""
     <table border="{border}" cellpadding="5" cellspacing="0" style="border-collapse: {border_collapse};">
@@ -1410,30 +1454,19 @@ def send_compleated_payment_email(products, shipping_details, total_sum, total_w
     </table>
     """
 
-    cur.execute("SELECT subject, sender, body FROM email_template WHERE name = 'Payment Email'")
-    values = cur.fetchone()
+    body_filled = body.format(
+        first_name=first_name,
+        last_name=last_name,
+        products=products_html,
+        shipping_details=shipping_html,
+    )
 
-    cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (user_email,))
-    first_name, last_name = cur.fetchone()
-
-    if values:
-        subject, sender, body = values
-
-        body_filled = body.format(
-            first_name=first_name,
-            last_name=last_name,
-            products=products_html,
-            shipping_details=shipping_html,
-        )
-
-        with app.app_context():
-            msg = Message(subject,
-                    sender = sender,
-                    recipients = [user_email])
-        msg.html = body_filled
-        mail.send(msg)
-    else:
-        utils.AssertDev(False, "No information in the database")
+    with app.app_context():
+        msg = Message(subject,
+                sender = sender,
+                recipients = [user_email])
+    msg.html = body_filled
+    mail.send(msg)
 
 def staff_login(conn, cur):
 
@@ -2874,6 +2907,8 @@ def handle_request(username=None, path=''):
         utils.AssertDev(callable(funtion_to_call), "You are trying to invoke something that is not a function")
 
         if match:
+            utils.trace("*match.groups()")
+            utils.trace(*match.groups())
             return funtion_to_call(conn, cur, *match.groups())
         else:
             return funtion_to_call(conn, cur)
