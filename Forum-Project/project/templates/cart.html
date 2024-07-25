@@ -142,7 +142,7 @@
                     <select class="custom-select" id="country_code" name="country_code" value="{{form_data['country_code'] if form_data else ''}}" required>
                         <option value="">Select a country</option>
                         {% for code in country_codes %}
-                            <option value="{{ code[2] }}">{{ code[1] }} ({{ code[2] }})</option>
+                            <option value="{{ code[1] }}">{{ code[0] }} {{ code[1] }}</option>
                         {% endfor %}
                     </select>
 

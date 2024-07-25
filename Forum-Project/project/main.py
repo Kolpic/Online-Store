@@ -971,19 +971,46 @@ def add_to_cart_meth(conn, cur):
 
 def cart(conn, cur):
     authenticated_user =  sessions.get_current_user(request, cur)
+    cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     if authenticated_user == None:
        return redirect('/login')
     
     if request.method == 'GET':
-        #TODO: na nqkolko reda i imenata - form_data
-        form_data = session.get('form_data_stack', []).pop() if 'form_data_stack' in session and len(session['form_data_stack']) > 0 else None
+        #TODO: imenata - form_data ->
+        form_data = None
 
-        if form_data:
-            session.modified = True
+        if 'form_data_stack' in session:
+            form_data_stack = session.get('form_data_stack', [])
+            if len(form_data_stack) > 0:
+                form_data = form_data_stack.pop()
+        else:
+            form_data = None
 
-        cur.execute("SELECT id FROM users WHERE email = %s", (authenticated_user,))
-        user_id = cur.fetchone()[0]
+        query = """
+                    SELECT
+                        users.id,
+                        users.first_name,
+                        users.last_name,
+                        country_codes.name as name,
+                        country_codes.code as code
+                    FROM users
+                        LEFT JOIN country_codes ON TRUE
+                    WHERE users.email = %s
+            """
+
+        cur_dict.execute(query, (authenticated_user,))
+        query_results = cur_dict.fetchall()
+
+        user_id = query_results[0]['id']
+        first_name = query_results[0]['first_name']
+        last_name = query_results[0]['last_name']
+
+        country_codes = []
+
+        for row in query_results:
+            country_codes.append((row['name'],row['code']))
+
         items = view_cart(conn, cur, user_id)
 
         #TODO: da ne e tuple
@@ -997,13 +1024,7 @@ def cart(conn, cur):
             vat = items_sum_without_vat * vat_float
             total_sum_with_vat += items_sum_without_vat + vat
 
-        cur.execute("SELECT * FROM country_codes")
-        country_codes = cur.fetchall()
-
-        cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (authenticated_user,))
-        user_details = cur.fetchone()
-
-        return render_template('cart.html', items=items, total_sum_with_vat=round(total_sum_with_vat, 2), total_sum=total_sum,country_codes=country_codes, form_data=form_data, first_name=user_details[0], last_name=user_details[1], email=authenticated_user)
+        return render_template('cart.html', items=items, total_sum_with_vat=round(total_sum_with_vat, 2), total_sum=total_sum,country_codes=country_codes, form_data=form_data, first_name=first_name, last_name=last_name, email=authenticated_user)
    
     elif request.method == 'POST':
 
