@@ -75,8 +75,8 @@ def serialize_report(report):
             row[0] if not isinstance(row[0], int) else int(row[0]), 
             row[1] if not isinstance(row[1], int) else int(row[1]),
             float(row[5]),
-            float(row[6]),
-            float(row[7]),
+            float(row[6]) if row[6] is not None else 1,
+            float(row[7]) if row[7] is not None else 1,
             row[3],
             row[4],
         ]

@@ -1794,8 +1794,8 @@ def back_office_manager(conn, cur, *params):
             # total_records = len(report)
 
             total_price = sum(row[5] for row in report)
-            total_vat = sum(row[6] for row in report)
-            total_price_with_vat = sum(row[7] for row in report)
+            total_vat = sum(row[6] for row in report if row[6] is not None)
+            total_price_with_vat = sum(row[7] for row in report if row[7] is not None)
 
             report_json = utils.serialize_report(report)
             utils.trace(report_json)
