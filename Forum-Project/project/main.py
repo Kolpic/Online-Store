@@ -2338,21 +2338,28 @@ def back_office_manager(conn, cur, *params):
                         oi.quantity, 
                         oi.price, 
                         sum(oi.quantity * oi.price) AS total_price,
-                        c.symbol
-                    FROM order_items AS oi 
-                    JOIN products    AS p ON oi.product_id = p.id 
-                    JOIN currencies  AS c ON p.currency_id = c.id
+                        c.symbol,
+                        oi.vat
+                    FROM order_items                AS oi 
+                        JOIN products               AS p ON oi.product_id = p.id 
+                        JOIN currencies             AS c ON p.currency_id = c.id
                     WHERE order_id = %s 
-                    GROUP BY p.id, p.name, oi.quantity, oi.price, c.symbol
+                        GROUP BY 
+                            p.id, 
+                            p.name, 
+                            oi.quantity, 
+                            oi.price, 
+                            c.symbol,
+                            oi.vat
                 """, (order_id,))
 
             products_from_order = cur.fetchall()
 
-            all_products_sum = 0
+            all_products_sum_with_vat = 0
             for product in products_from_order:
-                all_products_sum += product[2] * product[3]
+                all_products_sum_with_vat += float(product[2] * product[3]) + (float(product[2] * product[3]) * (float(product[6]) / 100))
 
-            return render_template('edit_order.html', order_id=order_id,statuses=statuses, order_date = formatted_date, products_from_order=products_from_order, all_products_sum=all_products_sum)
+            return render_template('edit_order.html', order_id=order_id,statuses=statuses, order_date = formatted_date, products_from_order=products_from_order, all_products_sum=round(all_products_sum_with_vat,2))
 
         elif request.method == 'POST':
 
