@@ -70,7 +70,7 @@
                         <th>Order ID</th>
                         <th>Name of Buyer</th>
                         <th class="text-right">Order Status</th>
-                        <th class="text-right">Total Price</th>
+                        <th class="text-right">Price</th>
                         <th class="text-right">VAT</th>
                         <th class="text-right">Total Price With VAT</th>
                     </tr>
@@ -109,9 +109,9 @@
                             <td> Every record is displayed </td>
 
                         {% endif %}
-
-                        <td colspan="2" class="text-right"><strong>Total:</strong></td>
-                        <td class="text-right"><strong>{{ total_price }} лв.</strong></td>
+                        
+                        <td colspan="4" class="text-right"><strong>Total With VAT:</strong></td>
+                        <td class="text-right"><strong>{{ total_price_with_vat }} лв.</strong></td>
                         <td></td>
                     </tr>
                 </tbody>
@@ -125,6 +125,8 @@
             <input type="hidden" name="total_records" value="{{ total_records }}">
             <input type="hidden" name="total_price" value="{{ total_price }}">
             <input type="hidden" name="report_data" value="{{ report_json }}">
+            <input type="hidden" name="total_vat" value="{{ total_vat }}">
+            <input type="hidden" name="total_price_with_vat" value="{{ total_price_with_vat }}">
 
             <select name="format" class="form-control">
                 <option value="csv">CSV</option>

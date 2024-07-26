@@ -67,12 +67,16 @@ def has_permission(cur, request, interface, permission_needed, username):
 def serialize_report(report):
     json_ready_report = []
     for row in report:
+        trace(row)
+        trace("")
         date_str = row[2].strftime('%Y-%m-%d') if isinstance(row[2], date) else row[2]
         json_row = [
             date_str,
             row[0] if not isinstance(row[0], int) else int(row[0]), 
             row[1] if not isinstance(row[1], int) else int(row[1]),
             float(row[5]),
+            float(row[6]),
+            float(row[7]),
             row[3],
             row[4],
         ]

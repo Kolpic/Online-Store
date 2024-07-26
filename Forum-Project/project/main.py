@@ -1783,9 +1783,6 @@ def back_office_manager(conn, cur, *params):
             cur.execute(query_for_total_rows, params)
             total_records = len(cur.fetchall())
 
-            utils.trace(query_for_total_rows)
-            utils.trace(query)
-
             params.append(limitation_rows)
 
             cur.execute(query, params)
@@ -1797,13 +1794,13 @@ def back_office_manager(conn, cur, *params):
             # total_records = len(report)
 
             total_price = sum(row[5] for row in report)
+            total_vat = sum(row[6] for row in report)
+            total_price_with_vat = sum(row[7] for row in report)
 
             report_json = utils.serialize_report(report)
+            utils.trace(report_json)
 
-            utils.trace(type(total_records))
-            utils.trace(type(limitation_rows))
-
-            return render_template('report.html', limitation_rows=int(limitation_rows), filter_by_status=filter_by_status,report=report, total_records=total_records, total_price=total_price, report_json=report_json, default_to_date=date_to, default_from_date=date_from)
+            return render_template('report.html', limitation_rows=int(limitation_rows), filter_by_status=filter_by_status,report=report, total_records=total_records, total_price_with_vat=total_price_with_vat,total_vat=total_vat,total_price=total_price, report_json=report_json, default_to_date=date_to, default_from_date=date_from)
         else:
             utils.AssertUser(False, "Invalid url")
 
@@ -1854,13 +1851,13 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/download_report':
 
-        keys = ['date_from', 'date_to', 'group_by', 'status', 'filter_by_status', 'total_records', 'total_price', 'report_data', 'format']
+        keys = ['date_from', 'date_to', 'group_by', 'status', 'filter_by_status', 'total_records', 'total_price', 'total_vat', 'total_price_with_vat','report_data', 'format']
 
         form_data = {key: request.form.get(key, '') for key in keys}
 
         report_data = json.loads(form_data['report_data'])
 
-        headers = ['Date', 'User ID', 'Order ID', 'Total Price', 'Buyer', 'Order Status']
+        headers = ['Date', 'User ID', 'Order ID', 'Price', 'VAT', 'Total order price with VAT', 'Buyer','Order Status',]
 
         if form_data['format'] == 'csv':
 
@@ -1881,10 +1878,12 @@ def back_office_manager(conn, cur, *params):
                     user_id = row[1]
                     order_id = row[2]
                     price = row[3]
-                    name = row[4]
-                    status = row[5]
+                    vat = row[4]
+                    price_with_vat = row[5]
+                    name = row[6]
+                    status = row[7]
 
-                    row = [date, user_id, order_id, price, name, status]
+                    row = [date, user_id, order_id, price, vat, price_with_vat,name, status]
 
                     cw.writerow(row)
                     si.seek(0)
@@ -1892,8 +1891,11 @@ def back_office_manager(conn, cur, *params):
                     si.truncate(0)
                     si.seek(0)
 
-                
-                cw.writerow(['Total Records:', form_data['total_records'], 'Total Price:', form_data['total_price']])
+                cw.writerow("")
+                cw.writerow(['Total Records:', form_data['total_records']])
+                cw.writerow(['Total Price Without VAT:', form_data['total_price']])
+                cw.writerow(['VAT:', form_data['total_vat']])
+                cw.writerow(['Total Price With VAT:', form_data['total_price_with_vat']])
                 si.seek(0)
                 yield si.getvalue()
                 si.close()
