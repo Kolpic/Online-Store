@@ -50,7 +50,7 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
     body = query_results['body']
 
     products_html = f"""
-    <table border="{border}" cellpadding="5" cellspacing="0" style="border-collapse: {border_collapse};">
+    <table border="{border}" cellpadding="5" cellspacing="3" style="border-collapse: {border_collapse};">
         <tr>
             <th style="background-color: {background_color};">Product</th>
             <th style="background-color: {background_color};">Quantity</th>
@@ -102,10 +102,10 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
     elif email_type == 'purchase_mail':
         products_html += "</table>"
 
-    utils.trace(shipping_details)
+    utils.trace(products_html)
     shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code_id = shipping_details
     shipping_html = f"""
-    <table border="{border}" cellpadding="5" cellspacing="0" style="border-collapse: {border_collapse};">
+    <table border="{border}" cellpadding="5" cellspacing="3" style="border-collapse: {border_collapse};">
         <tr>
             <th style="background-color: {background_color};">Recipient</th><td>{first_name} {last_name}</td>
         </tr>
