@@ -2205,12 +2205,13 @@ def back_office_manager(conn, cur, *params):
         query = """
             SELECT 
                 o.order_id, 
-                u.first_name || ' ' || u.last_name as user_names, 
-                array_agg(p.name) as product_names,
-                to_char(sum(oi.quantity * oi.price),'FM999999990.00') as order_price, 
+                u.first_name || ' ' || u.last_name                    AS user_names, 
+                array_agg(p.name)                                     AS product_names,
+                to_char(sum(oi.quantity * oi.price),'FM999999990.00') AS order_price, 
                 o.status, 
-                to_char(o.order_date, 'MM-DD-YYYY HH:MI:SS') AS formatted_order_date,
-                c.symbol
+                to_char(o.order_date, 'MM-DD-YYYY HH:MI:SS')          AS formatted_order_date,
+                c.symbol,
+                oi.vat
             FROM orders      AS o 
             JOIN users       AS u  ON o.user_id     = u.id 
             JOIN order_items AS oi ON o.order_id    = oi.order_id 
@@ -2238,12 +2239,20 @@ def back_office_manager(conn, cur, *params):
             query += " AND o.status = %s"
             params.append(status)
 
+        # AND products.price + (products.price * (CAST(settings.value AS numeric) / 100)) BETWEEN %s AND %s"
         if price_min and price_max:
-            query += "GROUP BY o.order_id, user_names, c.symbol HAVING sum(oi.quantity * oi.price) >= %s AND sum(oi.quantity * oi.price) <= %s"
+            query += """
+                        GROUP BY 
+                            o.order_id, 
+                            user_names, 
+                            c.symbol, 
+                            oi.vat 
+                            HAVING sum((oi.quantity * oi.price) + ((oi.quantity * oi.price) * (CAST(oi.vat AS numeric) / 100))) >= %s AND sum((oi.quantity * oi.price) + ((oi.quantity * oi.price) * (CAST(oi.vat AS numeric) / 100))) <= %s
+                    """
             params.extend([price_min, price_max])
 
         if price_min == '' and price_max == '':
-            query += " GROUP BY o.order_id, user_names, c.symbol "
+            query += " GROUP BY o.order_id, user_names, c.symbol, oi.vat "
 
         query += f" ORDER BY o.order_{sort_by} {sort_order} "
 
@@ -2258,7 +2267,9 @@ def back_office_manager(conn, cur, *params):
 
         loaded_orders = len(orders)
 
-        return render_template('crud_orders.html', page=page,total_pages=total_length_query // per_page ,orders=orders, statuses=statuses, current_status=status, price_min=price_min, price_max=price_max, order_by_id=order_by_id, date_from=date_from, date_to=date_to, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
+        return render_template('crud_orders.html', page=page,total_pages=total_length_query // per_page ,orders=orders, statuses=statuses, 
+            current_status=status, price_min=price_min, price_max=price_max, order_by_id=order_by_id, 
+            date_from=date_from, date_to=date_to, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
 
     elif request.path == f'/crud_orders/add_order' and len(request.path.split('/')) == 3:
 
