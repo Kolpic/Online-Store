@@ -60,12 +60,14 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
     """
     total_price = 0
 
+    currency_sumbol = ""
     for item in products:
         if email_type == 'purchase_mail':
             product_id, product_name, quantity, price, symbol, vat = item
         elif email_type == 'payment_mail':
             product_name, quantity, price, symbol = item
 
+        currency_sumbol = symbol
         price_total = float(price) * int(quantity)
         total_price += price_total
         products_html += f"""
@@ -81,11 +83,11 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
     products_html += f"""
         <tr>
             <td colspan='3' style="text-align: {text_align};">Total Order Price Without VAT:</td>
-            <td style="text-align: {text_align};">{total_sum}</td>
+            <td style="text-align: {text_align};">{total_sum} {currency_sumbol}</td>
         </tr>
         <tr>
             <td colspan='3' style="text-align: {text_align};">Total Order Price With VAT:</td>
-            <td style="text-align: {text_align};">{total_with_vat}</td>
+            <td style="text-align: {text_align};">{total_with_vat} {currency_sumbol}</td>
         </tr>
     """
 
@@ -93,7 +95,7 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
         products_html += f"""
             <tr>
                 <td colspan='3' style="text-align: {text_align};">You paid:</td>
-                <td style="text-align: {text_align};">{provided_sum}</td>
+                <td style="text-align: {text_align};">{provided_sum} {currency_sumbol}</td>
             </tr>
         </table>
         """
