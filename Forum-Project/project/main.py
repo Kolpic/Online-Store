@@ -990,7 +990,7 @@ def add_to_cart_meth(conn, cur):
     return jsonify({'message':response, 'newCartCount': newCartCount})
 
 def cart(conn, cur):
-    authenticated_user =  sessions.get_current_user(request, cur)
+    authenticated_user = sessions.get_current_user(request, cur)
     cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     if authenticated_user == None:
@@ -1158,7 +1158,9 @@ def cart(conn, cur):
                     """, (order_id,))
         shipping_details = cur.fetchall()
 
-        send_mail.send_mail(products=cart_items, shipping_details=shipping_details[0], total_sum=total_sum, total_with_vat=total_sum_with_vat, provided_sum=0, user_email=authenticated_user, cur=cur, conn=conn, email_type='purchase_mail', app=app, mail=mail)
+        send_mail.send_mail(products=cart_items, shipping_details=shipping_details[0], total_sum=total_sum, 
+                            total_with_vat=total_sum_with_vat, provided_sum=0, user_email=authenticated_user, 
+                            cur=cur, conn=conn, email_type='purchase_mail', app=app, mail=mail)
 
         session['payment_message'] = "You successful made an order with id = " + str(order_id)
 
@@ -1167,7 +1169,10 @@ def cart(conn, cur):
 
         utils.trace(round(total_sum_with_vat, 2))
 
-        return render_template('payment.html', order_id=order_id, order_products=cart_items, shipping_details=shipping_details, total_sum_with_vat=round(total_sum_with_vat, 2 ),total_sum=round(total_sum, 2), first_name=user_details[0], last_name=user_details[1], email=authenticated_user)
+        return render_template('payment.html', order_id=order_id, order_products=cart_items, 
+                                shipping_details=shipping_details, total_sum_with_vat=round(total_sum_with_vat, 2 ),
+                                total_sum=round(total_sum, 2), first_name=user_details[0], 
+                                last_name=user_details[1], email=authenticated_user)
 
     else:
         utils.AssertUser(False, "Invalid method")
@@ -1754,7 +1759,7 @@ def back_office_manager(conn, cur, *params):
 
             utils.trace(date_from)
             utils.trace(date_to)
-            
+
             group_by = request.form.get('group_by')
             status = request.form.get('status')
             filter_by_status = request.form.get('filter_by_status', '')

@@ -107,6 +107,9 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
     shipping_html = f"""
     <table border="{border}" cellpadding="5" cellspacing="3" style="border-collapse: {border_collapse};">
         <tr>
+            <th style="background-color: {background_color};">Order ID</th><td>{order_id}</td>
+        </tr>
+        <tr>
             <th style="background-color: {background_color};">Recipient</th><td>{first_name} {last_name}</td>
         </tr>
         <tr>
