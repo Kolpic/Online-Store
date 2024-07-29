@@ -228,8 +228,12 @@ def check_request_arg_fields(cur, request, datetime):
         'status': (request.args.get('status', ''), str),
         'email': (request.args.get('email','', type=str), str),
         'user_by_id': (request.args.get('user_by_id', '', type=int), int),
-        'page': (request.args.get('page', 1, type=int), int),
-        'per_page': (request.args.get('per_page', 50, type=int), int),
+        # 'page': ((request.path.split("/")[2]), int),
+        # 'page': (request.args.get('page=', 1, type=int), int),
+        'per_page': (request.args.get('per_page', 10, type=int), int),
+        'product_name': (request.args.get('product_name', '', type=str), str),
+        'product_category': (request.args.get('product_category', '', type=str), str),
+        'products_per_page': (request.args.get('products_per_page', 10, type=int), int),
         # 'offset': (page - 1) * per_page
     }
 
@@ -238,7 +242,16 @@ def check_request_arg_fields(cur, request, datetime):
         sort_by = 'id'
         sort_order = 'asc'
 
+    trace("request.path.split("")")
+    trace(request.path.split("/"))
+    trace(len(request.path.split("/")))
+
+    if len(request.path.split("/")) > 2:
+        parameters['page'] = ((request.path.split("/")[2]), int)
+
     validated_params = {}
+
+    trace(parameters)
 
     for key, (value, expected_type) in parameters.items():
 
@@ -253,6 +266,9 @@ def check_request_arg_fields(cur, request, datetime):
             except:
                 AssertUser(False, f"Invalid value for {key}. Expected type {expected_type.__name__}.")
 
-    validated_params['offset'] = (validated_params['page'] - 1) * validated_params['per_page']
+    if validated_params.get('page') is not None:
+        validated_params['offset'] = (validated_params['page'] - 1) * validated_params['per_page']
+    else:
+        pass
 
     return validated_params

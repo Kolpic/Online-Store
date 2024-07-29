@@ -518,48 +518,50 @@ def login(conn, cur):
     utils.AssertUser(user_data['verification_status'], "Your account is not verified or has been deleted")
 
     session_id = sessions.create_session(os, datetime, timedelta, email, cur, conn)
-    response = make_response(redirect('/home'))
+    response = make_response(redirect('/home/1'))
     response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
 
     return response
 
 def home(conn, cur, page = 1):
+    cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     authenticated_user =  sessions.get_current_user(request, cur)
 
     if authenticated_user == None:
        return redirect('/login') 
 
-    page = request.args.get('page', 1, type=int)
-
-    cur.execute("SELECT DISTINCT(category) FROM products")
-    categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
-
-    first_name, last_name, email__ = utils.getUserNamesAndEmail(conn, cur, authenticated_user)
-
-    prodcuts_user_wants = request.args.get('products_per_page', 10)
-    if prodcuts_user_wants == '':
-        prodcuts_user_wants = 10
-
-    products_per_page = int(prodcuts_user_wants)
-    offset = 0
-    if page == None:
-        page = 1
-        offset = 10
-    else:
-        offset = (page - 1) * products_per_page
+    query = """
+        WITH categories AS (
+            SELECT DISTINCT(category) FROM products
+        )
+        SELECT *
+        FROM categories 
+        CROSS JOIN (SELECT * FROM users WHERE email = %s) u
+    """
     
-    sort_by = request.args.get('sort','id')
-    sort_order = request.args.get('order', 'asc')
-    product_name = request.args.get('product_name', '')
-    product_category = request.args.get('product_category', '')
-    price_min = request.args.get('price_min', '')
-    price_max = request.args.get('price_max', '')
+    cur_dict.execute(query, (authenticated_user,))
+    results = cur_dict.fetchall()
 
-    valid_sort_columns = {'price':'price', 'category':'category', 'name':'name'}
-    sort_column = valid_sort_columns.get(sort_by, 'id')
-    order_by_clause = f"{sort_column} {'DESC' if sort_order == 'desc' else 'ASC'}"
+    categories = [row[0] for row in results]
+    user_id = results[0][1]
+    first_name = results[0][2]
+    last_name = results[0][3]
 
-    name_filter = f" AND name ILIKE %s" if product_name else ''
+    validated_fields = utils.check_request_arg_fields(cur, request, datetime)
+
+    sort_by = validated_fields['sort_by']
+    sort_order = validated_fields['sort_order']
+
+    products_per_page = validated_fields['products_per_page']
+    page = validated_fields['page']
+    offset = validated_fields['offset']
+
+    product_name = validated_fields['product_name']
+    product_category = validated_fields['product_category']
+    price_min = validated_fields['price_min']
+    price_max = validated_fields['price_max']
+
+    name_filter = f" AND products.name ILIKE %s" if product_name else ''
     category_filter = f" AND category ILIKE %s" if product_category else ''
     price_filter = ""
     query_params = []
@@ -569,11 +571,28 @@ def home(conn, cur, page = 1):
     if product_category:
         query_params.append(f"%{product_category}%")
 
-    if price_min.isdigit() and price_max.isdigit():
+    if price_min and price_max:
         price_filter = " AND price BETWEEN %s AND %s"
         query_params.extend([price_min, price_max])
 
-    query = f"SELECT p.id, p.name, p.price, p.quantity, p.category, c.symbol, p.vat FROM products AS p JOIN currencies AS c ON p.currency_id=c.id WHERE TRUE{name_filter}{category_filter}{price_filter} ORDER BY {order_by_clause} LIMIT %s OFFSET %s"
+    query = f"""
+                SELECT 
+                    products.id, 
+                    products.name, 
+                    products.price, 
+                    products.quantity, 
+                    products.category, 
+                    currencies.symbol, 
+                    settings.value 
+                FROM products 
+                    JOIN currencies ON products.currency_id = currencies.id
+                    JOIN settings   ON products.vat_id      = settings.id
+                WHERE TRUE{name_filter}{category_filter}{price_filter} 
+                ORDER BY {sort_by} {sort_order}
+                LIMIT %s 
+                OFFSET %s
+            """
+
     query_params.extend([products_per_page, offset])
 
     cur.execute(query,tuple(query_params))
@@ -581,18 +600,19 @@ def home(conn, cur, page = 1):
 
     count_query = f"SELECT COUNT(*) FROM products WHERE TRUE{name_filter}{category_filter}{price_filter}"
     cur.execute(count_query, tuple(query_params[:-2]))
+
     total_products = cur.fetchone()[0]
     utils.AssertUser(total_products, 'No results with this filter')
-    # total_pages = (total_products + products_per_page - 1)
-    # total_pages = int(total_products / products_per_page) + 1
-    total_pages = (total_products // products_per_page) + (1 if total_products % products_per_page > 0 else 0)
 
-    cur.execute("SELECT id FROM users WHERE email = %s", (authenticated_user,))
-    user_id = cur.fetchone()[0]
+    total_pages = (total_products // products_per_page) + (1 if total_products % products_per_page > 0 else 0)
 
     cart_count = get_cart_items_count(conn, cur, user_id)
 
-    return render_template('home.html', first_name=first_name, last_name=last_name, email = email__,products=products, page=page, total_pages=total_pages, sort_by=sort_by, sort_order=sort_order, product_name=product_name, product_category=product_category, cart_count=cart_count, categories=categories)
+    return render_template('home.html', first_name=first_name, last_name=last_name, 
+                            email = authenticated_user, products=products, products_per_page=products_per_page, 
+                            price_min=price_min, price_max=price_max,page=page, total_pages=total_pages, 
+                            sort_by=sort_by, sort_order=sort_order, product_name=product_name, 
+                            product_category=product_category, cart_count=cart_count, categories=categories)
 
 def logout(conn, cur):
     session_id = request.cookies.get('session_id')

@@ -17,29 +17,6 @@
         <br>
         <br>
         <form method="get" action="/home/{{ page }}">
-           <!--  <div class="form-group">
-                <label for="sort">Sort by:</label>
-                <select name="sort" id="sort" onchange="this.form.submit()">
-                    <option value="price" {% if sort_by == 'price' %}selected{% endif %}>Price</option>
-                    <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name</option>
-                    <option value="category" {% if sort_by == 'category' %}selected{% endif %}>Category</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="order">Order:</label>
-                <select name="order" id="order" onchange="this.form.submit()">
-                    <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>Ascending</option>
-                    <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>Descending</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <label for="product_category">Category:</label>
-                <select name="product_category" id="product_category" onchange="this.form.submit()">
-                    {% for categ in categories %}
-                    <option value="{{ categ }}" {% if categ == categ  %}selected {% endif %}>{{categ}}</option>
-                    {% endfor %}
-                </select>
-            </div> -->
             <div class="form-group">
                 <label for="price_min">Price from:</label>
                 <input type="text" id="price_min" name="price_min" value="{{ price_min }}" placeholder="Min Price">
@@ -50,33 +27,40 @@
             </div>
             <div class="form-group">
                 <label for="product_name">Product Name:</label>
-                <input type="text" id="product_name" name="product_name" value="{{ product_name }}" onchange="this.form.submit()">
+                <input type="text" id="product_name" name="product_name" value="{{ product_name }}" placeholder="E.g LED Bulb ">
             </div>
             <div class="form-group">
                 <label for="products_per_page">Products per page:</label>
                 <input type="text" id="products_per_page" name="products_per_page" value="{{ products_per_page }}" onchange="validateAndSubmit(this)">
             </div>
-        </form>
         <br>
+        <!-- onchange="this.form.submit()" -->
             <label for="sort">Sort by:</label>
-                <select name="sort" id="sort" onchange="this.form.submit()">
+                <select name="sort" id="sort">
                     <option value="price" {% if sort_by == 'price' %}selected{% endif %}>Price</option>
                     <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name</option>
                     <option value="category" {% if sort_by == 'category' %}selected{% endif %}>Category</option>
                 </select>
 
             <label for="order">Order:</label>
-                <select name="order" id="order" onchange="this.form.submit()">
+                <select name="order" id="order">
                     <option value="asc" {% if sort_order == 'asc' %}selected{% endif %}>Ascending</option>
                     <option value="desc" {% if sort_order == 'desc' %}selected{% endif %}>Descending</option>
                 </select>
 
             <label for="product_category">Category:</label>
-                <select name="product_category" id="product_category" onchange="this.form.submit()">
+                <select name="product_category" id="product_category">
                     {% for categ in categories %}
                     <option value="{{ categ }}" {% if categ == categ  %}selected {% endif %}>{{categ}}</option>
                     {% endfor %}
                 </select>
+
+            <div>
+
+                <button type="submit" class="btn btn-primary">Filter Products</button>  
+
+            </div>        
+        </form>
         <br>
         <br>
         <div class="row">
