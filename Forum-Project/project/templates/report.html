@@ -105,15 +105,13 @@
                         <!-- <td> <strong>Total Records: </strong>{{ total_records }} from {{ limitation_rows }}</td> -->
 
                         {% if total_records >= limitation_rows %}
+                            <strong>Total Records: </strong>{{ limitation_rows }} of {{ total_records }} and
 
-                            <strong>Total Records: </strong>{{ limitation_rows }}/{{ total_records }}
-
-                            <td> {{ total_records - limitation_rows }} records are missing in the report</td>
+                            <strong>{{ total_records - limitation_rows }} records are missing in the report</strong>
 
                         {% else %}
 
-                            <strong>Total Records: </strong>{{ total_records }}
-                            <td> Every record is displayed </td>
+                            <strong>Total Records: </strong>{{ total_records }} and every record is displayed
 
                         {% endif %}
                         
