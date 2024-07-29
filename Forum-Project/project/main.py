@@ -1751,6 +1751,10 @@ def back_office_manager(conn, cur, *params):
 
             date_from = request.form.get('date_from')
             date_to = request.form.get('date_to')
+
+            utils.trace(date_from)
+            utils.trace(date_to)
+            
             group_by = request.form.get('group_by')
             status = request.form.get('status')
             filter_by_status = request.form.get('filter_by_status', '')
@@ -1766,7 +1770,7 @@ def back_office_manager(conn, cur, *params):
             query = "SELECT "
 
             if group_by == '':
-                query += "users.id, orders.order_id, orders.order_date, users.first_name, "
+                query += "users.id, orders.order_id, to_char(orders.order_date, 'YYYY-MM-DD HH24:MI:SS') AS order_date, users.first_name, "
             else:
                 query += f"'-' AS id, '-' AS order_id, date_trunc('{group_by}', order_date) AS order_date, '-' AS first_name, "
 
@@ -1810,6 +1814,7 @@ def back_office_manager(conn, cur, *params):
             cur.execute(query, params)
 
             report = cur.fetchall()
+            utils.trace(report)
 
             utils.AssertUser(report[0][0] != None and report[0][1] != None and report[0][2] != None and report[0][3] != None, "No result with this filter")
 
@@ -1820,7 +1825,6 @@ def back_office_manager(conn, cur, *params):
             total_price_with_vat = sum(row[7] for row in report if row[7] is not None)
 
             report_json = utils.serialize_report(report)
-            utils.trace(report_json)
 
             return render_template('report.html', limitation_rows=int(limitation_rows), filter_by_status=filter_by_status,report=report, total_records=total_records, total_price_with_vat=total_price_with_vat,total_vat=total_vat,total_price=total_price, report_json=report_json, default_to_date=date_to, default_from_date=date_from)
         else:
