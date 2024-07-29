@@ -553,8 +553,8 @@ def home(conn, cur, page = 1):
     sort_order = validated_fields['sort_order']
 
     products_per_page = validated_fields['products_per_page']
-    page = validated_fields['page']
-    offset = validated_fields['offset']
+    page = validated_fields['page_front_office']
+    offset = validated_fields['offset_front_office']
 
     product_name = validated_fields['product_name']
     product_category = validated_fields['product_category']
@@ -1275,7 +1275,7 @@ def finish_payment(conn, cur):
 
         session['home_message'] = "You paid the order successful"
 
-        return redirect('/home')
+        return redirect('/home/1')
 
     else:
         utils.AssertUser(False, "Invalid method")
