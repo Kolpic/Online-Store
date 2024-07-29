@@ -1725,10 +1725,10 @@ def back_office_manager(conn, cur, *params):
             try:
                 vat_for_all_products = int(vat_for_all_products)
             except:
-                utils.AssertUser(False,"Enter a number !!!")
+                utils.AssertUser(False,"Enter a number !!!, Without the '%' sign")
 
             cur.execute("UPDATE settings SET value = %s WHERE name = %s", (vat_for_all_products,'VAT'))
-            cur.execute("UPDATE products SET vat = %s", (vat_for_all_products,))
+            # cur.execute("UPDATE products SET vat = %s", (vat_for_all_products,))
 
             session['staff_message'] = "You changed the VAT for all products successfully"
 
