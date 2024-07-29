@@ -14,18 +14,8 @@
     <form action="/template_email" method="POST">
 
         <div class="form-group">
-            <label for="name">Template Name</label>
-            <input type="text" class="form-control" id="name" name="name" value="{{ name }}" readonly>
-        </div>
-
-        <div class="form-group">
             <label for="subject">Subject</label>
-            <input type="text" class="form-control" id="subject" name="subject" value="{{ subject }}" readonly>
-        </div>
-
-        <div class="form-group">
-            <label for="sender_email">Sender Email</label>
-            <input type="email" class="form-control" id="sender" name="sender" value="{{ sender }}" readonly>
+            <input type="text" class="form-control" id="subject" name="subject" value="{{ subject }}">
         </div>
 
         <div class="form-group">
@@ -42,18 +32,8 @@
     <form action="/template_email_purchase" method="POST">
 
         <div class="form-group">
-            <label for="name">Template Name</label>
-            <input type="text" class="form-control" id="name_purchase" name="name_purchase" value="{{ tepmplate_name_purchase }}" readonly>
-        </div>
-
-        <div class="form-group">
-            <label for="subject">Subject</label>
-            <input type="text" class="form-control" id="subject_purchase" name="subject_purchase" value="{{ tepmplate_subject_purchase }}" readonly>
-        </div>
-
-        <div class="form-group">
-            <label for="sender_email">Sender Email</label>
-            <input type="email" class="form-control" id="sender" name="sender" value="{{ sender }}"readonly>
+            <label for="subject_purchase">Subject</label>
+            <input type="text" class="form-control" id="subject_purchase" name="subject_purchase" value="{{ tepmplate_subject_purchase }}">
         </div>
 
         <div class="form-group">
@@ -70,18 +50,8 @@
     <form action="/template_email_payment" method="POST">
 
         <div class="form-group">
-            <label for="name">Template Name</label>
-            <input type="text" class="form-control" id="name_payment" name="name_payment" value="{{ tepmplate_name_payment }}" readonly>
-        </div>
-
-        <div class="form-group">
-            <label for="subject">Subject</label>
-            <input type="text" class="form-control" id="subject_payment" name="subject_payment" value="{{ tepmplate_subject_payment }}" readonly>
-        </div>
-
-        <div class="form-group">
-            <label for="sender_email">Sender Email</label>
-            <input type="email" class="form-control" id="sender" name="sender" value="{{ sender }}"readonly>
+            <label for="subject_payment">Subject</label>
+            <input type="text" class="form-control" id="subject_payment" name="subject_payment" value="{{ tepmplate_subject_payment }}">
         </div>
 
         <div class="form-group">

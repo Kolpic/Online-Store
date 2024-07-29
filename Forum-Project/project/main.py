@@ -157,19 +157,19 @@ FIELD_CONFIG = {
     },
     'Template email': {
         'edit': {
-            'name': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 5 and len(x) <= 30, "Template name should be between 5 and 30 symbols")]},
             'subject': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 5 and len(x) <= 30, "Email subject should be between 5 and 30 symbols")]},
             'body': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},
-            'sender': {'type': str, 'required': True, 'conditions': [(lambda x: '@' in x, "Invalid email")]},
         }
     },
     'Template email purchase': {
         'edit': {
+            'subject_purchase': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 5 and len(x) <= 30, "Email subject should be between 5 and 30 symbols")]},
             'body_purchase': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},
         }
     },
     'Template email payment': {
         'edit': {
+            'subject_payment': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 5 and len(x) <= 30, "Email subject should be between 5 and 30 symbols")]},
             'body_payment': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},
         }
     }
@@ -2566,7 +2566,8 @@ def back_office_manager(conn, cur, *params):
                 name_purchase, subject_purchase, body_purchase = values_purchase
                 name_payment, subject_payment, body_payment = values_payment
 
-                return render_template('template_email.html', name=name, subject=subject, body=body, sender=sender, tepmplate_name_purchase=name_purchase, tepmplate_subject_purchase=subject_purchase, tepmplate_body_purchase=body_purchase, tepmplate_name_payment=name_payment, tepmplate_subject_payment=subject_payment, tepmplate_body_payment=body_payment)
+                return render_template('template_email.html', subject=subject, body=body, tepmplate_subject_purchase=subject_purchase, 
+                                        tepmplate_body_purchase=body_purchase, tepmplate_subject_payment=subject_payment, tepmplate_body_payment=body_payment)
 
         elif request.method == 'POST':
             
@@ -2575,11 +2576,9 @@ def back_office_manager(conn, cur, *params):
             cur.execute("""
                 UPDATE email_template 
                 SET 
-                    name = %s, 
                     subject = %s, 
-                    body = %s, 
-                    sender = %s 
-                WHERE id = 1""", (data['values'][0], data['values'][1], data['values'][2], data['values'][3]))
+                    body = %s
+                WHERE name = 'Verification Email'""", (data['values'][0], data['values'][1]))
 
             session['staff_message'] = "You successfully updated template for sending emails"
 
@@ -2599,8 +2598,9 @@ def back_office_manager(conn, cur, *params):
             cur.execute("""
                 UPDATE email_template 
                 SET 
+                    subject = %s,
                     body = %s 
-                WHERE id = 4""", (data_purchase['values'][0],))
+                WHERE name = 'Purchase Email' """, (data_purchase['values'][0],data_purchase['values'][1]))
             session['staff_message'] = "You successfully updated template for sending purchase email"
 
             return redirect(f'/staff_portal')
@@ -2619,8 +2619,9 @@ def back_office_manager(conn, cur, *params):
             cur.execute("""
                 UPDATE email_template 
                 SET 
+                    subject = %s,
                     body = %s 
-                WHERE id = 6""", (data_payment['values'][0],))
+                WHERE name = 'Payment Email ' """, (data_payment['values'][0], data_payment['values'][1]))
             session['staff_message'] = "You successfully updated template for sending payment email"
 
             return redirect(f'/staff_portal')
