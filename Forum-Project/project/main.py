@@ -1417,12 +1417,14 @@ def user_orders(conn, cur):
                 oi.price, 
                 oi.quantity, 
                 to_char(sum(oi.price * oi.quantity), 'FM999999990.00') AS total_price,
-                c.symbol
+                c.symbol,
+                settings.value
             FROM orders      AS o 
-            JOIN users       AS u  on o.user_id     = u.id 
-            JOIN order_items AS oi on o.order_id    = oi.order_id 
-            JOIN products    AS p  on oi.product_id = p.id 
-            JOIN currencies  AS c  on p.currency_id = c.id 
+            JOIN users       AS u  ON o.user_id     = u.id 
+            JOIN order_items AS oi ON o.order_id    = oi.order_id 
+            JOIN products    AS p  ON oi.product_id = p.id 
+            JOIN currencies  AS c  ON p.currency_id = c.id 
+            JOIN settings          ON p.vat_id      = settings.id
             WHERE u.email = %s 
             """
 
@@ -1441,12 +1443,12 @@ def user_orders(conn, cur):
             params.append(status)
 
         if price_min and price_max:
-            query += "GROUP BY o.order_id, o.status, o_date, oi.product_id, oi.price, oi.quantity, p.name, c.symbol HAVING sum(oi.quantity * oi.price) >= %s AND sum(oi.quantity * oi.price) <= %s"
+            query += "GROUP BY o.order_id, o.status, o_date, oi.product_id, oi.price, oi.quantity, p.name, c.symbol, settings.value HAVING sum(oi.quantity * oi.price) >= %s AND sum(oi.quantity * oi.price) <= %s"
             params.extend([price_min, price_max])
 
         if price_min == '' and price_max == '':
             # o.order_id
-            query += " GROUP BY o.order_id, o.status, o_date, oi.product_id, oi.price, oi.quantity, p.name, c.symbol"
+            query += " GROUP BY o.order_id, o.status, o_date, oi.product_id, oi.price, oi.quantity, p.name, c.symbol, settings.value"
 
         query += f" ORDER BY o.order_{sort_by} {sort_order}  LIMIT 100; "
 

@@ -64,9 +64,10 @@
                     <th><a href="?sort=date&order={{ 'desc' if request.args.get('sort') == 'date' and request.args.get('order') == 'asc' else 'asc' }}">Date</a></th>
                     <th>Product ID</th>
                     <th>Product Name</th>
-                    <th class="text-right">Product price</th>
                     <th class="text-right">Product quantity</th>
-                    <th class="text-right">Total order price</th>
+                    <th class="text-right">Product price</th>
+                    <th class="text-right">VAT</th>
+                    <th class="text-right">Total order price with VAT</th>
                 </tr>
             </thead>
             <tbody id="ordersBody">
@@ -77,9 +78,10 @@
                     <td>{{ order[2]}}</td>
                     <td>{{ order[3]}}</td>
                     <td>{{ order[4]}}</td>
-                    <td class="text-right">{{ order[5]}} {{ order[8] }}</td>
                     <td class="text-right">{{ order[6]}}</td>
-                    <td class="text-right">{{ order[7]}} {{ order[8] }}</td>
+                    <td class="text-right">{{ order[5]}} {{ order[8] }}</td>
+                    <td class="text-right"> {{ ((order[6] * order[5]|float) * (order[9]|float / 100))|round(2) }} {{ order[8] }}</td>
+                    <td class="text-right"> {{ ((order[6] * order[5]|float) + ((order[6] * order[5]|float) * (order[9]|float / 100)))|round(2) }} {{ order[8] }}</td>
                 </tr>
                 {% endfor %}
             </tbody>
