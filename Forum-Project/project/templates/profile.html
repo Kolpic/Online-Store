@@ -17,22 +17,46 @@
         <div class="col-12">
         <h1>Settings</h1>
         <form action="/update_profile" method="post">
+
             <div class="form-group">
                 <label for="first-name">Change first name</label>
-                <input type="text" class="form-control" id="first-name" name="first-name" value="{{ user_details[0] }}">
+                <input type="text" class="form-control" id="first-name" name="first-name" value="{{ first_name }}">
             </div>
+
             <div class="form-group">
                 <label for="last-name">Change last name</label>
-                <input type="text" class="form-control" id="last-name" name="last-name" value="{{ user_details[1] }}">
+                <input type="text" class="form-control" id="last-name" name="last-name" value="{{ last_name }}">
             </div>
+
             <div class="form-group">
                 <label for="email">Change email address</label>
-                <input type="email" class="form-control" id="email" name="email" value="{{ user_details[2] }}">
+                <input type="email" class="form-control" id="email" name="email" value="{{ email }}">
             </div>
+
             <div class="form-group">
                 <label for="password">Change password</label>
                 <input type="password" class="form-control" id="password" name="password">
             </div>
+
+            <div class="form-group">
+                <label for="address">Change address</label>
+                <input type="text" class="form-control" id="address" name="address" value="{{ address }}">
+            </div>
+
+            <div class="form-group">
+                <label for="phone">Change phone</label>
+                <input type="text" class="form-control" id="phone" name="phone" value="{{ phone }}">
+            </div>
+
+            <div class="form-group">
+                <label for="gender">Change gender</label>
+                <select name="gender" id="gender">
+                    <option value="male" {% if gender == 'male' %}selected{% endif %}>Male</option>
+                    <option value="female" {% if gender == 'female' %}selected{% endif %}>Female</option>
+                    <option value="other" {% if gender == 'other' %}selected{% endif %}>Prefer not to say</option>
+                </select>
+            </div>
+
             <button type="submit" class="btn btn-primary">Submit</button>
         </form>
     </div>

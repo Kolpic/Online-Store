@@ -623,16 +623,20 @@ def logout(conn, cur):
     return response
 
 def profile(conn, cur):
+    cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     authenticated_user =  sessions.get_current_user(request, cur)
 
     if authenticated_user == None:
        return redirect('/login') 
     
-    cur.execute("SELECT first_name, last_name, email FROM users WHERE email = %s", (authenticated_user,))
-    user_details = cur.fetchone()
+    cur_dict.execute("SELECT * FROM users WHERE email = %s", (authenticated_user,))
+    user_details = cur_dict.fetchone()
+    utils.trace(user_details)
 
     if user_details:
-        return render_template('profile.html', user_details=user_details, first_name=user_details[0], last_name=user_details[1], email=user_details[2])
+        return render_template('profile.html', first_name=user_details['first_name'], last_name=user_details['last_name'],
+                                 email=user_details['email'], address=user_details['address'], phone=user_details['phone'],
+                                 gender=user_details['gender'])
     
     return render_template('profile.html')
 
@@ -642,11 +646,16 @@ def update_profile(conn, cur):
     if authenticated_user == None:
        return redirect('/login')
 
-    first_name = request.form['first-name']
-    last_name = request.form['last-name']
-    email = request.form['email']
-    password_ = request.form['password']
-    
+    validated_fields = utils.check_request_form_fields(request)
+
+    first_name = validated_fields['first_name']
+    last_name = validated_fields['last_name']
+    email = validated_fields['email']
+    password_ = validated_fields['password']
+    address = validated_fields['address']
+    phone = validated_fields['phone']
+    gender = validated_fields['gender']
+
     query_string = "UPDATE users SET "
     fields_list = []
     updated_fields = []
@@ -683,8 +692,28 @@ def update_profile(conn, cur):
         hashed_password = utils.hash_password(password_)
         fields_list.append(hashed_password)
         updated_fields.append("password")
+    if address:
+        if len(address) < 5 or len(address) > 50:
+            session['settings_error'] = 'Address must be between 3 and 50 letters'
+            return redirect('/profile')
+        query_string +="address = %s, "
+        fields_list.append(address)
+        updated_fields.append("address")
+    if phone:
+        if len(str(phone)) < 7 or len(str(phone)) > 15:
+            session['settings_error'] = 'Phone must be between 7 and 15 digits'
+            return redirect('/profile')
+        query_string += "phone = %s, "
+        fields_list.append(phone)
+        updated_fields.append("phone")
+    if gender:
+        if gender != 'male' and gender != 'female' and gender != 'other':
+            session['settings_error'] = 'Gender must be between male, female or other'
+        query_string += "gender = %s, "
+        fields_list.append(gender)
+        updated_fields.append("gender")
 
-    if first_name == "" and last_name == "" and email == "" and password_ == "":
+    if first_name == "" and last_name == "" and email == "" and password_ == "" and address == "" and phone == "" and gender == "":
         session['settings_error'] = 'You have to insert data in at least one field'
         return redirect('/profile')
 
@@ -702,7 +731,7 @@ def update_profile(conn, cur):
     
     updated_fields_message = ', '.join(updated_fields)
     session['home_message'] = f"You successfully updated your {updated_fields_message}."
-    return redirect('/home')
+    return redirect('/home/1')
 
 def delete_account(conn, cur):
     authenticated_user =  sessions.get_current_user(request, cur)

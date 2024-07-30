@@ -265,3 +265,28 @@ def check_request_arg_fields(cur, request, datetime):
         pass
 
     return validated_params
+
+def check_request_form_fields(request):
+    parameters = {
+        'first_name': (request.form['first-name'], str),
+        'last_name': (request.form['last-name'],str),
+        'email': (request.form['email'], str),
+        'password': (request.form['password'],str),
+        'address': (request.form['address'], str),
+        'phone': (request.form['phone'], int),
+        'gender': (request.form['gender'],str),
+    }
+
+    validated_params = {}
+
+    for key, (value, expected_value) in parameters.items():
+
+        if value == '':
+            validated_params[key] = value
+        else:
+            try:
+                validated_params[key] = expected_value(value)
+            except:
+                AssertUser(False, f"Invalid value for {key}. Expected type {expected_value.__name__}.")
+
+    return validated_params
