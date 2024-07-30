@@ -23,6 +23,7 @@ from flask_session import Session
 from project import utils
 from project import send_mail
 from project import sessions
+from project import cache_impl
 from .models import User
 from sqlalchemy import or_
 import traceback
@@ -58,11 +59,13 @@ host = config.host
 
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # Maximum file size in bytes (e.g., 10MB)
-# last_cleanup = 0
+
+cache = {}
+CACHE_TIMEOUT = 20 # 600 seconds
 
 app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
-app.add_url_rule("/<username>/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
+app.add_url_rule("/<username>/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
 
 def assertIsProvidedMethodsTrue(*args):
     if len(args) == 2:
@@ -323,12 +326,14 @@ def registration(conn, cur):
 
         cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING id", (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
         captcha_id = cur.fetchone()[0]
-     
-        cur.execute("SELECT * FROM country_codes")
-        country_codes = cur.fetchall()
+
+        country_codes_cached_data = cache_impl.get_country_codes(key='country_codes', cache=cache, CACHE_TIMEOUT=CACHE_TIMEOUT, time=time, cur=cur)
+
+        # cur.execute("SELECT * FROM country_codes")
+        # country_codes = cur.fetchall()
 
         session["captcha_id"] = captcha_id
-        return render_template('registration.html', country_codes=country_codes, form_data=form_data, captcha = {"first": first_captcha_number, "second": second_captcha_number})
+        return render_template('registration.html', country_codes=country_codes_cached_data, form_data=form_data, captcha = {"first": first_captcha_number, "second": second_captcha_number})
 
     elif request.method == 'POST':
 
