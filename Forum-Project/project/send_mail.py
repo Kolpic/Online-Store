@@ -102,7 +102,6 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
     elif email_type == 'purchase_mail':
         products_html += "</table>"
 
-    utils.trace(products_html)
     shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code_id = shipping_details
     shipping_html = f"""
     <table border="{border}" cellpadding="5" cellspacing="3" style="border-collapse: {border_collapse};">

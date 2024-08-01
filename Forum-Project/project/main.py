@@ -324,6 +324,10 @@ def registration(conn, cur):
         first_captcha_number = random.randint(0,100)
         second_captcha_number = random.randint(0,100)
 
+        cur_server_side = conn.cursor("server side cursor")
+        cur_server_side.execute("SELECT * FROM users")
+        utils.trace(cur_server_side.fetchall())
+
         cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING id", (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
         captcha_id = cur.fetchone()[0]
 
@@ -1031,7 +1035,6 @@ def cart(conn, cur):
        return redirect('/login')
     
     if request.method == 'GET':
-        #TODO: imenata - form_data ->
         form_data = None
 
         if 'form_data_stack' in session:
@@ -1081,9 +1084,11 @@ def cart(conn, cur):
         return render_template('cart.html', items=items, total_sum_with_vat=round(total_sum_with_vat, 2), total_sum=total_sum,country_codes=country_codes, form_data=form_data, first_name=first_name, last_name=last_name, email=authenticated_user)
    
     elif request.method == 'POST':
+        cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
         form_data = request.form.to_dict()
         session['form_data'] = form_data
+
         email = request.form['email'].strip()
         first_name = request.form['first_name'].strip()
         last_name = request.form['last_name'].strip()
@@ -1092,53 +1097,83 @@ def cart(conn, cur):
         country_code = request.form['country_code']
         phone = request.form['phone'].strip()
 
-        cur.execute("SELECT id FROM users WHERE email = %s", (authenticated_user,))
-        user_id = cur.fetchone()[0]
-        regexx = r'^\d{7,15}$'
+        regex_phone = r'^\d{7,15}$'
+        regex_email = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
 
         # Check fields
         utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
         utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
-        regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-        utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
-        utils.AssertUser(re.fullmatch(regexx, phone), "Phone number format is not valid. The number should be between 7 and 15 digits")
+        utils.AssertUser(re.fullmatch(regex_email, email), "Email is not valid")
+        utils.AssertUser(re.fullmatch(regex_phone, phone), "Phone number format is not valid. The number should be between 7 and 15 digits")
         utils.AssertUser(phone[0] != "0", "Phone number format is not valid.")
 
         # Retrieve cart items for the user
-        cur.execute("""
-                    SELECT c.cart_id FROM users AS u 
-                    JOIN carts AS c ON u.id = c.user_id
-                    WHERE u.id = %s
-                    """, (user_id,))
-        cart_id = cur.fetchone()[0]
+        cur_dict.execute("""
+                    SELECT 
+                        *
+                    FROM     users      
+                        JOIN carts ON users.id = carts.user_id
+                    WHERE users.email = %s
+                    """, 
+                    (authenticated_user,))
 
-        cur.execute("""
-                    SELECT ci.product_id, p.name, ci.quantity, p.price, currencies.symbol, ci.vat 
-                    FROM cart_itmes     AS ci
-                        JOIN products   AS p          ON ci.product_id = p.id
-                        JOIN currencies AS currencies ON p.currency_id = currencies.id
-                    WHERE ci.cart_id = %s
-                    """, (cart_id,))
-        cart_items = cur.fetchall()
+        users_carts_row = cur_dict.fetchone()
+        user_id = users_carts_row['id']
+        cart_id = users_carts_row['cart_id']
 
-        cur.execute("SELECT quantity FROM products WHERE id = %s", (cart_items[0][0],))
-        quantity_db = cur.fetchone()[0]
+        cur_dict.execute("""
+                    SELECT 
+                        cart_itmes.product_id, 
+                        products.name, 
+                        cart_itmes.quantity, 
+                        products.price, 
+                        currencies.symbol, 
+                        cart_itmes.vat 
+                    FROM cart_itmes
+                        JOIN products   ON cart_itmes.product_id = products.id
+                        JOIN currencies ON products.currency_id  = currencies.id
+                    WHERE cart_itmes.cart_id = %s
+                    """,
+                    (cart_id,))
+
+        cart_items = cur_dict.fetchall()
+
+        db_items_quantity = []
+
+        for item in cart_items:
+            cur_dict.execute("""
+                        SELECT 
+                            quantity 
+                        FROM products 
+                        WHERE id = %s
+                        """, 
+                        (item['product_id'],))
+
+            item_quantity_db = cur_dict.fetchone()[0]
+
+            db_items_quantity.append(item_quantity_db)
 
         # Check and change quantity 
         for item in cart_items:
+
             product_id_, name, quantity, price, symbol, vat = item
+            quantity_db = db_items_quantity.pop(0)
+
             if quantity > quantity_db:
                 session['cart_error'] = "We don't have " + str(quantity) + " from product: " + str(name) + " in our store. You can purchase less or to remove the product from your cart"
                 utils.add_form_data_in_session(session.get('form_data'))
                 return redirect('/cart')
-            cur.execute("UPDATE products SET quantity = quantity - %s WHERE id = %s", (quantity, product_id_))
 
-        # current_prices = {item['poroduct_id']: item['price'] for item in cart_items}
+            cur_dict.execute("UPDATE products SET quantity = quantity - %s WHERE id = %s", (quantity, product_id_))
+
         price_mismatch = False
         for item in cart_items:
+
             product_id, name, quantity, cart_price, symbol, vat = item
-            cur.execute("SELECT price FROM products WHERE id = %s", (product_id,))
-            current_price = cur.fetchone()[0]
+
+            cur_dict.execute("SELECT price FROM products WHERE id = %s", (product_id,))
+            current_price = cur_dict.fetchone()['price']
+
             if current_price != cart_price:
                 # Price can be updated here
                 price_mismatch = True
@@ -1146,24 +1181,61 @@ def cart(conn, cur):
 
         utils.AssertUser(not price_mismatch, "The price on some of your product's in the cart has been changed, you can't make the purchase")
 
-        # Build JSON object of cart items if no mismatch
-        products_json = [{"product_id": item[0], "name": item[1], "quantity": item[2], "price": str(item[3])} for item in cart_items]
-
         # First make order, then make shipping_details #
         formatted_datetime = datetime.now().strftime('%Y-%m-%d')
-        # cur.execute("INSERT INTO orders (user_id, status, product_details, order_date) VALUES (%s, %s, %s, %s) RETURNING order_id", (user_id, "Ready for Paying", json.dumps(products_json), formatted_datetime))
-        # order_id = cur.fetchone()[0]
-        # #
-        cur.execute("INSERT INTO orders (user_id, status, order_date) VALUES (%s, %s, CURRENT_TIMESTAMP) RETURNING order_id", (user_id, "Ready for Paying")) #formatted_datetime
-        order_id = cur.fetchone()[0]
+        cur_dict.execute("""
+                    INSERT INTO orders (
+                        user_id, 
+                        status, 
+                        order_date) 
+                    VALUES (%s, %s, CURRENT_TIMESTAMP) 
+                    RETURNING order_id
+                    """, 
+                    (user_id, "Ready for Paying")) #formatted_datetime
 
-        # Insert order items into order_items table
+        order_id = cur_dict.fetchone()['order_id']
+
+        # Insert order products into order_items table
         for item in cart_items:
-            cur.execute("INSERT INTO order_items (order_id, product_id, quantity, price, vat) VALUES (%s, %s, %s, %s, %s)", (order_id, item[0], item[2], item[3], item[5]))
 
-        cur.execute("SELECT id FROM country_codes WHERE code = %s", (country_code,))
-        country_code_id = cur.fetchone()[0]
-        cur.execute("INSERT INTO shipping_details (order_id, email, first_name, last_name, town, address, phone, country_code_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)", (order_id, email, first_name, last_name, town, address, phone, country_code_id))
+            item_id = item[0]
+            item_quantity = item[2]
+            item_price = item[3]
+            item_vat = item[5]
+
+            cur_dict.execute("""
+                        INSERT INTO order_items (
+                            order_id, 
+                            product_id, 
+                            quantity, 
+                            price, 
+                            vat) 
+                        VALUES (%s, %s, %s, %s, %s)
+                        """, 
+                        (order_id, item_id, item_quantity, item_price, item_vat))
+
+        cur_dict.execute("""
+                    SELECT 
+                        * 
+                    FROM country_codes 
+                    WHERE code = %s
+                    """, 
+                    (country_code,))
+
+        country_code_row = cur_dict.fetchone()
+        country_code_id = country_code_row['id']
+
+        cur_dict.execute("""
+                    INSERT INTO shipping_details (
+                            order_id, 
+                            email, 
+                            first_name, 
+                            last_name, town, 
+                            address, phone, 
+                            country_code_id  ) 
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """, 
+                    (order_id, email, first_name, last_name, town, address, phone, country_code_id))
 
         # Total sum to be passed to the payment.html
         items = view_cart(conn, cur, user_id)
@@ -1179,17 +1251,26 @@ def cart(conn, cur):
             total_sum_with_vat += items_sum_without_vat + vatt
 
         # When the purchase is made we empty the user cart 
-        cur.execute("SELECT cart_id FROM carts WHERE user_id = %s", (user_id,))
-        cart_id = cur.fetchone()[0]
         cur.execute("DELETE FROM cart_itmes WHERE cart_id = %s", (cart_id,))
 
         cur.execute("""
-                    SELECT shd.shipping_id, shd.order_id, shd.email, shd.first_name, shd.last_name, shd.town, shd.address, shd.phone, cc.code 
-                    FROM shipping_details AS shd 
-                    JOIN orders AS o ON shd.order_id=o.order_id 
-                    JOIN country_codes AS cc ON shd.country_code_id = cc.id 
-                    WHERE o.order_id = %s
-                    """, (order_id,))
+                    SELECT 
+                        shipping_details.shipping_id, 
+                        shipping_details.order_id, 
+                        shipping_details.email, 
+                        shipping_details.first_name, 
+                        shipping_details.last_name, 
+                        shipping_details.town, 
+                        shipping_details.address, 
+                        shipping_details.phone, 
+                        country_codes.code 
+                    FROM shipping_details
+                        JOIN orders        ON shipping_details.order_id        = orders.order_id 
+                        JOIN country_codes ON shipping_details.country_code_id = country_codes.id 
+                    WHERE orders.order_id = %s
+                    """, 
+                    (order_id,))
+
         shipping_details = cur.fetchall()
 
         send_mail.send_mail(products=cart_items, shipping_details=shipping_details[0], total_sum=total_sum, 

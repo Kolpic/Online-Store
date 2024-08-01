@@ -268,8 +268,8 @@ def check_request_arg_fields(cur, request, datetime):
 
 def check_request_form_fields(request):
     parameters = {
-        'first_name': (request.form['first-name'], str),
-        'last_name': (request.form['last-name'],str),
+        'first_name': (request.form['first_name'], str),
+        'last_name': (request.form['last_name'],str),
         'email': (request.form['email'], str),
         'password': (request.form['password'],str),
         'address': (request.form['address'], str),
