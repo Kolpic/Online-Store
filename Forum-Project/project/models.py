@@ -7,8 +7,12 @@ db = SQLAlchemy()
 class Settings(db.Model):
     __tablename__ = 'settings'
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(255), nullable=False, unique=True)
-    value = db.Column(db.String(255), nullable=False)
+    vat = db.Column(db.Integer, nullable=False)
+    report_limitation_rows = db.Column(db.Integer, nullable=False)
+    send_email_template_background_color = db.Column(db.String(255), nullable=False)
+    send_email_template_text_align = db.Column(db.String(255), nullable=False)
+    send_email_template_border  = db.Column(db.Integer, nullable=False)
+    send_email_template_border_collapse = db.Column(db.String(255), nullable=False)
 
 class EmailTemplate(db.Model):
     __tablename__ = 'email_template'

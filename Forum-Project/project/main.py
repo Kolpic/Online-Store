@@ -592,7 +592,7 @@ def home(conn, cur, page = 1):
                     products.quantity, 
                     products.category, 
                     currencies.symbol, 
-                    settings.value 
+                    settings.vat 
                 FROM products 
                     JOIN currencies ON products.currency_id = currencies.id
                     JOIN settings   ON products.vat_id      = settings.id
@@ -948,11 +948,11 @@ def add_to_cart(conn, cur, user_id, product_id, quantity):
     # cur.execute("SELECT vat FROM products WHERE id = %s", (product_id,))
     # vat = cur.fetchone()[0]
     cur.execute("""
-                SELECT s.value 
+                SELECT s.vat 
                 FROM products      AS p
                     JOIN settings  AS s ON p.vat_id = s.id
-                WHERE p.id = %s AND s.name = %s  
-        """, (product_id, 'VAT'))
+                WHERE p.id = %s
+        """, (product_id, ))
     vat = cur.fetchone()[0]
     utils.trace("VAT with join")
     utils.trace(vat)
@@ -980,13 +980,13 @@ def add_to_cart(conn, cur, user_id, product_id, quantity):
 #TODO: na vsichki fetchall da ima assertDev za duljina na redove ot bazata | assertPeer na post na cart
 def view_cart(conn, cur, user_id):
     cur.execute("""
-                SELECT p.name, p.price, ci.quantity, p.id, currencies.symbol, s.value
+                SELECT p.name, p.price, ci.quantity, p.id, currencies.symbol, s.vat
                 FROM     CARTS      AS c 
                     JOIN cart_itmes AS ci ON c.cart_id     = ci.cart_id 
                     JOIN products   AS p  ON ci.product_id = p.id
                     JOIN currencies AS currencies  ON p.currency_id = currencies.id
                     JOIN settings   AS s  ON p.vat_id      = s.id
-                WHERE c.user_id = %s AND s.name = 'VAT'
+                WHERE c.user_id = %s
                 """, (user_id,))
     items = cur.fetchall()
     return items
@@ -1479,7 +1479,7 @@ def update_cart_quantity(conn, cur):
     quantity_ = int(quantity)
     utils.AssertUser(quantity_ > 0, "You can't enter quantity zero or below")
 
-    cur.execute("SELECT price, settings.value FROM products JOIN settings ON products.vat_id=settings.id WHERE products.id = %s AND settings.name=%s", (item_id,'VAT'))
+    cur.execute("SELECT price, settings.vat FROM products JOIN settings ON products.vat_id=settings.id WHERE products.id = %s ", (item_id,))
     price, vat_rate = cur.fetchone()
     new_total = price * quantity_
 
@@ -1534,7 +1534,7 @@ def user_orders(conn, cur):
                 oi.quantity, 
                 to_char(sum(oi.price * oi.quantity), 'FM999999990.00') AS total_price,
                 c.symbol,
-                settings.value
+                settings.vat
             FROM orders      AS o 
             JOIN users       AS u  ON o.user_id     = u.id 
             JOIN order_items AS oi ON o.order_id    = oi.order_id 
@@ -1559,12 +1559,12 @@ def user_orders(conn, cur):
             params.append(status)
 
         if price_min and price_max:
-            query += "GROUP BY o.order_id, o.status, o_date, oi.product_id, oi.price, oi.quantity, p.name, c.symbol, settings.value HAVING sum(oi.quantity * oi.price) >= %s AND sum(oi.quantity * oi.price) <= %s"
+            query += "GROUP BY o.order_id, o.status, o_date, oi.product_id, oi.price, oi.quantity, p.name, c.symbol, settings.vat HAVING sum(oi.quantity * oi.price) >= %s AND sum(oi.quantity * oi.price) <= %s"
             params.extend([price_min, price_max])
 
         if price_min == '' and price_max == '':
             # o.order_id
-            query += " GROUP BY o.order_id, o.status, o_date, oi.product_id, oi.price, oi.quantity, p.name, c.symbol, settings.value"
+            query += " GROUP BY o.order_id, o.status, o_date, oi.product_id, oi.price, oi.quantity, p.name, c.symbol, settings.vat"
 
         query += f" ORDER BY o.order_{sort_by} {sort_order}  LIMIT 100; "
 
@@ -1740,19 +1740,20 @@ def back_office_manager(conn, cur, *params):
 
             current_settings = utils.get_current_settings(cur)
 
-            cur.execute("SELECT value FROM settings WHERE name = %s", ("report_limitation_rows",))
+            cur.execute("SELECT report_limitation_rows FROM settings")
             limitation_rows = cur.fetchone()[0]
 
-            cur.execute("SELECT value FROM settings WHERE name = %s OR name = %s OR name = %s OR name = %s", ("email_template_background_color", "email_template_text_align", "email_template_border", "email_template_border_collapse"))
-            values = cur.fetchall()
+            cur.execute("SELECT send_email_template_background_color, send_email_template_text_align, send_email_template_border, send_email_template_border_collapse FROM settings")
+            values = cur.fetchone()
+            utils.trace(values)
 
-            cur.execute("SELECT value FROM settings WHERE name = %s", ('VAT',))
+            cur.execute("SELECT vat FROM settings")
             vat = cur.fetchone()[0]
 
-            background_color = values[0][0]
-            text_align = values[1][0]
-            border = values[2][0]
-            border_collapse = values[3][0]
+            background_color = values[0]
+            text_align = values[1]
+            border = values[2]
+            border_collapse = values[3]
 
             return render_template('captcha_settings.html', vat=vat,limitation_rows=limitation_rows, border_collapse=border_collapse,border=border,text_align=text_align,background_color=background_color,**current_settings)
 
@@ -1787,8 +1788,8 @@ def back_office_manager(conn, cur, *params):
 
             utils.AssertUser(limitation_rows >= 0 and limitation_rows <= 50000, "You can't enter zero or negative number. The maximum number is 50000")
 
-            query = ("UPDATE settings SET value = %s WHERE name = %s")
-            cur.execute(query, (limitation_rows, 'report_limitation_rows'))
+            query = ("UPDATE settings SET report_limitation_rows = %s")
+            cur.execute(query, (limitation_rows,))
 
             session['staff_message'] = "You changed the limitation number of every report to: " + str(limitation_rows)
 
@@ -1808,18 +1809,10 @@ def back_office_manager(conn, cur, *params):
 
             utils.AssertUser(int(border) <= 10 and int(border) >= 1, "Border can be between 1 and 10")
 
-            cur.execute("SELECT id FROM settings WHERE name = %s OR name = %s OR name = %s OR name = %s", ("email_template_background_color", "email_template_text_align", "email_template_border", "email_template_border_collapse"))
-            values = cur.fetchall()
-
-            background_color_id = values[0][0]
-            text_align_id = values[1][0]
-            border_id = values[2][0]
-            border_collapse_id = values[3][0]
-
-            cur.execute("UPDATE settings SET value = %s WHERE id = %s", (background_color, background_color_id))
-            cur.execute("UPDATE settings SET value = %s WHERE id = %s", (text_align, text_align_id))
-            cur.execute("UPDATE settings SET value = %s WHERE id = %s", (border , border_id))
-            cur.execute("UPDATE settings SET value = %s WHERE id = %s", (border_collapse, border_collapse_id))
+            cur.execute("UPDATE settings SET send_email_template_background_color = %s", (background_color,))
+            cur.execute("UPDATE settings SET send_email_template_text_align = %s", (text_align,))
+            cur.execute("UPDATE settings SET send_email_template_border = %s", (border,))
+            cur.execute("UPDATE settings SET send_email_template_border_collapse = %s", (border_collapse,))
 
             session['staff_message'] = "You changed the email template table look successfully"
 
@@ -1838,8 +1831,7 @@ def back_office_manager(conn, cur, *params):
             except:
                 utils.AssertUser(False,"Enter a number !!!, Without the '%' sign")
 
-            cur.execute("UPDATE settings SET value = %s WHERE name = %s", (vat_for_all_products,'VAT'))
-            # cur.execute("UPDATE products SET vat = %s", (vat_for_all_products,))
+            cur.execute("UPDATE settings SET vat = %s", (vat_for_all_products,))
 
             session['staff_message'] = "You changed the VAT for all products successfully"
 
@@ -1862,7 +1854,7 @@ def back_office_manager(conn, cur, *params):
         
         elif request.method == 'POST':
 
-            cur.execute("SELECT value FROM settings WHERE name = %s", ("report_limitation_rows",))
+            cur.execute("SELECT report_limitation_rows FROM settings")
             limitation_rows = cur.fetchone()[0]
 
             date_from = request.form.get('date_from')
@@ -2154,8 +2146,8 @@ def back_office_manager(conn, cur, *params):
                             products.quantity, 
                             products.category, 
                             currencies.symbol,
-                            settings.value,
-                            products.price + (products.price * (CAST(settings.value AS numeric) / 100)) AS product_vat_price
+                            settings.vat,
+                            products.price + (products.price * (CAST(settings.vat AS numeric) / 100)) AS product_vat_price
                         FROM products 
                             JOIN currencies ON products.currency_id = currencies.id
                             JOIN settings   ON products.vat_id      = settings.id
@@ -2164,7 +2156,7 @@ def back_office_manager(conn, cur, *params):
         query_params = []
 
         if price_min is not '' and price_max is not '':
-            base_query += " AND products.price + (products.price * (CAST(settings.value AS numeric) / 100)) BETWEEN %s AND %s"
+            base_query += " AND products.price + (products.price * (CAST(settings.vat AS numeric) / 100)) BETWEEN %s AND %s"
             query_params.extend([price_min, price_max])
         
         base_query += f"ORDER BY {sort_by} {sort_order} LIMIT 100"

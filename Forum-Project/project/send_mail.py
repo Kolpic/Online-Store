@@ -7,19 +7,16 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
 
     query = """
             SELECT
-                s1.value               AS background_color,
-                s2.value               AS text_align,
-                s3.value               AS border,
-                s4.value               AS border_collapse,
-                email_template.subject AS subject,
-                email_template.sender  AS sender,
-                email_template.body    AS body,
-                users.first_name       AS first_name,
-                users.last_name        AS last_name
-            FROM settings              AS s1 
-                JOIN settings          AS s2 ON s2.name             = 'email_template_text_align'
-                JOIN settings          AS s3 ON s3.name             = 'email_template_border'
-                JOIN settings          AS s4 ON s4.name             = 'email_template_border_collapse'
+                settings.send_email_template_background_color AS background_color,
+                settings.send_email_template_text_align       AS text_align,
+                settings.send_email_template_border           AS border,
+                settings.send_email_template_border_collapse  AS border_collapse,
+                email_template.subject                        AS subject,
+                email_template.sender                         AS sender,
+                email_template.body                           AS body,
+                users.first_name                              AS first_name,
+                users.last_name                               AS last_name
+            FROM settings
     """
 
     if email_type == 'payment_mail':
@@ -31,7 +28,6 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
 
     query += """
                 JOIN users ON users.email = %s
-            WHERE s1.name = 'email_template_background_color'
         """
 
     cur_dict.execute(query, (user_email,))
