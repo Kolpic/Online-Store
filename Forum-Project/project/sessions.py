@@ -1,41 +1,75 @@
 from project import utils
+import psycopg2.extras
 
-def create_session(os, datetime, timedelta, session_data, cur, conn):
+def create_session(os, datetime, timedelta, session_data, cur, conn, is_front_office):
     session_id = os.urandom(20).hex()
     expires_at = datetime.now() + timedelta(hours=1)
 
-    # cur.execute("SELECT id FROM users WHERE email = %s", (session_data,))
-    # userr_id = cur.fetchone()['id']
+    if is_front_office:
+        cur.execute("""
+                    INSERT INTO custom_sessions (
+                        session_id, 
+                        expires_at, 
+                        is_active, 
+                        user_id)
+                    VALUES (%s, %s, %s, (SELECT id FROM users WHERE email = %s)) 
 
-    # cur.execute("INSERT INTO custom_sessions (session_id, data, expires_at, is_active, user_id) VALUES (%s, %s, %s, %s, %s) RETURNING id", (session_id, session_data, expires_at, True, userr_id))
-    # _id = cur.fetchone()['id']
+            """, (session_id, expires_at, True, session_data))
+    else:
+        cur.execute("""
+                    INSERT INTO custom_sessions (
+                        session_id, 
+                        expires_at, 
+                        is_active,
+                        staff_id) 
+                    VALUES (%s, %s, %s, (SELECT id FROM staff WHERE username = %s)) 
 
-    _id = _map_tables(session_data, cur, session_id, expires_at)
+            """, (session_id, expires_at, True, session_data))
 
     return session_id
 
-def get_current_user(request, cur):
+def get_current_user(request, cur, conn):
+    cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     session_id = request.cookies.get('session_id')
 
     if not session_id:
         return None
     else:
-        return _get_user_by_session(session_id, cur)
+        return _get_user_by_session(session_id, cur_dict)
 
-#TODO: da vrushtam celiq red ot tablicata vmesto otdelna kolkonka, da go pravq v cqloto prilojenie
+
 def _get_user_by_session(session_id, cur):
-    cur.execute("SELECT id FROM custom_sessions WHERE session_id = %s", (session_id,))
-    _id = cur.fetchone()
- 
-    cur.execute("SELECT data FROM custom_sessions WHERE session_id = %s AND id = %s AND is_active = True", (session_id, _id))
 
-    # utils.AssertDev(rowcounut = 1)
+    cur.execute("""
+                SELECT 
+                    custom_sessions.*, 
+                    users.email AS user_email, 
+                    staff.username AS staff_username 
+                FROM 
+                    custom_sessions 
+                LEFT JOIN 
+                    users ON custom_sessions.user_id = users.id AND custom_sessions.user_id IS NOT NULL
+                LEFT JOIN 
+                    staff ON custom_sessions.staff_id = staff.id AND custom_sessions.staff_id IS NOT NULL
+                WHERE 
+                    custom_sessions.session_id = %s
+                """, 
+    (session_id,))
 
-    result = cur.fetchone()
+    custom_sessions_user_row = cur.fetchone()
 
-    if result:
-        # cur.execute("UPDATE custom_sessions SET is_active = True WHERE session_id = %s AND id = %s", (session_id, _id))
-        return result[0]
+    data = None
+
+    if custom_sessions_user_row['user_email'] is not None:
+        data = custom_sessions_user_row['user_email']
+    elif custom_sessions_user_row['staff_username'] is not None:
+        data = custom_sessions_user_row['staff_username']
+
+    is_active = custom_sessions_user_row['is_active']
+
+
+    if is_active and data:
+        return data
     else:
         return None
 
@@ -43,36 +77,9 @@ def clear_expired_sessions(cur, conn):
     cur.execute("DELETE FROM custom_sessions WHERE expires_at < NOW()")
     conn.commit()
 
-def update_current_user_session_data(cur, conn, new_data, session_id):
-    #TODO: samo edna sql zaqvka select + update- vuzmojno nai-prosta
-    cur.execute("SELECT id FROM custom_sessions WHERE session_id = %s", (session_id, ))
-    _id = cur.fetchone()[0]
-
-    cur.execute("UPDATE custom_sessions SET data = %s WHERE session_id = %s AND id = %s", (new_data, session_id, _id))
-    # conn.commit()
 
 def get_user_session_id(request):
     return request.cookies.get('session_id')
-
-#TODO: da podavam flag v koi office sme i da propusna proverkata
-def _map_tables(session_data, cur, session_id, expires_at):
-
-    flag = False
-
-    if '@' in session_data:
-        cur.execute("SELECT id FROM users WHERE email = %s", (session_data,))
-        flag = True
-    else:
-        cur.execute("SELECT id FROM staff WHERE username = %s", (session_data,))
-    
-    userr_id = cur.fetchone()['id']
-
-    if flag:
-        cur.execute("INSERT INTO custom_sessions (session_id, data, expires_at, is_active, user_id) VALUES (%s, %s, %s, %s, %s) RETURNING id", (session_id, session_data, expires_at, True, userr_id))
-    else:
-        cur.execute("INSERT INTO custom_sessions (session_id, data, expires_at, is_active, staff_id) VALUES (%s, %s, %s, %s, %s) RETURNING id", (session_id, session_data, expires_at, True, userr_id))
-
-    return cur.fetchone()['id']
 
 def get_session_cookie_type(request, cur):
 
@@ -80,11 +87,6 @@ def get_session_cookie_type(request, cur):
 
     cur.execute("SELECT user_id, staff_id FROM custom_sessions WHERE session_id = %s AND is_active = True", (session_id,))
     user_id, staff_id = cur.fetchone()
-
-    utils.trace("user_id")
-    utils.trace(user_id)
-    utils.trace("staff_id")
-    utils.trace(staff_id)
 
     if user_id:
         return True

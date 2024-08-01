@@ -526,7 +526,7 @@ def login(conn, cur):
     utils.AssertUser(utils.verify_password(password_, user_data['password']), "Invalid email or password")
     utils.AssertUser(user_data['verification_status'], "Your account is not verified or has been deleted")
 
-    session_id = sessions.create_session(os, datetime, timedelta, email, cur, conn)
+    session_id = sessions.create_session(os=os, datetime=datetime, timedelta=timedelta, session_data=email, cur=cur, conn=conn, is_front_office=True)
     response = make_response(redirect('/home/1'))
     response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
 
@@ -534,7 +534,7 @@ def login(conn, cur):
 
 def home(conn, cur, page = 1):
     cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    authenticated_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login') 
@@ -633,7 +633,7 @@ def logout(conn, cur):
 
 def profile(conn, cur):
     cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    authenticated_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login') 
@@ -650,7 +650,7 @@ def profile(conn, cur):
     return render_template('profile.html')
 
 def update_profile(conn, cur):
-    authenticated_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login')
@@ -729,21 +729,17 @@ def update_profile(conn, cur):
     query_string = query_string[:-2]
     query_string += " WHERE email = %s"
 
-    email_in_session = sessions.get_current_user(request, cur)
+    email_in_session = sessions.get_current_user(request=request, cur=cur, conn=conn)
     fields_list.append(email_in_session)
 
     cur.execute(query_string, (fields_list))
-    
-    # Update session email if email was changed
-    if email:
-        sessions.update_current_user_session_data(cur, conn, email, sessions.get_user_session_id(request))
     
     updated_fields_message = ', '.join(updated_fields)
     session['home_message'] = f"You successfully updated your {updated_fields_message}."
     return redirect('/home/1')
 
 def delete_account(conn, cur):
-    authenticated_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login')
@@ -900,7 +896,7 @@ def log_exception(exception_type, message ,email = None):
     cur_new.close()
 
 def add_product(conn, cur):
-    authenticated_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login')
@@ -1011,7 +1007,7 @@ def remove_from_cart(conn, cur, item_id):
     return "You successfully deleted item."
 
 def add_to_cart_meth(conn, cur):
-    authenticated_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login')
@@ -1028,7 +1024,7 @@ def add_to_cart_meth(conn, cur):
     return jsonify({'message':response, 'newCartCount': newCartCount})
 
 def cart(conn, cur):
-    authenticated_user = sessions.get_current_user(request, cur)
+    authenticated_user = sessions.get_current_user(request=request, cur=cur, conn=conn)
     cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     if authenticated_user == None:
@@ -1293,7 +1289,7 @@ def cart(conn, cur):
         utils.AssertUser(False, "Invalid method")
 
 def remove_from_cart_meth(conn, cur):
-    authenticated_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login')
@@ -1304,7 +1300,7 @@ def remove_from_cart_meth(conn, cur):
     return redirect('/cart')
 
 def finish_payment(conn, cur):
-    authenticated_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login')
@@ -1417,7 +1413,7 @@ def staff_login(conn, cur):
 
         session['staff_username'] = username
 
-        session_id = sessions.create_session(os, datetime, timedelta, username, cur, conn)
+        session_id = sessions.create_session(os=os, datetime=datetime, timedelta=timedelta, session_data=username, cur=cur, conn=conn, is_front_office=False)
         response = make_response(redirect('/staff_portal'))
         response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
 
@@ -1426,7 +1422,7 @@ def staff_login(conn, cur):
         utils.AssertUser(False, "Invalid method")
 
 def staff_portal(conn, cur):
-    authenticated_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/staff_login')
@@ -1505,7 +1501,7 @@ def update_cart_quantity(conn, cur):
 #         return "No image found"
 
 def user_orders(conn, cur):
-    authenticated_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login')
@@ -1631,7 +1627,7 @@ def get_active_users(sort_by='id', sort_order='desc', name=None, email=None, use
     return active_users
 
 def back_office_manager(conn, cur, *params):
-    authenticated_user =  sessions.get_current_user(request, cur)
+    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/staff_login')
@@ -2831,7 +2827,7 @@ def handle_request(username=None, path=''):
         utils.trace(request.path)
 
         #TODO Validaciq na cookie prez bazata + req.args
-        authenticated_user = sessions.get_current_user(request, cur)
+        authenticated_user = sessions.get_current_user(request=request, cur=cur, conn=conn)
 
         utils.trace("authenticated_user")
         utils.trace(authenticated_user)
@@ -2874,7 +2870,7 @@ def handle_request(username=None, path=''):
 
     except Exception as message:
 
-        user_email = sessions.get_current_user(request, cur)
+        user_email = sessions.get_current_user(request=request, cur=cur, conn=conn)
         traceback_details = traceback.format_exc()
 
         log_exception(message.__class__.__name__, str(message), user_email)
