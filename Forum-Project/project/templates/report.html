@@ -92,11 +92,15 @@
                         <td class="text-right">
                             {% if row[6] != None %}
                                 {{ row[6] }} {{'лв.'}}
+                            {% else %}
+                                 - 
                             {% endif %}
                         </td>
                         <td class="text-right">
                             {% if row[6] != None %}
                                 {{ row[7] }} {{'лв.'}}</td>
+                            {% else %}
+                                 - 
                             {% endif %}
                     </tr>
                     {% endfor %}
