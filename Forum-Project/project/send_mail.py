@@ -56,16 +56,26 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
     """
     total_price = 0
 
+    vat_total = 0
     currency_sumbol = ""
     for item in products:
         if email_type == 'purchase_mail':
             product_id, product_name, quantity, price, symbol, vat = item
         elif email_type == 'payment_mail':
-            product_name, quantity, price, symbol = item
+            product_name, quantity, price, symbol, vat = item
+
+        utils.trace(vat)
+        utils.trace(type(vat))
+
+        float_vat = float(vat)
+
+        utils.trace(float_vat)
+        utils.trace(type(float_vat))
 
         currency_sumbol = symbol
         price_total = float(price) * int(quantity)
         total_price += price_total
+        vat_total += price_total * (float_vat / 100)
         products_html += f"""
         <tr>
             <td>{product_name}</td>
@@ -79,11 +89,15 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
     products_html += f"""
         <tr>
             <td colspan='3' style="text-align: {text_align};">Total Order Price Without VAT:</td>
-            <td style="text-align: {text_align};">{total_sum} {currency_sumbol}</td>
+            <td style="text-align: {text_align};">{round(total_sum, 2)} {currency_sumbol}</td>
+        </tr>
+        <tr>
+            <td colspan='3' style="text-align: {text_align};">VAT:</td>
+            <td style="text-align: {text_align};">{round(vat_total, 2)} {currency_sumbol}</td>
         </tr>
         <tr>
             <td colspan='3' style="text-align: {text_align};">Total Order Price With VAT:</td>
-            <td style="text-align: {text_align};">{total_with_vat} {currency_sumbol}</td>
+            <td style="text-align: {text_align};">{round(total_with_vat, 2)} {currency_sumbol}</td>
         </tr>
     """
 
@@ -91,7 +105,7 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
         products_html += f"""
             <tr>
                 <td colspan='3' style="text-align: {text_align};">You paid:</td>
-                <td style="text-align: {text_align};">{provided_sum} {currency_sumbol}</td>
+                <td style="text-align: {text_align};">{round(provided_sum, 2)} {currency_sumbol}</td>
             </tr>
         </table>
         """

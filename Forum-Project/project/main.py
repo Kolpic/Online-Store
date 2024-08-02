@@ -1378,16 +1378,20 @@ def finish_payment(conn, cur):
                 p.name, 
                 oi.quantity, 
                 oi.price,
-                c.symbol 
-            FROM order_items AS oi 
-            JOIN products    AS p ON oi.product_id=p.id
-            JOIN currencies  AS c ON p.currency_id=c.id
+                c.symbol,
+                oi.vat
+            FROM order_items     AS oi 
+                JOIN products    AS p ON oi.product_id = p.id
+                JOIN currencies  AS c ON p.currency_id = c.id
             WHERE order_id = %s
 
             """, (order_id,))
         products_from_order = cur.fetchall()
 
-        send_mail.send_mail(products=products_from_order, shipping_details=shipping_details, total_sum=total, total_with_vat=total_with_vat, provided_sum=payment_amount, user_email=authenticated_user, cur=cur, conn=conn, email_type='payment_mail', app=app, mail=mail)
+        send_mail.send_mail(products=products_from_order, shipping_details=shipping_details, 
+                            total_sum=total, total_with_vat=total_with_vat, provided_sum=payment_amount, 
+                            user_email=authenticated_user, cur=cur, conn=conn, email_type='payment_mail', 
+                            app=app, mail=mail)
 
         session['home_message'] = "You paid the order successful"
 
@@ -2813,7 +2817,7 @@ def handle_request(username=None, path=''):
     cur = None
     try:
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-        cur = conn.cursor()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
         utils.trace("request.path")
         utils.trace(request.path)
