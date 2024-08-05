@@ -315,12 +315,16 @@ def process_form(interface, method):
 def registration(conn, cur):
     user_ip = request.remote_addr
 
-    assertIsProvidedMethodsTrue('GET','POST')
-
     if request.method == 'GET':
-        form_data = session.get('form_data_stack', []).pop() if 'form_data_stack' in session and len(session['form_data_stack']) > 0 else None
-        if form_data:
-            session.modified = True
+        form_data = None
+
+        if 'form_data_stack' in session:
+            form_data_stack = session.get('form_data_stack', [])
+            if len(form_data_stack) > 0:
+                form_data = form_data_stack.pop()
+        else:
+            form_data = None
+
         first_captcha_number = random.randint(0,100)
         second_captcha_number = random.randint(0,100)
 
@@ -329,7 +333,7 @@ def registration(conn, cur):
         utils.trace(cur_server_side.fetchall())
 
         cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING id", (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
-        captcha_id = cur.fetchone()[0]
+        captcha_id = cur.fetchone()['id']
 
         country_codes_cached_data = cache_impl.get_country_codes(key='country_codes', cache=cache, CACHE_TIMEOUT=CACHE_TIMEOUT, time=time, cur=cur)
 
@@ -337,7 +341,8 @@ def registration(conn, cur):
         # country_codes = cur.fetchall()
 
         session["captcha_id"] = captcha_id
-        return render_template('registration.html', country_codes=country_codes_cached_data, form_data=form_data, captcha = {"first": first_captcha_number, "second": second_captcha_number})
+        return render_template('registration.html', country_codes=country_codes_cached_data, form_data=form_data, 
+                                captcha = {"first": first_captcha_number, "second": second_captcha_number})
 
     elif request.method == 'POST':
 
@@ -356,10 +361,11 @@ def registration(conn, cur):
 
         captcha_ = int(request.form['captcha'])
 
+        regex_phone = r'^\d{7,15}$'
+
         utils.AssertUser(password_ == confirm_password_, "Password and Confirm Password fields are different")
         utils.AssertUser(len(address) >= 5 and len(address) <= 50, "Address must be between 5 and 50 characters long")
-        regexx = r'^\d{7,15}$'
-        utils.AssertUser(re.fullmatch(regexx, phone), "Phone number format is not valid. The number should be between 7 and 15 digits")
+        utils.AssertUser(re.fullmatch(regex_phone, phone), "Phone number format is not valid. The number should be between 7 and 15 digits")
         utils.AssertUser(gender == 'male' or gender == 'female', "Gender must be Male of Female")
 
         cur.execute("SELECT id, last_attempt_time, attempts FROM captcha_attempts WHERE ip_address = %s", (user_ip,))
