@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Circle Drawing</title>
+</head>
+<body>
+    <div>
+        <label for="centerX">Center X:</label>
+        <input type="number" id="centerX" value="200">
+        <label for="centerY">Center Y:</label>
+        <input type="number" id="centerY" value="200">
+        <label for="radius">Radius:</label>
+        <input type="number" id="radius" value="100">
+        <button onclick="drawUserCircle()">Draw Circle</button>
+    </div>
+    <canvas id="myCanvas" width="400" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById('myCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function drawPixel(x, y) {
+            ctx.fillStyle = 'black';
+            ctx.fillRect(x, y, 1, 1);
+        }
+
+        function drawCircle(centerX, centerY, radius) {
+            let x = 0;
+            let y = radius;
+            let pointer = 3 - 2 * radius;
+
+            while (x <= y) {
+                drawPixel(centerX + x, centerY + y);
+                drawPixel(centerX - x, centerY + y);
+                drawPixel(centerX + x, centerY - y);
+                drawPixel(centerX - x, centerY - y);
+                drawPixel(centerX + y, centerY + x);
+                drawPixel(centerX - y, centerY + x);
+                drawPixel(centerX + y, centerY - x);
+                drawPixel(centerX - y, centerY - x);
+
+                if (pointer < 0) {
+                    pointer = pointer + 4 * x + 6;
+                } else {
+                    pointer = pointer + 4 * (x - y) + 10;
+                    y--;
+                }
+                x++;
+            }
+        }
+
+        function drawUserCircle() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const centerX = parseInt(document.getElementById('centerX').value);
+            const centerY = parseInt(document.getElementById('centerY').value);
+            const radius = parseInt(document.getElementById('radius').value);
+
+            if (isNaN(centerX) || isNaN(centerY) || isNaN(radius)) {
+                alert("Please enter valid digits for Center X, Center Y, and Radius.");
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            drawCircle(centerX, centerY, radius);
+        }
+    </script>
+</body>
+</html>

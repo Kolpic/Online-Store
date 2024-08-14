@@ -29,13 +29,12 @@ def create_session(os, datetime, timedelta, session_data, cur, conn, is_front_of
     return session_id
 
 def get_current_user(request, cur, conn):
-    cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     session_id = request.cookies.get('session_id')
 
     if not session_id:
         return None
     else:
-        return _get_user_by_session(session_id, cur_dict)
+        return _get_user_by_session(session_id, cur)
 
 
 def _get_user_by_session(session_id, cur):
@@ -57,6 +56,9 @@ def _get_user_by_session(session_id, cur):
     (session_id,))
 
     custom_sessions_user_row = cur.fetchone()
+    
+    if custom_sessions_user_row is None:
+        return None
 
     data = None
 

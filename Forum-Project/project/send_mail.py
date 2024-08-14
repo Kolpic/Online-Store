@@ -11,6 +11,7 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
                 settings.send_email_template_text_align       AS text_align,
                 settings.send_email_template_border           AS border,
                 settings.send_email_template_border_collapse  AS border_collapse,
+                settings.vat                                  AS vat,
                 email_template.subject                        AS subject,
                 email_template.sender                         AS sender,
                 email_template.body                           AS body,
@@ -39,6 +40,7 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
     text_align = query_results['text_align']
     border = query_results['border']
     border_collapse = query_results['border_collapse']
+    vat = query_results['vat']
     first_name = query_results['first_name']
     last_name = query_results['last_name']
     subject = query_results['subject']
@@ -50,8 +52,8 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
         <tr>
             <th style="background-color: {background_color};">Product</th>
             <th style="background-color: {background_color};">Quantity</th>
-            <th style="background-color: {background_color};">Price</th>
-            <th style="background-color: {background_color};">Total Product Price</th>
+            <th style="background-color: {background_color};">Price (Per item without VAT)</th>
+            <th style="background-color: {background_color};">Total Product Price With VAT</th>
         </tr>
     """
     total_price = 0
@@ -73,15 +75,16 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
         utils.trace(type(float_vat))
 
         currency_sumbol = symbol
-        price_total = float(price) * int(quantity)
+        price_total = float(price) * int(quantity) # 250
         total_price += price_total
-        vat_total += price_total * (float_vat / 100)
+        vat_total += price_total * (float_vat / 100) #62,5
+        total_product_price_with_vat = round(price_total + vat_total, 2)
         products_html += f"""
         <tr>
             <td>{product_name}</td>
             <td style="text-align: {text_align};">{quantity}</td>
             <td style="text-align: {text_align};">{price} {symbol}</td>
-            <td style="text-align: {text_align};">{price_total} {symbol}</td>
+            <td style="text-align: {text_align};">{total_product_price_with_vat} {symbol}</td>
         </tr>
         """
     
@@ -94,6 +97,10 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
         <tr>
             <td colspan='3' style="text-align: {text_align};">VAT:</td>
             <td style="text-align: {text_align};">{round(vat_total, 2)} {currency_sumbol}</td>
+        </tr>
+        <tr>
+            <td colspan='3' style="text-align: {text_align};">VAT %:</td>
+            <td style="text-align: {text_align};">{vat}%</td>
         </tr>
         <tr>
             <td colspan='3' style="text-align: {text_align};">Total Order Price With VAT:</td>
@@ -112,7 +119,8 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
     elif email_type == 'purchase_mail':
         products_html += "</table>"
 
-    shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code_id = shipping_details
+    shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code_id, country_codes_code  = shipping_details
+
     shipping_html = f"""
     <table border="{border}" cellpadding="5" cellspacing="3" style="border-collapse: {border_collapse};">
         <tr>
@@ -132,6 +140,8 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
         </tr>
     </table>
     """
+
+    subject = f"{subject} - Order ID: {order_id}"
 
     if email_type == 'payment_mail':
         body_filled = body.format(

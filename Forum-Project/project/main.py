@@ -29,6 +29,7 @@ from sqlalchemy import or_
 import traceback
 import itertools
 import time
+import uuid
 
 # https://stackoverflow.com/questions/23327293/flask-raises-templatenotfound-error-even-though-template-file-exists
 app = Flask(__name__)
@@ -59,9 +60,6 @@ host = config.host
 
 ALLOWED_EXTENSIONS = {'jpg', 'jpeg'}
 MAX_FILE_SIZE = 10 * 1024 * 1024  # Maximum file size in bytes (e.g., 10MB)
-
-cache = {}
-CACHE_TIMEOUT = 20 # 600 seconds
 
 app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
@@ -316,38 +314,33 @@ def registration(conn, cur):
     user_ip = request.remote_addr
 
     if request.method == 'GET':
-        form_data = None
+        recovery_data = None
 
-        if 'form_data_stack' in session:
-            form_data_stack = session.get('form_data_stack', [])
-            if len(form_data_stack) > 0:
-                form_data = form_data_stack.pop()
+        if 'recovery_data_stack' in session:
+            recovery_data_stack = session.get('recovery_data_stack', [])
+            if len(recovery_data_stack) == 1:
+                utils.trace("len(recovery_data_stack)")
+                utils.trace(len(recovery_data_stack))
+                recovery_data = recovery_data_stack.pop()
         else:
-            form_data = None
+            recovery_data = None
 
         first_captcha_number = random.randint(0,100)
         second_captcha_number = random.randint(0,100)
 
-        cur_server_side = conn.cursor("server side cursor")
-        cur_server_side.execute("SELECT * FROM users")
-        utils.trace(cur_server_side.fetchall())
-
         cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING id", (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
         captcha_id = cur.fetchone()['id']
 
-        country_codes_cached_data = cache_impl.get_country_codes(key='country_codes', cache=cache, CACHE_TIMEOUT=CACHE_TIMEOUT, time=time, cur=cur)
-
-        # cur.execute("SELECT * FROM country_codes")
-        # country_codes = cur.fetchall()
+        country_codes = cache_impl.get_country_codes(cur=cur)
 
         session["captcha_id"] = captcha_id
-        return render_template('registration.html', country_codes=country_codes_cached_data, form_data=form_data, 
+        return render_template('registration.html', country_codes=country_codes, recovery_data=recovery_data, 
                                 captcha = {"first": first_captcha_number, "second": second_captcha_number})
 
     elif request.method == 'POST':
 
-        form_data = request.form.to_dict()
-        session['form_data'] = form_data
+        recovery_data = request.form.to_dict()
+        session['recovery_data'] = recovery_data
         first_name = request.form['first_name']
         last_name = request.form['last_name']
         email = request.form['email']
@@ -364,9 +357,13 @@ def registration(conn, cur):
         regex_phone = r'^\d{7,15}$'
 
         utils.AssertUser(password_ == confirm_password_, "Password and Confirm Password fields are different")
-        utils.AssertUser(len(address) >= 5 and len(address) <= 50, "Address must be between 5 and 50 characters long")
+        # utils.AssertUser(len(address) >= 5 and len(address) <= 50, "Address must be between 5 and 50 characters long")
         utils.AssertUser(re.fullmatch(regex_phone, phone), "Phone number format is not valid. The number should be between 7 and 15 digits")
         utils.AssertUser(gender == 'male' or gender == 'female', "Gender must be Male of Female")
+        utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
+        utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
+        regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
+        utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
 
         cur.execute("SELECT id, last_attempt_time, attempts FROM captcha_attempts WHERE ip_address = %s", (user_ip,))
         attempt_record = cur.fetchone()
@@ -390,7 +387,7 @@ def registration(conn, cur):
         verification_code = os.urandom(24).hex()
 
         if captcha_ != result:  
-            utils.add_form_data_in_session(form_data)
+            utils.add_recovery_data_in_session(recovery_data)
             new_attempts = attempts + 1
             if attempt_record:
                 cur.execute("UPDATE captcha_attempts SET attempts = %s, last_attempt_time = CURRENT_TIMESTAMP WHERE id = %s", (new_attempts, attempt_id))
@@ -401,23 +398,14 @@ def registration(conn, cur):
             if attempt_record:
                 cur.execute("DELETE FROM captcha_attempts WHERE id = %s", (attempt_id,))
 
-        utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
-        utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
-            
-        regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-        utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
-        
-        cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-        is_email_present_in_database = cur.fetchone()
-        cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
-        is_email_verified = cur.fetchone()
+        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+        user_row = cur.fetchone()
 
-        if is_email_present_in_database != None:
-            utils.AssertUser(not(is_email_present_in_database[0] and is_email_verified[0]), "There is already registration with this email")
-            utils.AssertUser(not(is_email_present_in_database[0] and not is_email_verified[0]), "Account was already registered with this email, but it's not verified")
+        utils.AssertUser(user_row is None, "There is already registration with this email")
 
-        cur.execute("SELECT id FROM country_codes WHERE code = %s", (country_code,))
-        country_code_id = cur.fetchone()[0]
+        cur.execute("SELECT * FROM country_codes WHERE code = %s", (country_code,))
+        country_code_row = cur.fetchone()
+        country_code_id = country_code_row['id']
 
         cur.execute("""
             INSERT INTO users 
@@ -433,21 +421,31 @@ def registration(conn, cur):
         return redirect("/verify")
 
     else:
-        utils.AssertUser(False, "Invalid method")
+        utils.AssertPeer(False, "Invalid method")
 
 def send_verification_email(user_email, verification_code, cur):
 
-    cur.execute("SELECT subject, sender, body FROM email_template WHERE name = 'Verification Email'")
-    values = cur.fetchone()
+    cur.execute("""
+                SELECT 
+                    email_template.*,
+                    users.*
+                FROM 
+                    email_template,
+                    users
+                WHERE 
+                    email_template.name = %s 
+                    AND 
+                    users.email = %s
+        """, ('Verification Email', user_email))
 
-    cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (user_email,))
-    user_data = cur.fetchone()
+    email_template_user_rows = cur.fetchone()
 
-    utils.trace(values)
-
-    if values and user_data:
-        subject, sender, body = values
-        first_name, last_name = user_data
+    if email_template_user_rows:
+        subject = email_template_user_rows['subject']
+        sender = email_template_user_rows['sender']
+        body = email_template_user_rows['body']
+        first_name = email_template_user_rows['first_name']
+        last_name = email_template_user_rows['last_name']
 
         body_filled = body.format(
             first_name=first_name,
@@ -455,7 +453,6 @@ def send_verification_email(user_email, verification_code, cur):
             verification_code=verification_code
         )
 
-        #TODO: Mail Server kak raboti
         with app.app_context():
             msg = Message(subject,
                     sender = sender,
@@ -466,101 +463,134 @@ def send_verification_email(user_email, verification_code, cur):
         utils.AssertDev(False, "No information in the database")
 
 def verify(conn, cur):
-    assertIsProvidedMethodsTrue('GET','POST')
 
     if request.method == 'GET':
-        form_data = session.get('form_data_stack', []).pop() if 'form_data_stack' in session and len(session['form_data_stack']) > 0 else None
-        if form_data:
-            session.modified = True
-        return render_template('verify.html', form_data=form_data)
 
-    form_data = request.form.to_dict()
-    session['form_data'] = form_data
-    email = request.form['email']
-    verification_code = request.form['verification_code']
+        recovery_data = None
 
-    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+        if 'recovery_data_stack' in session:
+            recovery_data_stack = session.get('recovery_data_stack', [])
+            if len(recovery_data_stack) == 1:
+                recovery_data = recovery_data_stack.pop()
+        else:
+            recovery_data = None
 
-    cur.execute("SELECT email FROM users WHERE email = %s", (email,))
+        return render_template('verify.html', recovery_data=recovery_data)
 
-    utils.AssertUser(not cur.rowcount == 0, "There is no registration with this email")
+    elif request.method == 'POST':
 
-    email_from_database = cur.fetchone()['email']
+        recovery_data = request.form.to_dict()
+        session['recovery_data'] = recovery_data
+        email = request.form['email']
+        verification_code = request.form['verification_code']
 
-    cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
-    is_verified = cur.fetchone()['verification_status']
+        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+        user_row = cur.fetchone()
+        utils.AssertUser(user_row is not None, "There is no registration with this mail")
 
-    cur.execute("SELECT verification_code FROM users WHERE email = %s", (email,))
-    verification_code_database = cur.fetchone()['verification_code']
+        email_from_database = user_row['email']
+        is_verified = user_row['verification_status']
+        verification_code_database = user_row['verification_code']
 
-    utils.AssertUser(email_from_database == email, "You entered different email")
-    utils.AssertUser(not is_verified, "The account is already verified")
-    utils.AssertUser(verification_code_database == verification_code, "The verification code you typed is different from the one we send you")
-    
-    cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
+        utils.AssertUser(email_from_database == email, "You entered different email")
+        utils.AssertUser(not is_verified, "The account is already verified")
+        utils.AssertUser(verification_code_database == verification_code, "The verification code you typed is different from the one we send you")
+        
+        cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
 
-    session['login_message'] = 'Successful verification'
-    return redirect("/login") 
+        session['login_message'] = 'Successful verification'
+        return redirect("/login")
+
+    else:
+        utils.AssertPeer(False, "Invalid method")
 
 def login(conn, cur):
-    assertIsProvidedMethodsTrue('GET','POST')
 
     if request.method == 'GET':
-        form_data = session.get('form_data_stack', []).pop() if 'form_data_stack' in session and len(session['form_data_stack']) > 0 else None
-        if form_data:
-            session.modified = True
-        return render_template('login.html', form_data=form_data)
 
-    form_data = request.form.to_dict()
-    session['form_data'] = form_data
-    email = request.form['email']
-    password_ = request.form['password']
+        recovery_data = None
 
-    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+        if 'recovery_data_stack' in session:
+            recovery_data_stack = session.get('recovery_data_stack', [])
+            if len(recovery_data_stack) == 1:
+                recovery_data = recovery_data_stack.pop()
+        else:
+            recovery_data = None
 
-    cur.execute("""
-                SELECT 
-                    email, 
-                    verification_status, 
-                    password
-                FROM users
-                WHERE email = %s
-                """, (email,))
-    user_data = cur.fetchone()
+        return render_template('login.html', recovery_data=recovery_data)
 
-    utils.AssertUser(user_data, "There is no registration with this email")
-    utils.AssertUser(utils.verify_password(password_, user_data['password']), "Invalid email or password")
-    utils.AssertUser(user_data['verification_status'], "Your account is not verified or has been deleted")
+    elif request.method == 'POST':
 
-    session_id = sessions.create_session(os=os, datetime=datetime, timedelta=timedelta, session_data=email, cur=cur, conn=conn, is_front_office=True)
-    response = make_response(redirect('/home/1'))
-    response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
+        recovery_data = request.form.to_dict()
+        session['recovery_data'] = recovery_data
+        email = request.form['email']
+        password_ = request.form['password']
 
-    return response
+        cur.execute("""
+                    SELECT 
+                        *
+                    FROM 
+                        users
+                    WHERE 
+                        email = %s
+                    """, (email,))
+        user_data = cur.fetchone()
+
+        utils.AssertUser(user_data, "There is no registration with this email")
+        utils.AssertUser(utils.verify_password(password_, user_data['password']), "Invalid email or password")
+        utils.AssertUser(user_data['verification_status'], "Your account is not verified or has been deleted")
+
+        session_id = sessions.create_session(os=os, datetime=datetime, timedelta=timedelta, session_data=email, cur=cur, conn=conn, is_front_office=True)
+
+        session_id_unauthenticated_user = request.cookies.get('session_id_unauthenticated_user')
+        if session_id_unauthenticated_user:
+            if user_data:
+                user_id = user_data['id']
+                merge_cart(conn, cur, user_id, session_id_unauthenticated_user)
+
+                session['cart_message_unauth_user'] = "You logged in successfully, this are the items you selected before you logged"
+                response = make_response(redirect('/cart'))
+                response.set_cookie('session_id_unauthenticated_user', '', expires=0)
+        else:
+            response = make_response(redirect('/home/1'))
+
+        response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
+
+        return response
+    else:
+        utils.AssertPeer(False, "Invalid method")
 
 def home(conn, cur, page = 1):
-    cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
     if authenticated_user == None:
-       return redirect('/login') 
+       # return redirect('/login') 
+        cur.execute("SELECT DISTINCT(category) FROM products")
+        categories = cur.fetchall()
 
-    query = """
-        WITH categories AS (
-            SELECT DISTINCT(category) FROM products
-        )
-        SELECT *
-        FROM categories 
-        CROSS JOIN (SELECT * FROM users WHERE email = %s) u
-    """
-    
-    cur_dict.execute(query, (authenticated_user,))
-    results = cur_dict.fetchall()
+        cart_count = 0
+        first_name = ""
+        last_name = ""
+        email = ""
+    else:
+        query = """
+            WITH categories AS (
+                SELECT DISTINCT(category) FROM products
+            )
+            SELECT *
+            FROM categories 
+            CROSS JOIN (SELECT * FROM users WHERE email = %s) u
+        """
+        
+        cur.execute(query, (authenticated_user,))
+        results = cur.fetchall()
 
-    categories = [row[0] for row in results]
-    user_id = results[0][1]
-    first_name = results[0][2]
-    last_name = results[0][3]
+        categories = [row[0] for row in results]
+        user_id = results[0][1]
+        first_name = results[0][2]
+        last_name = results[0][3]
+
+        cart_count = get_cart_items_count(conn, cur, user_id)
 
     validated_fields = utils.check_request_arg_fields(cur, request, datetime)
 
@@ -613,21 +643,20 @@ def home(conn, cur, page = 1):
     cur.execute(query,tuple(query_params))
     products = cur.fetchall()
 
-    count_query = f"SELECT COUNT(*) FROM products WHERE TRUE{name_filter}{category_filter}{price_filter}"
+    count_query = f"SELECT COUNT(*) as count FROM products WHERE TRUE{name_filter}{category_filter}{price_filter}"
     cur.execute(count_query, tuple(query_params[:-2]))
 
-    total_products = cur.fetchone()[0]
+    total_products = cur.fetchone()['count']
+
     utils.AssertUser(total_products, 'No results with this filter')
 
     total_pages = (total_products // products_per_page) + (1 if total_products % products_per_page > 0 else 0)
 
-    cart_count = get_cart_items_count(conn, cur, user_id)
-
     return render_template('home.html', first_name=first_name, last_name=last_name, 
-                            email = authenticated_user, products=products, products_per_page=products_per_page, 
-                            price_min=price_min, price_max=price_max,page=page, total_pages=total_pages, 
-                            sort_by=sort_by, sort_order=sort_order, product_name=product_name, 
-                            product_category=product_category, cart_count=cart_count, categories=categories)
+                                email = authenticated_user, products=products, products_per_page=products_per_page, 
+                                price_min=price_min, price_max=price_max,page=page, total_pages=total_pages, 
+                                sort_by=sort_by, sort_order=sort_order, product_name=product_name, 
+                                product_category=product_category, cart_count=cart_count, categories=categories)
 
 def logout(conn, cur):
     session_id = request.cookies.get('session_id')
@@ -638,22 +667,34 @@ def logout(conn, cur):
     return response
 
 def profile(conn, cur):
-    cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
     authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login') 
     
-    cur_dict.execute("SELECT * FROM users WHERE email = %s", (authenticated_user,))
-    user_details = cur_dict.fetchone()
-    utils.trace(user_details)
+    if request.method == 'GET':
+        cur.execute("""
+                        SELECT 
+                            users.*,
+                            country_codes.* 
+                        FROM users
+                        JOIN country_codes ON users.country_code_id = country_codes.id
+                        WHERE email = %s
 
-    if user_details:
-        return render_template('profile.html', first_name=user_details['first_name'], last_name=user_details['last_name'],
-                                 email=user_details['email'], address=user_details['address'], phone=user_details['phone'],
-                                 gender=user_details['gender'])
-    
-    return render_template('profile.html')
+                    """, (authenticated_user,))
+
+        user_details = cur.fetchone()
+
+        country_codes = cache_impl.get_country_codes(cur)
+
+        if user_details:
+            return render_template('profile.html', first_name=user_details['first_name'], last_name=user_details['last_name'],
+                                     email=user_details['email'], address=user_details['address'], phone=user_details['phone'],
+                                     gender=user_details['gender'], country_codes=country_codes, country_code=user_details['code'])
+        
+        return render_template('profile.html')
+    else:
+        utils.AssertPeer(False, "Invalid method")
 
 def update_profile(conn, cur):
     authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
@@ -661,88 +702,107 @@ def update_profile(conn, cur):
     if authenticated_user == None:
        return redirect('/login')
 
-    validated_fields = utils.check_request_form_fields(request)
+    if request.method == 'POST':
 
-    first_name = validated_fields['first_name']
-    last_name = validated_fields['last_name']
-    email = validated_fields['email']
-    password_ = validated_fields['password']
-    address = validated_fields['address']
-    phone = validated_fields['phone']
-    gender = validated_fields['gender']
+        validated_fields = utils.check_request_form_fields(request)
 
-    query_string = "UPDATE users SET "
-    fields_list = []
-    updated_fields = []
+        first_name = validated_fields['first_name']
+        last_name = validated_fields['last_name']
+        email = validated_fields['email']
+        password_ = validated_fields['password']
+        address = validated_fields['address']
+        phone = validated_fields['phone']
+        country_code = validated_fields['country_code']
+        gender = validated_fields['gender']
 
-    name_regex = r'^[A-Za-z]+$'
+        query_string = "UPDATE users SET "
+        fields_list = []
+        updated_fields = []
 
-    if first_name:
-        if len(first_name) < 3 or len(first_name) > 50 or not re.match(name_regex, first_name):
-            session['settings_error'] = 'First name must be between 3 and 50 letters and contain no special characters or digits'
+        name_regex = r'^[A-Za-z]+$'
+
+        if first_name:
+            if len(first_name) < 3 or len(first_name) > 50 or not re.match(name_regex, first_name):
+                session['settings_error'] = 'First name must be between 3 and 50 letters and contain no special characters or digits'
+                return redirect('/profile')
+            query_string += "first_name = %s, "
+            fields_list.append(first_name)
+            updated_fields.append("first name")
+        if last_name:
+            if len(last_name) < 3 or len(last_name) > 50 or not re.match(name_regex, last_name):
+                session['settings_error'] = 'Last name must be between 3 and 50 letters'
+                return redirect('/profile')
+            query_string += "last_name = %s, "
+            fields_list.append(last_name)
+            updated_fields.append("last name")
+        if email:
+            regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
+            if not (re.fullmatch(regex, email)):
+                session['settings_error'] = 'Invalid email'
+                return redirect('/profile')
+            query_string += "email = %s, "
+            fields_list.append(email)
+            updated_fields.append("email")
+        if password_:
+            if len(password_) < 8 or len(password_) > 20:
+                session['settings_error'] = 'Password must be between 8 and 20 symbols'
+                return redirect('/profile')
+            query_string += "password = %s, "
+            hashed_password = utils.hash_password(password_)
+            fields_list.append(hashed_password)
+            updated_fields.append("password")
+        if address:
+            if len(address) < 5 or len(address) > 50:
+                session['settings_error'] = 'Address must be between 3 and 50 letters'
+                return redirect('/profile')
+            query_string +="address = %s, "
+            fields_list.append(address)
+            updated_fields.append("address")
+        else:
+            query_string +="address = %s, "
+            fields_list.append(address)
+            # updated_fields.append("address")
+
+        if phone:
+            if len(str(phone)) < 7 or len(str(phone)) > 15:
+                session['settings_error'] = 'Phone must be between 7 and 15 digits'
+                return redirect('/profile')
+            query_string += "phone = %s, "
+            fields_list.append(phone)
+            updated_fields.append("phone")
+
+        if country_code:
+            cur.execute("SELECT * FROM country_codes WHERE code = %s", (country_code,))
+            country_code_row = cur.fetchone()
+
+            query_string += "country_code_id = %s, "
+            fields_list.append(country_code_row['id'])
+            updated_fields.append("country code")
+
+        if gender:
+            if gender != 'male' and gender != 'female' and gender != 'other':
+                session['settings_error'] = 'Gender must be between male, female or other'
+            query_string += "gender = %s, "
+            fields_list.append(gender)
+            updated_fields.append("gender")
+
+        if first_name == "" and last_name == "" and email == "" and password_ == "" and address == "" and phone == "" and gender == "":
+            session['settings_error'] = 'You have to insert data in at least one field'
             return redirect('/profile')
-        query_string += "first_name = %s, "
-        fields_list.append(first_name)
-        updated_fields.append("first name")
-    if last_name:
-        if len(last_name) < 3 or len(last_name) > 50 or not re.match(name_regex, last_name):
-            session['settings_error'] = 'Last name must be between 3 and 50 letters'
-            return redirect('/profile')
-        query_string += "last_name = %s, "
-        fields_list.append(last_name)
-        updated_fields.append("last name")
-    if email:
-        regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-        if not (re.fullmatch(regex, email)):
-            session['settings_error'] = 'Invalid email'
-            return redirect('/profile')
-        query_string += "email = %s, "
-        fields_list.append(email)
-        updated_fields.append("email")
-    if password_:
-        if len(password_) < 8 or len(password_) > 20:
-            session['settings_error'] = 'Password must be between 8 and 20 symbols'
-            return redirect('/profile')
-        query_string += "password = %s, "
-        hashed_password = utils.hash_password(password_)
-        fields_list.append(hashed_password)
-        updated_fields.append("password")
-    if address:
-        if len(address) < 5 or len(address) > 50:
-            session['settings_error'] = 'Address must be between 3 and 50 letters'
-            return redirect('/profile')
-        query_string +="address = %s, "
-        fields_list.append(address)
-        updated_fields.append("address")
-    if phone:
-        if len(str(phone)) < 7 or len(str(phone)) > 15:
-            session['settings_error'] = 'Phone must be between 7 and 15 digits'
-            return redirect('/profile')
-        query_string += "phone = %s, "
-        fields_list.append(phone)
-        updated_fields.append("phone")
-    if gender:
-        if gender != 'male' and gender != 'female' and gender != 'other':
-            session['settings_error'] = 'Gender must be between male, female or other'
-        query_string += "gender = %s, "
-        fields_list.append(gender)
-        updated_fields.append("gender")
 
-    if first_name == "" and last_name == "" and email == "" and password_ == "" and address == "" and phone == "" and gender == "":
-        session['settings_error'] = 'You have to insert data in at least one field'
-        return redirect('/profile')
+        query_string = query_string[:-2]
+        query_string += " WHERE email = %s"
 
-    query_string = query_string[:-2]
-    query_string += " WHERE email = %s"
+        email_in_session = sessions.get_current_user(request=request, cur=cur, conn=conn)
+        fields_list.append(email_in_session)
 
-    email_in_session = sessions.get_current_user(request=request, cur=cur, conn=conn)
-    fields_list.append(email_in_session)
-
-    cur.execute(query_string, (fields_list))
-    
-    updated_fields_message = ', '.join(updated_fields)
-    session['home_message'] = f"You successfully updated your {updated_fields_message}."
-    return redirect('/home/1')
+        cur.execute(query_string, (fields_list))
+        
+        updated_fields_message = ', '.join(updated_fields)
+        session['home_message'] = f"You successfully updated your {updated_fields_message}."
+        return redirect('/home/1')
+    else:
+        utils.AssertPeer(False, "Invalid method")
 
 def delete_account(conn, cur):
     authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
@@ -759,24 +819,26 @@ def delete_account(conn, cur):
     return response
 # 
 def recover_password(conn, cur):
-    assertIsProvidedMethodsTrue('POST')
 
-    email = request.form['recovery_email']
-    new_password = os.urandom(10).hex()
+    if request.method == 'POST':
+        email = request.form['recovery_email']
+        new_password = os.urandom(10).hex()
 
-    cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+        user_row = cur.fetchone()
 
-    cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-    utils.AssertUser(cur.rowcount == 1, "You entered non existent email")
+        utils.AssertUser(user_row is not None, "You entered non existent email")
 
-    hashed_password = utils.hash_password(new_password)
+        hashed_password = utils.hash_password(new_password)
 
-    cur.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_password, email))
+        cur.execute("UPDATE users SET password = %s WHERE email = %s", (hashed_password, email))
 
-    send_recovey_password_email(email, new_password)
-    
-    session['login_message'] = 'A recovery password has been sent to your email.'
-    return redirect('/login')
+        send_recovey_password_email(email, new_password)
+        
+        session['login_message'] = 'A recovery password has been sent to your email.'
+        return redirect('/login')
+    else:
+        utils.AssertPeer(False, "Invalid method")
 
 def send_recovey_password_email(user_email, recovery_password):
     with app.app_context():
@@ -811,35 +873,41 @@ def resend_verf_code(conn, cur):
     return redirect('/verify')
 
 def send_login_link(conn, cur):
-    assertIsProvidedMethodsTrue('POST') 
-    
-    email = request.form['resend_verf_code']
-    
-    login_token = os.urandom(24).hex()
 
-    cur.execute("SELECT email FROM users WHERE email = %s", (email,))
-    utils.AssertUser(not cur.rowcount == 0, "There is no registration with this email")
+    if request.method == 'POST':
 
-    cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
-    is_verified = cur.fetchone()[0]
+        email = request.form['resend_verf_code']
+        
+        login_token = os.urandom(24).hex()
 
-    utils.AssertUser(not is_verified, "The account is already verified")
-    
-    expiration_time = datetime.now() + timedelta(hours=1)
+        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+        user_row = cur.fetchone()
 
-    cur.execute("INSERT INTO tokens(login_token, expiration) VALUES (%s, %s)", (login_token, expiration_time))
+        utils.AssertUser(user_row is not None, "There is no registration with this email")
 
-    cur.execute("SELECT id FROM tokens WHERE login_token = %s", (login_token,))
-    token_id = cur.fetchone()[0]
-    cur.execute("UPDATE users SET token_id = %s WHERE email = %s", (token_id, email))
+        # cur.execute("SELECT verification_status FROM users WHERE email = %s", (email,))
+        is_verified = user_row['verification_status']
 
-    login_link = f"http://10.20.3.101:5000/log?token={login_token}"
+        utils.AssertUser(not is_verified, "The account is already verified")
+        
+        expiration_time = datetime.now() + timedelta(hours=1)
 
-    send_verification_link(email, login_link)
+        cur.execute("INSERT INTO tokens(login_token, expiration) VALUES (%s, %s) RETURNING id", (login_token, expiration_time))
+        token_id = cur.fetchone()['id']
 
-    session['login_message'] = 'A login link has been sent to your email.'
+        # cur.execute("SELECT id FROM tokens WHERE login_token = %s", (login_token,))
+        # token_id = cur.fetchone()[0]
+        cur.execute("UPDATE users SET token_id = %s WHERE email = %s", (token_id, email))
 
-    return redirect('/login')
+        login_link = f"http://10.20.3.101:5000/log?token={login_token}"
+
+        send_verification_link(email, login_link)
+
+        session['login_message'] = 'A login link has been sent to your email.'
+
+        return redirect('/login')
+    else:
+        utils.AssertPeer(False, "Invalid method")
 
 def send_verification_link(user_email, verification_link):
     with app.app_context():
@@ -850,48 +918,47 @@ def send_verification_link(user_email, verification_link):
     mail.send(msg)
 
 def login_with_token(conn, cur):
-    assertIsProvidedMethodsTrue('GET')
+
+    if request.method == 'GET':
     
-    token = request.args.get('token')
+        token = request.args.get('token')
 
-    if not token:
-        session['registration_error'] = 'Invalid login token'
-        return redirect('/registration')
-    
-    db_name = config.database
-    db_user = config.user
-    db_password = config.password
-    db_host = config.host
+        if not token:
+            session['registration_error'] = 'Invalid login token'
+            return redirect('/registration')
 
-    cur.execute("SELECT id, expiration FROM tokens WHERE login_token = %s", (token,))
+        cur.execute("SELECT * FROM tokens WHERE login_token = %s", (token,))
+        token_row = cur.fetchone()
 
-    token_data = cur.fetchone()
+        token_id = token_row['id']
+        expiration = token_row['expiration']
 
-    if not token_data or token_data[1] < datetime.now():
-        session['registration_error'] = 'Invalid login token'
-        return redirect('/login')
-    
-    cur.execute("SELECT * FROM users WHERE token_id = %s", (token_data[0],))
-    user = cur.fetchone()
+        if not token_row or expiration < datetime.now():
+            session['login_error'] = 'Invalid login token'
+            return redirect('/login')
+        
+        cur.execute("SELECT * FROM users WHERE token_id = %s", (token_id,))
+        user_row = cur.fetchone()
 
-    if not user:
-        session['registration_error'] = 'Invalid user'
-        return redirect('/login')
-    
-    # cur.execute("DELETE token_id FROM users WHERE id = %s", (user[0],))
+        if not user_row:
+            session['registration_error'] = 'Invalid user'
+            return redirect('/login')
+        
+        email = user_row['email']
 
-    email = user[3]
+        cur.execute("UPDATE users SET token_id = NULL, verification_status = true WHERE email = %s", (email,))
 
-    cur.execute("UPDATE users SET token_id = NULL WHERE email = %s", (email,))
+        cur.execute("DELETE FROM tokens WHERE id = %s", (token_id,))
 
-    cur.execute("DELETE FROM tokens WHERE id = %s", (token_data[0],))
+        session_id = sessions.create_session(os=os, datetime=datetime, timedelta=timedelta, session_data= email, cur=cur, conn=conn, is_front_office=True)
+        response = make_response(redirect('/home/1'))
+        response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
 
-    cur.execute("UPDATE users SET verification_status = true WHERE email = %s", (email,))
+        return response
+    else:
+        utils.AssertPeer(False, "Invalid method")
 
-    session['user_email'] = email   
-    return redirect('/home')
-
-def log_exception(exception_type, message ,email = None):
+def log_exception(exception_type, message ,email):
     conn_new = psycopg2.connect(dbname=database, user=user, password=password, host=host)
     cur_new = conn_new.cursor()
 
@@ -946,66 +1013,153 @@ def validate_image_size(image_stream):
 
 def serve_image(product_id, cur):
     pr_id = request.path.split("/")[2]
-    cur.execute("SELECT image FROM products WHERE id = %s", (pr_id,))
-    image_blob = cur.fetchone()[0]
+    cur.execute("SELECT * FROM products WHERE id = %s", (pr_id,))
+    image_blob = cur.fetchone()['image']
     return Response(image_blob, mimetype='jpeg')
 
 def add_to_cart(conn, cur, user_id, product_id, quantity):
-    # cur.execute("SELECT vat FROM products WHERE id = %s", (product_id,))
-    # vat = cur.fetchone()[0]
+    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
+
+    utils.trace("ENTERED ADD TO CART METHODDDDDDDDDDDDDDDD")
+    utils.trace("authenticated_user")
+    utils.trace(authenticated_user)
+
+    utils.trace("conn")
+    utils.trace(conn)
+    utils.trace("cur")
+    utils.trace(cur)
+    utils.trace("user_id")
+    utils.trace(user_id)
+    utils.trace("product_id")
+    utils.trace(product_id)
+    utils.trace("quantity")
+    utils.trace(quantity)
+
     cur.execute("""
-                SELECT s.vat 
-                FROM products      AS p
-                    JOIN settings  AS s ON p.vat_id = s.id
-                WHERE p.id = %s
-        """, (product_id, ))
-    vat = cur.fetchone()[0]
-    utils.trace("VAT with join")
-    utils.trace(vat)
+                    SELECT 
+                        products.*,
+                        settings.vat 
+                    FROM products
+                        JOIN settings ON products.vat_id = settings.id
+                    WHERE 
+                        products.id = %s
+            """, (product_id, ))
 
-    cur.execute("SELECT cart_id FROM carts WHERE user_id = %s", (user_id,))
-    result = cur.fetchone()
+    products_settings_rows = cur.fetchone()
 
-    if result:
-        cart_id = result[0]
+    vat = products_settings_rows['vat']
+
+    if authenticated_user == None:
+
+        utils.trace("ENTERED authenticated_user == None")
+
+        cur.execute("SELECT * FROM carts WHERE session_id = %s", (user_id,))
+        cart_row = cur.fetchone()
+
+        if cart_row:
+            utils.trace("ENTERED already present cart")
+            cart_id = cart_row['cart_id']
+        else:
+            utils.trace("ENTERED inserted new cart with anonym sesession")
+            cur.execute("INSERT INTO carts(session_id) VALUES (%s) RETURNING cart_id", (user_id,))
+            cart_id = cur.fetchone()['cart_id']
+
     else:
-        cur.execute("INSERT INTO carts(user_id) VALUES (%s) RETURNING cart_id", (user_id,))
-        cart_id = cur.fetchone()[0]
-    
-    cur.execute("SELECT id FROM cart_itmes WHERE cart_id = %s AND product_id = %s", (cart_id, product_id))
-    item = cur.fetchone()
 
-    if item:
-        cur.execute("UPDATE cart_itmes SET quantity = quantity + %s WHERE id = %s", (quantity, item[0]))
+        utils.trace("ENTERED authenticated_user IS NOT NONE")
+
+        cur.execute("SELECT * FROM carts WHERE user_id = %s", (user_id,))
+        cart_row = cur.fetchone() 
+
+        if cart_row:
+
+            utils.trace("ENTERED ALREADY CREATED CART FOR AUTH USER")
+
+            cart_id = cart_row['cart_id']
+        else:
+
+            utils.trace("ENTERED CREATING CART FOR AUTH USER")
+
+            cur.execute("INSERT INTO carts(user_id) VALUES (%s) RETURNING cart_id", (user_id,))
+            cart_id = cur.fetchone()['cart_id']
+       
+    utils.trace("cart_id")
+    utils.trace(cart_id)
+
+    cur.execute("SELECT * FROM cart_itmes WHERE cart_id = %s AND product_id = %s", (cart_id, product_id))
+    cart_items_row = cur.fetchone()
+
+    if cart_items_row is not None:
+        cart_items_id = cart_items_row['id']
+
+    if cart_items_row:
+        utils.trace("ENTERED cart_items_row is NOT None")
+
+        cur.execute("UPDATE cart_itmes SET quantity = quantity + %s WHERE id = %s", (quantity, cart_items_id))
+
+        utils.trace("added same item, quantity was increased")
+
+        return "You successfully added same item, quantity was increased."
     else:
+        utils.trace("ENTERED cart_items_row is None")
+
         cur.execute("INSERT INTO cart_itmes (cart_id, product_id, quantity, vat) VALUES (%s, %s, %s, %s)", (cart_id, product_id, quantity, vat))
 
-    return "You successfully added item."
+        utils.trace("INSERTED ITEMS")
+
+        return "You successfully added item."
 
 #TODO: cart_itmes REFACTOR
 #TODO: na vsichki fetchall da ima assertDev za duljina na redove ot bazata | assertPeer na post na cart
 def view_cart(conn, cur, user_id):
     cur.execute("""
-                SELECT p.name, p.price, ci.quantity, p.id, currencies.symbol, s.vat
-                FROM     CARTS      AS c 
-                    JOIN cart_itmes AS ci ON c.cart_id     = ci.cart_id 
-                    JOIN products   AS p  ON ci.product_id = p.id
-                    JOIN currencies AS currencies  ON p.currency_id = currencies.id
-                    JOIN settings   AS s  ON p.vat_id      = s.id
-                WHERE c.user_id = %s
+                SELECT 
+                    products.name, 
+                    products.price, 
+                    cart_itmes.quantity, 
+                    products.id, 
+                    currencies.symbol, 
+                    settings.vat
+                FROM carts
+                    JOIN cart_itmes  ON carts.cart_id         = cart_itmes.cart_id 
+                    JOIN products    ON cart_itmes.product_id = products.id
+                    JOIN currencies  ON products.currency_id  = currencies.id
+                    JOIN settings    ON products.vat_id       = settings.id
+                WHERE carts.user_id = %s
                 """, (user_id,))
+
     items = cur.fetchall()
+
+    utils.AssertDev(len(items) <= 1000, "Fetched too many rows in view_cart function")
+
     return items
 
 def get_cart_items_count(conn, cur, user_id):
-    cur.execute("""
-                SELECT p.name, p.price, ci.quantity, p.id 
-                FROM CARTS AS c 
-                JOIN cart_itmes AS ci ON c.cart_id=ci.cart_id 
-                JOIN products AS p ON ci.product_id=p.id 
-                WHERE c.user_id = %s
-                """, (user_id,))
+
+    query = """
+            SELECT 
+                products.name, 
+                products.price, 
+                cart_itmes.quantity, 
+                products.id 
+            FROM carts 
+                JOIN cart_itmes  ON carts.cart_id         = cart_itmes.cart_id 
+                JOIN products    ON cart_itmes.product_id = products.id 
+            WHERE
+    """
+
+    if isinstance(user_id, str):
+        query += f" carts.session_id = %s"
+
+    else:
+        query += f" carts.user_id = %s"
+
+    cur.execute(query, (user_id,))
+
     items = cur.fetchall()
+
+    utils.AssertDev(len(items) <= 1000, "Fetched too many rows in get_cart_items_count function")
+
     return len(items)
 
 def remove_from_cart(conn, cur, item_id):
@@ -1015,81 +1169,108 @@ def remove_from_cart(conn, cur, item_id):
 def add_to_cart_meth(conn, cur):
     authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
 
-    if authenticated_user == None:
-       return redirect('/login')
-
-    cur.execute("SELECT id FROM users WHERE email = %s", (authenticated_user,))
-    user_id = cur.fetchone()[0]
-
     product_id = request.form['product_id']
     quantity = request.form.get('quantity', 1)
+    # conn, cur, user_id, product_id, quantity
+    if authenticated_user == None:
 
-    response = add_to_cart(conn, cur, user_id, product_id, quantity)
-    newCartCount = get_cart_items_count(conn, cur, user_id)
+        session_id_unauthenticated_user = request.cookies.get('session_id_unauthenticated_user')
 
-    return jsonify({'message':response, 'newCartCount': newCartCount})
+        if session_id_unauthenticated_user == None:
+
+            session_id = str(uuid.uuid4())
+
+            response_message = add_to_cart(conn, cur, session_id, product_id, quantity)
+            newCartCount = get_cart_items_count(conn, cur, session_id)
+
+            response = make_response(jsonify({'message': response_message, 'newCartCount': newCartCount}))
+            response.set_cookie('session_id_unauthenticated_user', session_id, httponly=True, samesite='Lax')
+
+        else:
+            response_message = add_to_cart(conn, cur, session_id_unauthenticated_user, product_id, quantity)
+            newCartCount = get_cart_items_count(conn, cur, session_id_unauthenticated_user)
+
+            response = make_response(jsonify({'message': response_message, 'newCartCount': newCartCount}))
+    else:
+        cur.execute("SELECT * FROM users WHERE email = %s", (authenticated_user,))
+        user_row = cur.fetchone()
+        user_id = user_row['id']
+
+        response_message = add_to_cart(conn, cur, user_id, product_id, quantity)
+        newCartCount = get_cart_items_count(conn, cur, user_id)
+
+        response = make_response(jsonify({'message': response_message, 'newCartCount': newCartCount}))
+
+    return response
+
+def merge_cart(conn, cur, user_id, session_id):
+    cur.execute("SELECT * FROM carts WHERE session_id = %s", (session_id,))
+    cart_row = cur.fetchone()
+    cart_id = cart_row['cart_id']
+    cur.execute("UPDATE carts SET user_id = %s, session_id = null WHERE cart_id = %s and session_id = %s", (user_id, cart_id, session_id))
+    # if cart_row:
+    #     old_cart_id = cart_row['cart_id']
+        
+    #     cur.execute("SELECT * FROM cart_items WHERE cart_id = %s", (old_cart_id,))
+    #     items = cur.fetchall()
+
+    #     cur.execute("INSERT INTO carts (user_id) VALUES (%s) RETURNING cart_id", (user_id,))
+    #     new_cart_id = cur.fetchone()['cart_id']
+
+    #     for item in items:
+    #         cur.execute("INSERT INTO cart_items (cart_id, product_id, quantity, added_at, vat) VALUES (%s, %s, %s, %s, %s)",
+    #                     (new_cart_id, item['product_id'], item['quantity'], item['added_at'], item['vat']))
+
+    #     cur.execute("DELETE FROM cart_items WHERE cart_id = %s", (old_cart_id,))
+    #     cur.execute("DELETE FROM carts WHERE session_id = %s", (session_id,))
 
 def cart(conn, cur):
     authenticated_user = sessions.get_current_user(request=request, cur=cur, conn=conn)
-    cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
 
     if authenticated_user == None:
-       return redirect('/login')
+        session['login_message_unauth_user'] = "You have to login to see your cart"
+        return redirect("/login")
     
     if request.method == 'GET':
-        form_data = None
+        recovery_data = None
 
-        if 'form_data_stack' in session:
-            form_data_stack = session.get('form_data_stack', [])
-            if len(form_data_stack) > 0:
-                form_data = form_data_stack.pop()
+        if 'recovery_data_stack' in session:
+            recovery_data_stack = session.get('recovery_data_stack', [])
+            if len(recovery_data_stack) == 1:
+                recovery_data = recovery_data_stack.pop()
         else:
-            form_data = None
+            recovery_data = None
 
-        query = """
-                    SELECT
-                        users.id,
-                        users.first_name,
-                        users.last_name,
-                        country_codes.name as name,
-                        country_codes.code as code
-                    FROM users
-                        LEFT JOIN country_codes ON TRUE
-                    WHERE users.email = %s
-            """
+        cur.execute("SELECT users.*, settings.vat FROM users, settings WHERE email = %s", (authenticated_user,))
+        user_settings_row = cur.fetchone()
 
-        cur_dict.execute(query, (authenticated_user,))
-        query_results = cur_dict.fetchall()
+        user_id = user_settings_row['id']
+        first_name = user_settings_row['first_name']
+        last_name = user_settings_row['last_name']
+        vat_in_persent = user_settings_row['vat']
 
-        user_id = query_results[0]['id']
-        first_name = query_results[0]['first_name']
-        last_name = query_results[0]['last_name']
-
-        country_codes = []
-
-        for row in query_results:
-            country_codes.append((row['name'],row['code']))
+        country_codes = cache_impl.get_country_codes(cur=cur)
 
         items = view_cart(conn, cur, user_id)
 
-        #TODO: da ne e tuple
-        total_sum = sum(item[1] * item[2] for item in items)
+        total_sum = 0
 
         total_sum_with_vat = 0
 
         for item in items:
-            vat_float = (Decimal(item[5]) / 100)
-            items_sum_without_vat = item[1] * item[2]
+            vat_float = (Decimal(item['vat']) / 100)
+            items_sum_without_vat = item['price'] * item['quantity']
+            total_sum += items_sum_without_vat
             vat = items_sum_without_vat * vat_float
             total_sum_with_vat += items_sum_without_vat + vat
 
-        return render_template('cart.html', items=items, total_sum_with_vat=round(total_sum_with_vat, 2), total_sum=total_sum,country_codes=country_codes, form_data=form_data, first_name=first_name, last_name=last_name, email=authenticated_user)
+        return render_template('cart.html', items=items, total_sum_with_vat=round(total_sum_with_vat, 2), 
+                                total_sum=total_sum,country_codes=country_codes, recovery_data=recovery_data, 
+                                first_name=first_name, last_name=last_name, email=authenticated_user, vat=vat_in_persent)
    
     elif request.method == 'POST':
-        cur_dict = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-        form_data = request.form.to_dict()
-        session['form_data'] = form_data
+        recovery_data = request.form.to_dict()
+        session['recovery_data'] = recovery_data
 
         email = request.form['email'].strip()
         first_name = request.form['first_name'].strip()
@@ -1110,20 +1291,23 @@ def cart(conn, cur):
         utils.AssertUser(phone[0] != "0", "Phone number format is not valid.")
 
         # Retrieve cart items for the user
-        cur_dict.execute("""
+        cur.execute("""
                     SELECT 
                         *
-                    FROM     users      
-                        JOIN carts ON users.id = carts.user_id
+                    FROM users      
+                    JOIN carts ON users.id = carts.user_id
                     WHERE users.email = %s
                     """, 
                     (authenticated_user,))
 
-        users_carts_row = cur_dict.fetchone()
+        users_carts_row = cur.fetchone()
         user_id = users_carts_row['id']
+        user_first_name = users_carts_row['first_name']
+        user_last_name = users_carts_row['last_name']
         cart_id = users_carts_row['cart_id']
 
-        cur_dict.execute("""
+        #------------------------------------------------ edna zaqvka
+        cur.execute("""
                     SELECT 
                         cart_itmes.product_id, 
                         products.name, 
@@ -1132,18 +1316,18 @@ def cart(conn, cur):
                         currencies.symbol, 
                         cart_itmes.vat 
                     FROM cart_itmes
-                        JOIN products   ON cart_itmes.product_id = products.id
-                        JOIN currencies ON products.currency_id  = currencies.id
+                    JOIN products   ON cart_itmes.product_id = products.id
+                    JOIN currencies ON products.currency_id  = currencies.id
                     WHERE cart_itmes.cart_id = %s
                     """,
                     (cart_id,))
 
-        cart_items = cur_dict.fetchall()
+        cart_items = cur.fetchall()
 
         db_items_quantity = []
 
         for item in cart_items:
-            cur_dict.execute("""
+            cur.execute("""
                         SELECT 
                             quantity 
                         FROM products 
@@ -1151,9 +1335,11 @@ def cart(conn, cur):
                         """, 
                         (item['product_id'],))
 
-            item_quantity_db = cur_dict.fetchone()[0]
+            item_quantity_db = cur.fetchone()[0]
 
             db_items_quantity.append(item_quantity_db)
+
+        #------------------------------------------------
 
         # Check and change quantity 
         for item in cart_items:
@@ -1163,18 +1349,18 @@ def cart(conn, cur):
 
             if quantity > quantity_db:
                 session['cart_error'] = "We don't have " + str(quantity) + " from product: " + str(name) + " in our store. You can purchase less or to remove the product from your cart"
-                utils.add_form_data_in_session(session.get('form_data'))
+                utils.add_recovery_data_in_session(session.get('recovery_data'))
                 return redirect('/cart')
 
-            cur_dict.execute("UPDATE products SET quantity = quantity - %s WHERE id = %s", (quantity, product_id_))
+            cur.execute("UPDATE products SET quantity = quantity - %s WHERE id = %s", (quantity, product_id_))
 
         price_mismatch = False
         for item in cart_items:
 
             product_id, name, quantity, cart_price, symbol, vat = item
 
-            cur_dict.execute("SELECT price FROM products WHERE id = %s", (product_id,))
-            current_price = cur_dict.fetchone()['price']
+            cur.execute("SELECT price FROM products WHERE id = %s", (product_id,))
+            current_price = cur.fetchone()['price']
 
             if current_price != cart_price:
                 # Price can be updated here
@@ -1185,7 +1371,7 @@ def cart(conn, cur):
 
         # First make order, then make shipping_details #
         formatted_datetime = datetime.now().strftime('%Y-%m-%d')
-        cur_dict.execute("""
+        cur.execute("""
                     INSERT INTO orders (
                         user_id, 
                         status, 
@@ -1195,17 +1381,17 @@ def cart(conn, cur):
                     """, 
                     (user_id, "Ready for Paying")) #formatted_datetime
 
-        order_id = cur_dict.fetchone()['order_id']
+        order_id = cur.fetchone()['order_id']
 
         # Insert order products into order_items table
         for item in cart_items:
 
-            item_id = item[0]
-            item_quantity = item[2]
-            item_price = item[3]
-            item_vat = item[5]
+            item_id = item['product_id']
+            item_quantity = item['quantity']
+            item_price = item['price']
+            item_vat = item['vat']
 
-            cur_dict.execute("""
+            cur.execute("""
                         INSERT INTO order_items (
                             order_id, 
                             product_id, 
@@ -1216,7 +1402,7 @@ def cart(conn, cur):
                         """, 
                         (order_id, item_id, item_quantity, item_price, item_vat))
 
-        cur_dict.execute("""
+        cur.execute("""
                     SELECT 
                         * 
                     FROM country_codes 
@@ -1224,10 +1410,10 @@ def cart(conn, cur):
                     """, 
                     (country_code,))
 
-        country_code_row = cur_dict.fetchone()
+        country_code_row = cur.fetchone()
         country_code_id = country_code_row['id']
 
-        cur_dict.execute("""
+        cur.execute("""
                     INSERT INTO shipping_details (
                             order_id, 
                             email, 
@@ -1240,15 +1426,15 @@ def cart(conn, cur):
                     (order_id, email, first_name, last_name, town, address, phone, country_code_id))
 
         # Total sum to be passed to the payment.html
-        items = view_cart(conn, cur, user_id)
-        total_sum = sum(item[1] * item[2] for item in items)
-
         # Total sum with vat to be passed to the payment.html
+        total_sum = 0
+
         total_sum_with_vat = 0
 
-        for item in items:
-            vat_float = (float(item[5]) / 100)
-            items_sum_without_vat = float(item[1] * item[2])
+        for item in cart_items:
+            vat_float = (float(item['vat']) / 100)
+            items_sum_without_vat = float(item['quantity'] * item['price'])
+            total_sum += items_sum_without_vat
             vatt = items_sum_without_vat * vat_float
             total_sum_with_vat += items_sum_without_vat + vatt
 
@@ -1257,14 +1443,7 @@ def cart(conn, cur):
 
         cur.execute("""
                     SELECT 
-                        shipping_details.shipping_id, 
-                        shipping_details.order_id, 
-                        shipping_details.email, 
-                        shipping_details.first_name, 
-                        shipping_details.last_name, 
-                        shipping_details.town, 
-                        shipping_details.address, 
-                        shipping_details.phone, 
+                        shipping_details.*, 
                         country_codes.code 
                     FROM shipping_details
                         JOIN orders        ON shipping_details.order_id        = orders.order_id 
@@ -1275,24 +1454,41 @@ def cart(conn, cur):
 
         shipping_details = cur.fetchall()
 
-        send_mail.send_mail(products=cart_items, shipping_details=shipping_details[0], total_sum=total_sum, 
-                            total_with_vat=total_sum_with_vat, provided_sum=0, user_email=authenticated_user, 
-                            cur=cur, conn=conn, email_type='purchase_mail', app=app, mail=mail)
+        cur.execute("SELECT * FROM settings")
+        settings_row = cur.fetchone()
 
-        session['payment_message'] = "You successful made an order with id = " + str(order_id)
+        send_email = False
+        try:
+            utils.trace("ENTERED TRY BLOCK")
 
-        cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (authenticated_user,))
-        user_details = cur.fetchone()
+            send_mail_data = {
+                "products": cart_items,
+                "shipping_details": shipping_details[0],
+                "total_sum": total_sum,
+                "total_with_vat": total_sum_with_vat,
+                "provided_sum": 0,
+                "user_email": authenticated_user,
+                "cur": cur,
+                "conn": conn,
+                "email_type": 'purchase_mail',
+                "app": app,
+                "mail": mail,
+            }
 
-        utils.trace(round(total_sum_with_vat, 2))
+            session['send_email'] = True
+            session['send_mail_data'] = send_mail_data
 
-        return render_template('payment.html', order_id=order_id, order_products=cart_items, 
-                                shipping_details=shipping_details, total_sum_with_vat=round(total_sum_with_vat, 2 ),
-                                total_sum=round(total_sum, 2), first_name=user_details[0], 
-                                last_name=user_details[1], email=authenticated_user)
+            session['payment_message'] = "You successful made an order with id = " + str(order_id)
 
+            return render_template('payment.html', order_id=order_id, order_products=cart_items, 
+                                    shipping_details=shipping_details, total_sum_with_vat=round(total_sum_with_vat, 2 ),
+                                    total_sum=round(total_sum, 2), first_name=user_first_name, 
+                                    last_name=user_last_name, email=authenticated_user, vat_in_persent = settings_row['vat'])
+        except Exception as e:
+            conn.rollback()
+            raise e
     else:
-        utils.AssertUser(False, "Invalid method")
+        utils.AssertPeer(False, "Invalid method")
 
 def remove_from_cart_meth(conn, cur):
     authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
@@ -1312,28 +1508,49 @@ def finish_payment(conn, cur):
        return redirect('/login')
     
     if request.method == 'GET':
-        cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
         order_id = session.get('order_id')
 
-        cur.execute("SELECT oi.product_id, p.name, oi.quantity, oi.price, currencies.symbol, oi.vat FROM order_items AS oi JOIN products AS p ON oi.product_id=p.id JOIN currencies ON p.currency_id=currencies.id WHERE order_id = %s", (order_id,))
+        cur.execute("SELECT users.*, settings.vat FROM users, settings WHERE email = %s", (authenticated_user,))
+        user_settings_row = cur.fetchone()
+
+        cur.execute("""
+
+                    SELECT 
+                        order_items.product_id, 
+                        products.name, 
+                        order_items.quantity, 
+                        order_items.price, 
+                        currencies.symbol, 
+                        order_items.vat 
+                    FROM order_items  
+                        JOIN products   ON order_items.product_id = products.id 
+                        JOIN currencies ON products.currency_id   = currencies.id 
+                        WHERE order_id = %s
+
+                    """, (order_id,))
+
         order_products = cur.fetchall()
 
-        total_summ = sum(int(product[2]) * Decimal(product[3]) for product in order_products)
+        utils.AssertDev(len(order_products) <= 1000, "More than 1000 products where fetched from the db in finish_payment method")
+
+        total_summ = sum(int(product['quantity']) * Decimal(product['price']) for product in order_products)
         total_sum = round(total_summ, 2)
 
         total_with_vat = 0
         for product in order_products:
 
-            utils.trace(product)
-
-            total_with_vat += (int(product[2]) * float(product[3])) + (((float(product[5]) / 100)) * (int(product[2]) * float(product[3])))
+            total_with_vat += (int(product['quantity']) * float(product['price'])) + (((float(product['vat']) / 100)) * (int(product['quantity']) * float(product['price'])))
 
         cur.execute("SELECT * FROM shipping_details WHERE order_id = %s", (order_id,))
-        shipping_details = cur.fetchone()
+        shipping_details = cur.fetchall()
 
         session['order_id'] = order_id
 
-        return render_template('payment.html', order_products=order_products, shipping_details=shipping_details, total_sum=total_sum, total_sum_with_vat=round(total_with_vat, 2))
+        return render_template('payment.html', order_products=order_products, shipping_details=shipping_details, 
+                                total_sum=total_sum, total_sum_with_vat=round(total_with_vat, 2), 
+                                first_name = user_settings_row['first_name'], last_name = user_settings_row['last_name'], 
+                                email = user_settings_row['email'], vat_in_persent=user_settings_row['vat'])
 
     elif request.method == 'POST':
 
@@ -1350,6 +1567,41 @@ def finish_payment(conn, cur):
         cur.execute("SELECT quantity, price, vat FROM order_items WHERE order_id = %s", (order_id,))
         all_products_from_the_order = cur.fetchall()
 
+        cur.execute("""
+
+                    SELECT
+                        orders.*,
+                        shipping_details.*,
+                        country_codes.code AS country_codes_code
+                    FROM 
+                        orders,
+                        shipping_details
+
+                        JOIN country_codes ON shipping_details.country_code_id = country_codes.id
+                    WHERE
+                        orders.order_id = %s 
+                        AND 
+                        shipping_details.order_id = %s
+
+            """, (order_id, order_id))
+
+        orders_shipping_details_row = cur.fetchone()
+        order_status = orders_shipping_details_row['status']
+        # shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code_id, country_codes_code  = shipping_details
+        shipping_details = []
+        shipping_details.append(orders_shipping_details_row['shipping_id'])
+        shipping_details.append(orders_shipping_details_row['order_id'])
+        shipping_details.append(orders_shipping_details_row['email'])
+        shipping_details.append(orders_shipping_details_row['first_name'])
+        shipping_details.append(orders_shipping_details_row['last_name'])
+        shipping_details.append(orders_shipping_details_row['town'])
+        shipping_details.append(orders_shipping_details_row['address'])
+        shipping_details.append(orders_shipping_details_row['phone'])
+        shipping_details.append(orders_shipping_details_row['country_code_id'])
+        shipping_details.append(orders_shipping_details_row['country_codes_code'])
+
+        utils.trace(shipping_details)
+
         total = 0
         for product in all_products_from_the_order:
             total += int(product[0]) * Decimal(product[1])
@@ -1357,9 +1609,6 @@ def finish_payment(conn, cur):
         total_with_vat = 0
         for product in all_products_from_the_order:
             total_with_vat += (int(product[0]) * float(product[1])) + (((float(product[2]) / 100)) * (int(product[0]) * float(product[1])))
-
-        cur.execute("SELECT status FROM orders WHERE order_id= %s", (order_id,))
-        order_status = cur.fetchone()[0]
 
         utils.AssertUser(order_status == 'Ready for Paying', "This order is not ready for payment or has already been paid")
 
@@ -1375,36 +1624,53 @@ def finish_payment(conn, cur):
         # formatted_datetime = datetime.now().strftime('%Y-%m-%d')
         cur.execute("UPDATE orders SET status = 'Paid' WHERE order_id = %s", (order_id,))
 
-        cur.execute("SELECT * FROM shipping_details WHERE order_id = %s", (order_id,))
-        shipping_details = cur.fetchone()
-
         cur.execute("""
 
             SELECT 
-                p.name, 
-                oi.quantity, 
-                oi.price,
-                c.symbol,
-                oi.vat
-            FROM order_items     AS oi 
-                JOIN products    AS p ON oi.product_id = p.id
-                JOIN currencies  AS c ON p.currency_id = c.id
+                products.name, 
+                order_items.quantity, 
+                order_items.price,
+                currencies.symbol,
+                order_items.vat
+            FROM order_items      
+                JOIN products   ON order_items.product_id = products.id
+                JOIN currencies ON products.currency_id = currencies.id
             WHERE order_id = %s
 
             """, (order_id,))
+
         products_from_order = cur.fetchall()
 
-        send_mail.send_mail(products=products_from_order, shipping_details=shipping_details, 
-                            total_sum=total, total_with_vat=total_with_vat, provided_sum=payment_amount, 
-                            user_email=authenticated_user, cur=cur, conn=conn, email_type='payment_mail', 
-                            app=app, mail=mail)
+        send_email = False
+        try:
+            utils.trace("ENTERED TRY BLOCK")
 
-        session['home_message'] = "You paid the order successful"
+            send_mail_data = {
+                "products": products_from_order,
+                "shipping_details": shipping_details,
+                "total_sum": total,
+                "total_with_vat": total_with_vat,
+                "provided_sum": payment_amount,
+                "user_email": authenticated_user,
+                "cur": cur,
+                "conn": conn,
+                "email_type": 'payment_mail',
+                "app": app,
+                "mail": mail,
+            }
 
-        return redirect('/home/1')
+            session['send_email'] = True
+            session['send_mail_data'] = send_mail_data
 
+            session['home_message'] = "You paid the order successful"
+
+            return redirect('/home/1')
+
+        except Exception as e:
+            conn.rollback()
+            raise e
     else:
-        utils.AssertUser(False, "Invalid method")
+        utils.AssertPeer(False, "Invalid method")
 
 def staff_login(conn, cur):
 
@@ -1413,13 +1679,12 @@ def staff_login(conn, cur):
 
     elif request.method == 'POST':
 
-        cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
-        
         username = request.form['username']
         password = request.form['password']
 
-        cur.execute("SELECT username, password FROM staff WHERE username = %s AND password = %s", (username, password))
-        utils.AssertUser(cur.fetchone(), "There is no registration with this staff username and password")
+        cur.execute("SELECT * FROM staff WHERE username = %s AND password = %s", (username, password))
+        staff_row = cur.fetchone()
+        utils.AssertUser(staff_row is not None, "There is no registration with this staff username and password")
 
         session['staff_username'] = username
 
@@ -1429,7 +1694,7 @@ def staff_login(conn, cur):
 
         return response
     else:
-        utils.AssertUser(False, "Invalid method")
+        utils.AssertPeer(False, "Invalid method")
 
 def staff_portal(conn, cur):
     authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
@@ -1642,18 +1907,6 @@ def back_office_manager(conn, cur, *params):
     if authenticated_user == None:
        return redirect('/staff_login')
 
-    # username = authenticated_user
-    # username_from_url = request.path.split('/')[1]
-    # back_office = request.path.split('/')[2]
-
-    # if username != username_from_url:
-    #     requestt = request.path.split("/")
-    #     requestt.pop(0)
-    #     requestt.pop(0)
-    #     path = '/'.join(requestt)
-
-    #     return redirect(url_for('handle_request', username=username, path=path))
-
     print("back_office_manager request.path", flush=True)
     print(request.path, flush=True)
 
@@ -1662,22 +1915,20 @@ def back_office_manager(conn, cur, *params):
 
     if request.path == f'/active_users':
 
-        valid_sort_columns = {'id', 'last_active'}
-        valid_sort_orders = {'asc', 'desc'}
+        if request.method == 'GET':
+            validated_request_args_fields = utils.check_request_arg_fields(cur=cur, request=request, datetime=datetime)
 
-        sort_by = request.args.get('sort', 'desc')
-        sort_order = request.args.get('order', 'desc')
-        name = request.args.get('name', '')
-        email = request.args.get('email', '')
-        user_id = request.args.get('user_by_id','')
+            sort_by = validated_request_args_fields['sort_by']
+            sort_order = validated_request_args_fields['sort_order']
+            name = validated_request_args_fields['name']
+            email = validated_request_args_fields['email']
+            user_id = validated_request_args_fields['user_by_id']
 
-        if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
-            sort_by = 'id'
-            sort_order = 'desc'
+            users = get_active_users(sort_by, sort_order, name, email, user_id)
 
-        users = get_active_users(sort_by, sort_order, name, email, user_id)
-
-        return render_template('active_users.html', users=users, name=name, email=email, user_id=user_id)
+            return render_template('active_users.html', users=users, name=name, email=email, user_id=user_id)
+        else:
+            utils.AssertPeer(False, "Invalid method")
 
     elif re.match(r'^/crud_products_edit_picture/\d+$', request.path) and len(request.path.split('/')) == 3:
 
@@ -1722,75 +1973,72 @@ def back_office_manager(conn, cur, *params):
     elif request.path == f'/error_logs':     
         utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read', authenticated_user), "You don't have permission to this resource")
 
-        sort_by = request.args.get('sort','time')
-        sort_order = request.args.get('order','asc')
+        if request.method == 'GET':
+        
+            validated_request_args_fields = utils.check_request_arg_fields(cur=cur, request=request, datetime=datetime)
 
-        valid_sort_columns = {'time'}
-        valid_sort_orders = {'asc', 'desc'}
+            sort_by = validated_request_args_fields['sort_by']
+            sort_order = validated_request_args_fields['sort_order']
 
-        if sort_by not in valid_sort_columns or sort_order not in valid_sort_orders:
-            sort_by = 'time'
-            sort_order = 'asc'
+            query = "SELECT * FROM exception_logs"
 
-        query = "SELECT * FROM exception_logs"
+            if sort_by and sort_order:
+                query += f" ORDER BY {sort_by} {sort_order}"
 
-        if sort_by and sort_order:
-            query += f" ORDER BY {sort_by} {sort_order}"
+            cur.execute(query)
+            log_exceptions = cur.fetchall()
 
-        cur.execute(query)
-        log_exceptions = cur.fetchall()
+            utils.AssertDev(len(log_exceptions) <= 100000, "Too much fetched values from db /error_logs")
 
-        return render_template('logs.html', log_exceptions = log_exceptions, sort_by=sort_by, sort_order=sort_order)
+            return render_template('logs.html', log_exceptions = log_exceptions, sort_by=sort_by, sort_order=sort_order)
+        else:
+            utils.AssertPeer(False, "Invalid method")
     
     elif request.path == f'/update_captcha_settings':
-
         utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'read', authenticated_user), "You don't have permission to this resource")
 
         if request.method == 'GET':
 
             current_settings = utils.get_current_settings(cur)
 
-            cur.execute("SELECT report_limitation_rows FROM settings")
-            limitation_rows = cur.fetchone()[0]
+            cur.execute("SELECT * FROM settings")
+            settings_row = cur.fetchone()
 
-            cur.execute("SELECT send_email_template_background_color, send_email_template_text_align, send_email_template_border, send_email_template_border_collapse FROM settings")
-            values = cur.fetchone()
-            utils.trace(values)
-
-            cur.execute("SELECT vat FROM settings")
-            vat = cur.fetchone()[0]
-
-            background_color = values[0]
-            text_align = values[1]
-            border = values[2]
-            border_collapse = values[3]
+            limitation_rows = settings_row['report_limitation_rows']
+            vat = settings_row['vat']
+            background_color = settings_row['send_email_template_background_color']
+            text_align = settings_row['send_email_template_text_align']
+            border = settings_row['send_email_template_border']
+            border_collapse = settings_row['send_email_template_border_collapse']
 
             return render_template('captcha_settings.html', vat=vat,limitation_rows=limitation_rows, border_collapse=border_collapse,border=border,text_align=text_align,background_color=background_color,**current_settings)
 
-        utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
+        elif request.method == 'POST':
+            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
 
-        new_max_attempts = request.form['max_captcha_attempts']
-        new_timeout_minutes = request.form['captcha_timeout_minutes']
+            new_max_attempts = request.form['max_captcha_attempts']
+            new_timeout_minutes = request.form['captcha_timeout_minutes']
 
-        utils.AssertUser(not(new_max_attempts and int(new_max_attempts)) <= 0, "Captcha attempts must be possitive number")
-        utils.AssertUser(not(new_timeout_minutes and int(new_timeout_minutes)) <= 0, "Timeout minutes must be possitive number")
+            utils.AssertUser(not(new_max_attempts and int(new_max_attempts)) <= 0, "Captcha attempts must be possitive number")
+            utils.AssertUser(not(new_timeout_minutes and int(new_timeout_minutes)) <= 0, "Timeout minutes must be possitive number")
 
-        str_message = ""
+            str_message = ""
 
-        if new_max_attempts:
-            cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'max_captcha_attempts'", (new_max_attempts,))
-            str_message += 'You updated captcha attempts. '
-        if new_timeout_minutes:
-            cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'captcha_timeout_minutes'", (new_timeout_minutes,))
-            str_message += 'You updated timeout minutes.'
-    
-        if str_message != "":
-            session['staff_message'] = str_message
+            if new_max_attempts:
+                cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'max_captcha_attempts'", (new_max_attempts,))
+                str_message += 'You updated captcha attempts. '
+            if new_timeout_minutes:
+                cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'captcha_timeout_minutes'", (new_timeout_minutes,))
+                str_message += 'You updated timeout minutes.'
+        
+            if str_message != "":
+                session['staff_message'] = str_message
 
-        return redirect(f'/staff_portal')
+            return redirect(f'/staff_portal')
+        else:
+            utils.AssertPeer(False, "Invalid method")
 
     elif request.path == f'/update_report_limitation_rows':
-
         if request.method == 'POST':
             utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
 
@@ -1805,10 +2053,9 @@ def back_office_manager(conn, cur, *params):
 
             return redirect(f'/staff_portal')
         else:
-            utils.AssertUser(False, "Invalid method") 
+            utils.AssertPeer(False, "Invalid method") 
 
     elif request.path == f'/update_email_templates_table':
-
         if request.method == 'POST':
             utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
 
@@ -1819,19 +2066,22 @@ def back_office_manager(conn, cur, *params):
 
             utils.AssertUser(int(border) <= 10 and int(border) >= 1, "Border can be between 1 and 10")
 
-            cur.execute("UPDATE settings SET send_email_template_background_color = %s", (background_color,))
-            cur.execute("UPDATE settings SET send_email_template_text_align = %s", (text_align,))
-            cur.execute("UPDATE settings SET send_email_template_border = %s", (border,))
-            cur.execute("UPDATE settings SET send_email_template_border_collapse = %s", (border_collapse,))
+            if background_color:
+                cur.execute("UPDATE settings SET send_email_template_background_color = %s", (background_color,))
+            if text_align:
+                cur.execute("UPDATE settings SET send_email_template_text_align = %s", (text_align,))
+            if border:
+                cur.execute("UPDATE settings SET send_email_template_border = %s", (border,))
+            if border_collapse:
+                cur.execute("UPDATE settings SET send_email_template_border_collapse = %s", (border_collapse,))
 
             session['staff_message'] = "You changed the email template table look successfully"
 
             return redirect(f'/staff_portal')
         else:
-            utils.AssertUser(False, "Invalid method")
+            utils.AssertPeer(False, "Invalid method")
 
     elif request.path == f'/update_vat_for_all_products':
-
         if request.method == 'POST':
             utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
             vat_for_all_products = request.form['vat_for_all_products']
@@ -1847,7 +2097,7 @@ def back_office_manager(conn, cur, *params):
 
             return redirect(f'/staff_portal')
         else:
-            utils.AssertUser(False, "Invalid method")      
+            utils.AssertPeer(False, "Invalid method")      
 
     elif request.path == f'/report_sales':
         utils.AssertUser(utils.has_permission(cur, request, 'Report sales', 'read', authenticated_user), "You don't have permission to this resource")
@@ -1864,14 +2114,12 @@ def back_office_manager(conn, cur, *params):
         
         elif request.method == 'POST':
 
-            cur.execute("SELECT report_limitation_rows FROM settings")
-            limitation_rows = cur.fetchone()[0]
+            cur.execute("SELECT * FROM settings")
+            settings_rows = cur.fetchone()
+            limitation_rows = settings_rows['report_limitation_rows']
 
             date_from = request.form.get('date_from')
             date_to = request.form.get('date_to')
-
-            utils.trace(date_from)
-            utils.trace(date_to)
 
             group_by = request.form.get('group_by')
             status = request.form.get('status')
@@ -1946,7 +2194,7 @@ def back_office_manager(conn, cur, *params):
 
             return render_template('report.html', limitation_rows=int(limitation_rows), filter_by_status=filter_by_status,report=report, total_records=total_records, total_price_with_vat=total_price_with_vat,total_vat=total_vat,total_price=total_price, report_json=report_json, default_to_date=date_to, default_from_date=date_from)
         else:
-            utils.AssertUser(False, "Invalid url")
+            utils.AssertPeer(False, "Invalid url")
 
     elif request.path == f'/download_report_without_generating_rows_in_the_html':
 
@@ -2665,22 +2913,34 @@ def back_office_manager(conn, cur, *params):
 
         if request.method == 'GET':
 
-            cur.execute("SELECT name, subject, body, sender FROM email_template WHERE name = 'Verification Email'")
-            values = cur.fetchone()
+            cur.execute("SELECT * FROM email_template")
+            email_templates_rows = cur.fetchall()
 
-            cur.execute("SELECT name, subject, body FROM email_template WHERE name = 'Purchase Email'")
-            values_purchase = cur.fetchone()
+            cur.execute("SELECT * FROM settings")
+            settings_row = cur.fetchone()
 
-            cur.execute("SELECT name, subject, body FROM email_template WHERE name = 'Payment Email'")
-            values_payment = cur.fetchone()
+            for template in email_templates_rows:
+                if template['name'] == "Verification Email":
+                    verification_email_values = [template['name'],template['subject'],template['body'], template['sender']]
 
-            if values and values_purchase and values_payment:
-                name, subject, body, sender = values
-                name_purchase, subject_purchase, body_purchase = values_purchase
-                name_payment, subject_payment, body_payment = values_payment
+                elif template['name'] == "Purchase Email":
+                    purchase_email_values = [template['name'],template['subject'],template['body'], template['sender']]
+
+                elif template['name'] == "Payment Email":
+                    payment_email_values = [template['name'],template['subject'],template['body'], template['sender']]
+
+                else:
+                    utils.AssertDev(False, "No information in db for email_template")
+
+            if verification_email_values and purchase_email_values and payment_email_values:
+                name, subject, body, sender = verification_email_values
+                name_purchase, subject_purchase, body_purchase, sender_purchase = purchase_email_values
+                name_payment, subject_payment, body_payment, sender_payment = payment_email_values
 
                 return render_template('template_email.html', subject=subject, body=body, tepmplate_subject_purchase=subject_purchase, 
-                                        tepmplate_body_purchase=body_purchase, tepmplate_subject_payment=subject_payment, tepmplate_body_payment=body_payment)
+                                        tepmplate_body_purchase=body_purchase, tepmplate_subject_payment=subject_payment, tepmplate_body_payment=body_payment,
+                                        background_color=settings_row['send_email_template_background_color'], text_align=settings_row['send_email_template_text_align'],
+                                        border=settings_row['send_email_template_border'], border_collapse=settings_row['send_email_template_border_collapse'])
 
         elif request.method == 'POST':
             
@@ -2824,6 +3084,7 @@ def handle_request(username=None, path=''):
     try:
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+        # traceback.print_stack()
 
         utils.trace("request.path")
         utils.trace(request.path)
@@ -2857,25 +3118,39 @@ def handle_request(username=None, path=''):
             cur.execute("SELECT last_active FROM users WHERE email = %s", (authenticated_user,))
             current_user_last_active = cur.fetchone()[0]
             cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (authenticated_user,))
-
         else:
             pass
 
         utils.AssertDev(callable(funtion_to_call), "You are trying to invoke something that is not a function")
 
         if match:
-            utils.trace("*match.groups()")
-            utils.trace(*match.groups())
-            return funtion_to_call(conn, cur, *match.groups())
+            response = funtion_to_call(conn, cur, *match.groups())
         else:
-            return funtion_to_call(conn, cur)
+            response = funtion_to_call(conn, cur)
+
+        conn.commit()
+
+        send_email = session.get('send_email', False)
+        send_mail_data = session.get('send_mail_data', {})
+
+        if send_email:
+            utils.trace("ENTERED SEND MAIL TRUE")
+            send_mail.send_mail(products=send_mail_data['products'], shipping_details=send_mail_data['shipping_details'], total_sum=send_mail_data['total_sum'],
+                                total_with_vat=send_mail_data['total_with_vat'], provided_sum=send_mail_data['provided_sum'], 
+                                user_email=send_mail_data['user_email'],
+                                cur=send_mail_data['cur'], conn=send_mail_data['conn'], email_type=send_mail_data['email_type'], 
+                                app=send_mail_data['app'], mail=send_mail_data['mail'])
+            session['send_email'] = False
+            session['send_mail_data'] = {}
+
+        return response
 
     except Exception as message:
 
         user_email = sessions.get_current_user(request=request, cur=cur, conn=conn)
         traceback_details = traceback.format_exc()
 
-        log_exception(message.__class__.__name__, str(message), user_email)
+        log_exception(exception_type=message.__class__.__name__, message=str(message), email=user_email)
 
         print(f"Day: {datetime.now()} = ERROR by = {user_email} - {traceback_details} = error class name = {message.__class__.__name__} - Dev message: {message}", flush=True)
 
@@ -2888,14 +3163,12 @@ def handle_request(username=None, path=''):
         if request.url == 'http://127.0.0.1:5000/staff_login':
             session['staff_login'] = "Yes"
 
-        utils.add_form_data_in_session(session.get('form_data'))
+        utils.add_recovery_data_in_session(session.get('recovery_data'))
 
         conn.rollback()
 
         return render_template("error.html", message = str(message), redirect_url = request.url)
     finally:
-        #TODO: Da premestq predi if match:
-        conn.commit()
 
         if conn is not None:
             conn.close()

@@ -5,6 +5,46 @@
     <title>Settings</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
 </head>
+<style>
+/* Custom styling for Select2 container */
+.select2-container--default .select2-selection--single {
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    height: calc(2.25rem + 2px); /* Align height with Bootstrap's form controls */
+    padding: 0.375rem 0.75rem;
+}
+
+/* Style for the dropdown arrow */
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: calc(2.25rem + 2px);
+    right: 1.25rem; /* Adjust to fit the design better */
+}
+
+/* Customize the search input field inside the dropdown */
+.select2-container--default .select2-search--dropdown .select2-search__field {
+    border: none;
+}
+
+/* Customizing the dropdown items */
+.select2-container--default .select2-results>.select2-results__options {
+    max-height: 200px; /* Control the max height of dropdown */
+    overflow-y: auto;
+}
+
+/* Styles for highlighting selected and hovered items */
+.select2-container--default .select2-results__option[aria-selected=true],
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #007bff; /* Bootstrap primary color */
+    color: white;
+}
+
+/* Style adjustments for focus state */
+.select2-container--default .select2-selection--single:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+</style>
 <body>
     {% if 'settings_error' in session %}
         <div class="alert alert-danger" id="homeAlert">
@@ -43,9 +83,23 @@
                 <input type="text" class="form-control" id="address" name="address" value="{{ address }}">
             </div>
 
+
             <div class="form-group">
-                <label for="phone">Change phone</label>
-                <input type="text" class="form-control" id="phone" name="phone" value="{{ phone }}">
+                <label for="phone" class="required-field">Change phone</label>
+                <div class="input-group">
+
+                    <select class="custom-select" id="country_code" name="country_code" required>
+                        <option value="">Select a country</option>
+                        {% for code in country_codes %}
+                            <option value="{{ code[2] }}" {% if code[2] == country_code %}selected{% endif %}>
+                                {{ code[1] }} ({{ code[2] }})
+                            </option>
+                        {% endfor %}
+                    </select>
+
+                    <input type="tel" class="form-control" id="phone" name="phone" value="{{ phone }}" placeholder="Enter phone number without the country code" required>
+
+                </div>
             </div>
 
             <div class="form-group">

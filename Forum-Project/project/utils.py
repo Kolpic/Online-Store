@@ -13,10 +13,10 @@ user = config.user
 password = config.password
 host = config.host
 
-def add_form_data_in_session(form_data):
-    if 'form_data_stack' not in session:
-        session['form_data_stack'] = []
-    session['form_data_stack'].append(form_data)
+def add_recovery_data_in_session(recovery_data):
+    if 'recovery_data_stack' not in session:
+        session['recovery_data_stack'] = []
+    session['recovery_data_stack'].append(recovery_data)
     session.modified = True
 
 def hash_password(password):
@@ -225,6 +225,7 @@ def check_request_arg_fields(cur, request, datetime):
         'date_to': (request.args.get('date_to', ''), datetime),
         'status': (request.args.get('status', ''), str),
         'email': (request.args.get('email','', type=str), str),
+        'name': (request.args.get('name','', type=str), str),
         'user_by_id': (request.args.get('user_by_id', '', type=int), int),
         'page': (request.args.get('page', 1, type=int), int),
         'per_page': (request.args.get('per_page', 10, type=int), int),
@@ -235,7 +236,6 @@ def check_request_arg_fields(cur, request, datetime):
     }
 
     if parameters['sort_by'][0] not in valid_sort_columns or parameters['sort_order'][0] not in valid_sort_orders:
-        utils.AssertUser(False, "Hacker detected")
         sort_by = 'id'
         sort_order = 'asc'
 
@@ -274,6 +274,7 @@ def check_request_form_fields(request):
         'password': (request.form['password'],str),
         'address': (request.form['address'], str),
         'phone': (request.form['phone'], int),
+        'country_code': (request.form['country_code'], str),
         'gender': (request.form['gender'],str),
     }
 
@@ -288,5 +289,56 @@ def check_request_form_fields(request):
                 validated_params[key] = expected_value(value)
             except:
                 AssertUser(False, f"Invalid value for {key}. Expected type {expected_value.__name__}.")
+
+    return validated_params
+
+def check_request_form_fields_ab(needed_fields):
+    parameters = {}
+
+    for request_field, request_value in needed_fields.items():
+
+        if request_field == 'first_name':
+            parameters[request_field] = (request_value, str)
+
+        elif request_field == 'last_name':
+            parameters[request_field] = (request_value, str)
+
+        elif request_field == 'email':
+            parameters[request_field] = (request_value, str)
+
+        elif request_field == 'password':
+            parameters[request_field] = (request_value, str)
+
+        elif request_field == 'confirm_password':
+            parameters[request_field] = (request_value, str)
+
+        elif request_field == 'address':
+            parameters[request_field] = (request_value, str)
+
+        elif request_field == 'country_code':
+            parameters[request_field] = (request_value, str)
+
+        elif request_field == 'phone':
+            parameters[request_field] = (request_value, int)
+
+        elif request_field == 'gender':
+            parameters[request_field] = (request_value, str)
+
+        elif request_field == 'captcha':
+            parameters[request_field] = (request_value, int)
+
+    validated_params = {}
+
+    for key, (value, expected_value, length) in parameters.items():
+
+        try:
+            validated_params[key] = expected_value(value)
+        except:
+            AssertUser(False, f"Invalid value for {key}. Expected type {expected_value.__name__}.")
+
+        # min_value = int(length.split("-")[0])
+        # max_value = int(length.split("-")[1])
+
+        # AssertUser(len(value) >= min_value and len(value) <= max_value, f"{key} must be between {min_value} and {max_value} symbols")
 
     return validated_params

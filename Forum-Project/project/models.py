@@ -51,9 +51,14 @@ class CartItem(db.Model):
 class Cart(db.Model):
     __tablename__ = 'carts'
     cart_id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    session_id = db.Column(db.String(40), nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=db.func.current_timestamp())
     items = db.relationship('CartItem', backref='cart', lazy=True)
+
+    __table_args__ = (
+        db.CheckConstraint('(user_id IS NOT NULL AND session_id IS NULL) OR (user_id IS NULL AND session_id IS NOT NULL)', name='user_or_session_not_both'),
+    )
 
 class Product(db.Model):
     __tablename__ = 'products'
