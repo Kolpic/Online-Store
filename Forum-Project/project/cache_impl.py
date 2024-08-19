@@ -1,13 +1,6 @@
 from project import utils
 import time
 from project.config import cache, CACHE_TIMEOUT
-<<<<<<< HEAD
-<<<<<<< HEAD
-
-=======
->>>>>>> dev
-=======
->>>>>>> dev
 #TODO cache da e v tozi modul
 
 def _country_codes_from_db(cur):
