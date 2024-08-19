@@ -310,7 +310,7 @@ def process_form(interface, method):
             print(values_to_insert_db, flush=True)
     
     return values_to_insert_db
-
+    
 def registration(conn, cur):
     user_ip = request.remote_addr
 
@@ -414,21 +414,6 @@ def send_verification_email(user_email, verification_code, cur):
     else:
         utils.AssertDev(False, "No information in the database")
 
-def post_verify_method(cur, email, verification_code):
-
-    cur.execute("SELECT * FROM users WHERE email = %s", (email,))
-    user_row = cur.fetchone()
-    utils.AssertUser(user_row is not None, "There is no registration with this mail")
-
-    email_from_database = user_row['email']
-    is_verified = user_row['verification_status']
-    verification_code_database = user_row['verification_code']
-
-        utils.AssertUser(email_from_database == email, "You entered different email")
-        utils.AssertUser(not is_verified, "The account is already verified")
-        utils.AssertUser(verification_code_database == verification_code, "The verification code you typed is different from the one we send you")
-        
-        cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
 
 def verify(conn, cur):
 
@@ -459,18 +444,6 @@ def verify(conn, cur):
 
     else:
         utils.AssertPeer(False, "Invalid method")
-
-def post_login_method(cur, email, password_):
-    cur.execute("""
-                    SELECT 
-                        *
-                    FROM 
-                        users
-                    WHERE 
-                        email = %s
-                    """, (email,))
-    user_data = cur.fetchone()
-
 
 def login(conn, cur):
 
@@ -519,67 +492,6 @@ def login(conn, cur):
 
 def home(conn, cur, page = 1):
 
-    session_id = request.cookies.get('session_id')
-    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
-
-    if authenticated_user == None:
-       # return redirect('/login') 
-        cur.execute("SELECT DISTINCT(category) FROM products")
-        categories = cur.fetchall()
-
-        cart_count = 0
-        first_name = ""
-        last_name = ""
-        email = ""
-    else:
-        query = """
-            WITH categories AS (
-                SELECT DISTINCT(category) FROM products
-            )
-            SELECT *
-            FROM categories 
-            CROSS JOIN (SELECT * FROM users WHERE email = %s) u
-        """
-        
-        cur.execute(query, (authenticated_user,))
-        results = cur.fetchall()
-
-        categories = [row[0] for row in results]
-        user_id = results[0][1]
-        first_name = results[0][2]
-        last_name = results[0][3]
-
-        cart_count = front_office.get_cart_items_count(conn, cur, user_id)
-
-    validated_fields = utils.check_request_arg_fields(cur, request)
-
-    sort_by = validated_fields['sort_by']
-    sort_order = validated_fields['sort_order']
-
-    products_per_page = validated_fields['products_per_page']
-    page = validated_fields['page_front_office']
-    offset = validated_fields['offset_front_office']
-
-    product_name = validated_fields['product_name']
-    product_category = validated_fields['product_category']
-    price_min = validated_fields['price_min']
-    price_max = validated_fields['price_max']
-
-    results_from_home_page_query = front_office.get_home_query_data(cur=cur, sort_by=sort_by, sort_order=sort_order, products_per_page=products_per_page, 
-                                                        page=page, offset=offset, product_name=product_name, 
-                                                        product_category=product_category, price_min=price_min, price_max=price_max)
-
-    products = results_from_home_page_query['products']
-    total_pages = results_from_home_page_query['total_pages']
-
-    data_to_return = {
-        'products': products,
-        'total_pages': total_pages,
-    }
-
-    return data_to_return
-
-def home(conn, cur, page = 1):
     session_id = request.cookies.get('session_id')
     authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
@@ -919,10 +831,6 @@ def serve_image(product_id, cur):
 def add_to_cart_meth(conn, cur):
     session_cookie_id = request.cookies.get('session_id')
     authenticated_user =  sessions.get_current_user(session_id=session_cookie_id, cur=cur, conn=conn)
-
-        if session_id_unauthenticated_user == None:
-
-            session_id = str(uuid.uuid4())
 
     if authenticated_user == None:
 
@@ -1383,6 +1291,7 @@ def finish_payment(conn, cur):
             session['send_mail_data'] = send_mail_data
 
             session['home_message'] = "You paid the order successful"
+
             return redirect('/home/1')
 
         except Exception as e:
@@ -1638,7 +1547,6 @@ def back_office_manager(conn, cur, *params):
     if request.path == f'/active_users':
 
         if request.method == 'GET':
-
             validated_request_args_fields = utils.check_request_arg_fields(cur=cur, request=request)
 
             sort_by = validated_request_args_fields['sort_by']
