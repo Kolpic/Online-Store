@@ -124,6 +124,7 @@
                 <label for="captcha" class="required-field">Captcha</label>
                 <p>Solve the following: <span id="first_number">{{ captcha['first'] }}</span> + <span id="second_number">{{ captcha['second'] }}</span> = ?</p>
                 <button type="button" id="refresh_captcha" class="btn btn-info">Refresh Captcha</button>
+                <input type="hidden" name="captcha_id" value="{{ captcha_id }}">
                 <br>
                 <br>
                 <input type="text" class="form-control" id="captcha" name="captcha" placeholder="Enter the sum" required>

@@ -21,6 +21,7 @@ from flask_session_captcha import FlaskSessionCaptcha
 # from flask_sessionstore import Session
 from flask_session import Session
 from project import utils
+from project import front_office, back_office
 from project import send_mail
 from project import sessions
 from project import cache_impl
@@ -310,6 +311,82 @@ def process_form(interface, method):
     
     return values_to_insert_db
 
+def prepare_get_registration_return_data(cur, first_captcha_number, second_captcha_number):
+
+    cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING *", (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
+    captcha_row = cur.fetchone()
+    captcha_id = captcha_row['id']
+
+    country_codes = cache_impl.get_country_codes(cur=cur)
+
+    prepared_data = {
+        'first_captcha_number': first_captcha_number,
+        'second_captcha_number': second_captcha_number,
+        'captcha_result': captcha_row['result'],
+        'country_codes': country_codes,
+        'captcha_id': captcha_id
+    }
+
+    return prepared_data
+
+def check_post_registration_fields_data(cur, first_name, last_name, email, password_, confirm_password_, phone, gender, captcha_id, captcha_,user_ip, hashed_password, verification_code, country_code, address):    
+    regex_phone = r'^\d{7,15}$'
+
+    utils.AssertUser(password_ == confirm_password_, "Password and Confirm Password fields are different")
+    utils.AssertUser(re.fullmatch(regex_phone, phone), "Phone number format is not valid. The number should be between 7 and 15 digits")
+    utils.AssertUser(gender == 'male' or gender == 'female', "Gender must be Male of Female")
+    utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
+    utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
+    regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
+    utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
+
+    cur.execute("SELECT id, last_attempt_time, attempts FROM captcha_attempts WHERE ip_address = %s", (user_ip,))
+    attempt_record = cur.fetchone()
+
+    attempts = 0
+    max_attempts = int(utils.get_captcha_setting_by_name(cur, 'max_captcha_attempts'))
+    timeout_minutes = int(utils.get_captcha_setting_by_name(cur,'captcha_timeout_minutes'))
+
+    if attempt_record:
+        attempt_id, last_attempt_time, attempts = attempt_record
+        time_since_last_attempt = datetime.now() - last_attempt_time
+        utils.AssertUser(not(attempts >= max_attempts and time_since_last_attempt < timedelta(minutes=timeout_minutes)), "You typed wrong captcha several times, now you have timeout " + str(timeout_minutes) + " minutes")
+        if time_since_last_attempt >= timedelta(minutes=timeout_minutes):
+            attempts = 0
+            
+    # captcha_id = session.get("captcha_id")
+    cur.execute("SELECT result FROM captcha WHERE id = %s", (captcha_id,))
+    result = cur.fetchone()[0]
+
+    if captcha_ != result:
+        utils.add_recovery_data_in_session(recovery_data)
+        new_attempts = attempts + 1
+        if attempt_record:
+            cur.execute("UPDATE captcha_attempts SET attempts = %s, last_attempt_time = CURRENT_TIMESTAMP WHERE id = %s", (new_attempts, attempt_id))
+        else:
+            cur.execute("INSERT INTO captcha_attempts (ip_address, attempts, last_attempt_time) VALUES (%s, 1, CURRENT_TIMESTAMP)", (user_ip,))
+        raise exception.WrongUserInputException("Invalid CAPTCHA. Please try again")
+    else:
+        if attempt_record:
+            cur.execute("DELETE FROM captcha_attempts WHERE id = %s", (attempt_id,))
+
+    cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+    user_row = cur.fetchone()
+
+    utils.AssertUser(user_row is None, "There is already registration with this email")
+
+    cur.execute("SELECT * FROM country_codes WHERE code = %s", (country_code,))
+    country_code_row = cur.fetchone()
+    country_code_id = country_code_row['id']
+
+    cur.execute("""
+        INSERT INTO users 
+            (first_name, last_name, email, password, verification_code, address, gender, phone, country_code_id) 
+        VALUES 
+            (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, 
+        (first_name, last_name, email, hashed_password, verification_code, address, gender, phone,country_code_id))
+
 def registration(conn, cur):
     user_ip = request.remote_addr
 
@@ -328,14 +405,17 @@ def registration(conn, cur):
         first_captcha_number = random.randint(0,100)
         second_captcha_number = random.randint(0,100)
 
-        cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING id", (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
-        captcha_id = cur.fetchone()['id']
+        prepared_data = front_office.prepare_get_registration_return_data(cur=cur, 
+                                                                        first_captcha_number=first_captcha_number, 
+                                                                        second_captcha_number=second_captcha_number)
 
-        country_codes = cache_impl.get_country_codes(cur=cur)
+        rendered_template =  render_template('registration.html', 
+            country_codes=prepared_data['country_codes'], 
+            recovery_data=recovery_data, 
+            captcha = {"first": prepared_data['first_captcha_number'], "second": prepared_data['second_captcha_number']}, 
+            captcha_id = prepared_data['captcha_id'])
 
-        session["captcha_id"] = captcha_id
-        return render_template('registration.html', country_codes=country_codes, recovery_data=recovery_data, 
-                                captcha = {"first": first_captcha_number, "second": second_captcha_number})
+        return make_response(rendered_template, 200)
 
     elif request.method == 'POST':
 
@@ -354,66 +434,14 @@ def registration(conn, cur):
 
         captcha_ = int(request.form['captcha'])
 
-        regex_phone = r'^\d{7,15}$'
-
-        utils.AssertUser(password_ == confirm_password_, "Password and Confirm Password fields are different")
-        # utils.AssertUser(len(address) >= 5 and len(address) <= 50, "Address must be between 5 and 50 characters long")
-        utils.AssertUser(re.fullmatch(regex_phone, phone), "Phone number format is not valid. The number should be between 7 and 15 digits")
-        utils.AssertUser(gender == 'male' or gender == 'female', "Gender must be Male of Female")
-        utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
-        utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
-        regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-        utils.AssertUser(re.fullmatch(regex, email), "Email is not valid")
-
-        cur.execute("SELECT id, last_attempt_time, attempts FROM captcha_attempts WHERE ip_address = %s", (user_ip,))
-        attempt_record = cur.fetchone()
-
-        attempts = 0
-        max_attempts = int(utils.get_captcha_setting_by_name(cur, 'max_captcha_attempts'))
-        timeout_minutes = int(utils.get_captcha_setting_by_name(cur,'captcha_timeout_minutes'))
-
-        if attempt_record:
-            attempt_id, last_attempt_time, attempts = attempt_record
-            time_since_last_attempt = datetime.now() - last_attempt_time
-            utils.AssertUser(not(attempts >= max_attempts and time_since_last_attempt < timedelta(minutes=timeout_minutes)), "You typed wrong captcha several times, now you have timeout " + str(timeout_minutes) + " minutes")
-            if time_since_last_attempt >= timedelta(minutes=timeout_minutes):
-                attempts = 0
-                
-        captcha_id = session.get("captcha_id")
-        cur.execute("SELECT result FROM captcha WHERE id = %s", (captcha_id,))
-        result = cur.fetchone()[0]
+        captcha_id = request.form.get('captcha_id')
 
         hashed_password = utils.hash_password(password_)
         verification_code = os.urandom(24).hex()
 
-        if captcha_ != result:  
-            utils.add_recovery_data_in_session(recovery_data)
-            new_attempts = attempts + 1
-            if attempt_record:
-                cur.execute("UPDATE captcha_attempts SET attempts = %s, last_attempt_time = CURRENT_TIMESTAMP WHERE id = %s", (new_attempts, attempt_id))
-            else:
-                cur.execute("INSERT INTO captcha_attempts (ip_address, attempts, last_attempt_time) VALUES (%s, 1, CURRENT_TIMESTAMP)", (user_ip,))
-            raise exception.WrongUserInputException("Invalid CAPTCHA. Please try again")
-        else:
-            if attempt_record:
-                cur.execute("DELETE FROM captcha_attempts WHERE id = %s", (attempt_id,))
-
-        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
-        user_row = cur.fetchone()
-
-        utils.AssertUser(user_row is None, "There is already registration with this email")
-
-        cur.execute("SELECT * FROM country_codes WHERE code = %s", (country_code,))
-        country_code_row = cur.fetchone()
-        country_code_id = country_code_row['id']
-
-        cur.execute("""
-            INSERT INTO users 
-                (first_name, last_name, email, password, verification_code, address, gender, phone, country_code_id) 
-            VALUES 
-                (%s, %s, %s, %s, %s, %s, %s, %s, %s)
-            """, 
-            (first_name, last_name, email, hashed_password, verification_code, address, gender, phone,country_code_id))
+        front_office.check_post_registration_fields_data(cur, first_name, last_name, email, password_, confirm_password_, 
+                                                phone, gender, captcha_id, captcha_,user_ip, hashed_password, 
+                                                verification_code, country_code, address)
 
         send_verification_email(email, verification_code, cur)
 
@@ -462,6 +490,22 @@ def send_verification_email(user_email, verification_code, cur):
     else:
         utils.AssertDev(False, "No information in the database")
 
+def post_verify_method(cur, email, verification_code):
+
+    cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+    user_row = cur.fetchone()
+    utils.AssertUser(user_row is not None, "There is no registration with this mail")
+
+    email_from_database = user_row['email']
+    is_verified = user_row['verification_status']
+    verification_code_database = user_row['verification_code']
+
+        utils.AssertUser(email_from_database == email, "You entered different email")
+        utils.AssertUser(not is_verified, "The account is already verified")
+        utils.AssertUser(verification_code_database == verification_code, "The verification code you typed is different from the one we send you")
+        
+        cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
+
 def verify(conn, cur):
 
     if request.method == 'GET':
@@ -483,26 +527,26 @@ def verify(conn, cur):
         session['recovery_data'] = recovery_data
         email = request.form['email']
         verification_code = request.form['verification_code']
-
-        cur.execute("SELECT * FROM users WHERE email = %s", (email,))
-        user_row = cur.fetchone()
-        utils.AssertUser(user_row is not None, "There is no registration with this mail")
-
-        email_from_database = user_row['email']
-        is_verified = user_row['verification_status']
-        verification_code_database = user_row['verification_code']
-
-        utils.AssertUser(email_from_database == email, "You entered different email")
-        utils.AssertUser(not is_verified, "The account is already verified")
-        utils.AssertUser(verification_code_database == verification_code, "The verification code you typed is different from the one we send you")
         
-        cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
+        front_office.post_verify_method(cur=cur, email=email, verification_code=verification_code)
 
         session['login_message'] = 'Successful verification'
         return redirect("/login")
 
     else:
         utils.AssertPeer(False, "Invalid method")
+
+def post_login_method(cur, email, password_):
+    cur.execute("""
+                    SELECT 
+                        *
+                    FROM 
+                        users
+                    WHERE 
+                        email = %s
+                    """, (email,))
+    user_data = cur.fetchone()
+
 
 def login(conn, cur):
 
@@ -526,27 +570,16 @@ def login(conn, cur):
         email = request.form['email']
         password_ = request.form['password']
 
-        cur.execute("""
-                    SELECT 
-                        *
-                    FROM 
-                        users
-                    WHERE 
-                        email = %s
-                    """, (email,))
-        user_data = cur.fetchone()
+        user_data = front_office.post_login_method(cur=cur, email=email, password_=password_)
 
-        utils.AssertUser(user_data, "There is no registration with this email")
-        utils.AssertUser(utils.verify_password(password_, user_data['password']), "Invalid email or password")
-        utils.AssertUser(user_data['verification_status'], "Your account is not verified or has been deleted")
-
-        session_id = sessions.create_session(os=os, datetime=datetime, timedelta=timedelta, session_data=email, cur=cur, conn=conn, is_front_office=True)
+        session_id = sessions.create_session(session_data=email, cur=cur, conn=conn, is_front_office=True)
 
         session_id_unauthenticated_user = request.cookies.get('session_id_unauthenticated_user')
         if session_id_unauthenticated_user:
             if user_data:
                 user_id = user_data['id']
-                merge_cart(conn, cur, user_id, session_id_unauthenticated_user)
+
+                front_office.merge_cart(conn, cur, user_id, session_id_unauthenticated_user)
 
                 session['cart_message_unauth_user'] = "You logged in successfully, this are the items you selected before you logged"
                 response = make_response(redirect('/cart'))
@@ -561,7 +594,9 @@ def login(conn, cur):
         utils.AssertPeer(False, "Invalid method")
 
 def home(conn, cur, page = 1):
-    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
+
+    session_id = request.cookies.get('session_id')
+    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
     if authenticated_user == None:
        # return redirect('/login') 
@@ -590,9 +625,9 @@ def home(conn, cur, page = 1):
         first_name = results[0][2]
         last_name = results[0][3]
 
-        cart_count = get_cart_items_count(conn, cur, user_id)
+        cart_count = front_office.get_cart_items_count(conn, cur, user_id)
 
-    validated_fields = utils.check_request_arg_fields(cur, request, datetime)
+    validated_fields = utils.check_request_arg_fields(cur, request)
 
     sort_by = validated_fields['sort_by']
     sort_order = validated_fields['sort_order']
@@ -606,51 +641,73 @@ def home(conn, cur, page = 1):
     price_min = validated_fields['price_min']
     price_max = validated_fields['price_max']
 
-    name_filter = f" AND products.name ILIKE %s" if product_name else ''
-    category_filter = f" AND category ILIKE %s" if product_category else ''
-    price_filter = ""
-    query_params = []
+    results_from_home_page_query = front_office.get_home_query_data(cur=cur, sort_by=sort_by, sort_order=sort_order, products_per_page=products_per_page, 
+                                                        page=page, offset=offset, product_name=product_name, 
+                                                        product_category=product_category, price_min=price_min, price_max=price_max)
 
-    if product_name:
-        query_params.append(f"%{product_name}%")
-    if product_category:
-        query_params.append(f"%{product_category}%")
+    products = results_from_home_page_query['products']
+    total_pages = results_from_home_page_query['total_pages']
 
-    if price_min and price_max:
-        price_filter = " AND price BETWEEN %s AND %s"
-        query_params.extend([price_min, price_max])
+    data_to_return = {
+        'products': products,
+        'total_pages': total_pages,
+    }
 
-    query = f"""
-                SELECT 
-                    products.id, 
-                    products.name, 
-                    products.price, 
-                    products.quantity, 
-                    products.category, 
-                    currencies.symbol, 
-                    settings.vat 
-                FROM products 
-                    JOIN currencies ON products.currency_id = currencies.id
-                    JOIN settings   ON products.vat_id      = settings.id
-                WHERE TRUE{name_filter}{category_filter}{price_filter} 
-                ORDER BY {sort_by} {sort_order}
-                LIMIT %s 
-                OFFSET %s
-            """
+    return data_to_return
 
-    query_params.extend([products_per_page, offset])
+def home(conn, cur, page = 1):
+    session_id = request.cookies.get('session_id')
+    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
-    cur.execute(query,tuple(query_params))
-    products = cur.fetchall()
+    if authenticated_user == None:
+       # return redirect('/login') 
+        cur.execute("SELECT DISTINCT(category) FROM products")
+        categories = cur.fetchall()
 
-    count_query = f"SELECT COUNT(*) as count FROM products WHERE TRUE{name_filter}{category_filter}{price_filter}"
-    cur.execute(count_query, tuple(query_params[:-2]))
+        cart_count = 0
+        first_name = ""
+        last_name = ""
+        email = ""
+    else:
+        query = """
+            WITH categories AS (
+                SELECT DISTINCT(category) FROM products
+            )
+            SELECT *
+            FROM categories 
+            CROSS JOIN (SELECT * FROM users WHERE email = %s) u
+        """
+        
+        cur.execute(query, (authenticated_user,))
+        results = cur.fetchall()
 
-    total_products = cur.fetchone()['count']
+        categories = [row[0] for row in results]
+        user_id = results[0][1]
+        first_name = results[0][2]
+        last_name = results[0][3]
 
-    utils.AssertUser(total_products, 'No results with this filter')
+        cart_count = front_office.get_cart_items_count(conn, cur, user_id)
 
-    total_pages = (total_products // products_per_page) + (1 if total_products % products_per_page > 0 else 0)
+    validated_fields = utils.check_request_arg_fields(cur, request)
+
+    sort_by = validated_fields['sort_by']
+    sort_order = validated_fields['sort_order']
+
+    products_per_page = validated_fields['products_per_page']
+    page = validated_fields['page_front_office']
+    offset = validated_fields['offset_front_office']
+
+    product_name = validated_fields['product_name']
+    product_category = validated_fields['product_category']
+    price_min = validated_fields['price_min']
+    price_max = validated_fields['price_max']
+
+    results_from_home_page_query = front_office.get_home_query_data(cur=cur, sort_by=sort_by, sort_order=sort_order, products_per_page=products_per_page, 
+                                                        page=page, offset=offset, product_name=product_name, 
+                                                        product_category=product_category, price_min=price_min, price_max=price_max)
+
+    products = results_from_home_page_query['products']
+    total_pages = results_from_home_page_query['total_pages']
 
     return render_template('home.html', first_name=first_name, last_name=last_name, 
                                 email = authenticated_user, products=products, products_per_page=products_per_page, 
@@ -662,42 +719,34 @@ def logout(conn, cur):
     session_id = request.cookies.get('session_id')
 
     cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (session_id,))
+
     response = make_response(redirect('/login'))
     response.set_cookie('session_id', '', expires=0)
     return response
 
 def profile(conn, cur):
-    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
+    session_id = request.cookies.get('session_id')
+    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login') 
     
     if request.method == 'GET':
-        cur.execute("""
-                        SELECT 
-                            users.*,
-                            country_codes.* 
-                        FROM users
-                        JOIN country_codes ON users.country_code_id = country_codes.id
-                        WHERE email = %s
 
-                    """, (authenticated_user,))
+        result_data = front_office.get_profile_data(cur=cur, authenticated_user=authenticated_user)
 
-        user_details = cur.fetchone()
-
-        country_codes = cache_impl.get_country_codes(cur)
-
-        if user_details:
-            return render_template('profile.html', first_name=user_details['first_name'], last_name=user_details['last_name'],
-                                     email=user_details['email'], address=user_details['address'], phone=user_details['phone'],
-                                     gender=user_details['gender'], country_codes=country_codes, country_code=user_details['code'])
+        if result_data:
+            return render_template('profile.html', first_name=result_data['first_name'], last_name=result_data['last_name'],
+                                     email=result_data['email'], address=result_data['address'], phone=result_data['phone'],
+                                     gender=result_data['gender'], country_codes=result_data['country_codes'], country_code=result_data['code'])
         
         return render_template('profile.html')
     else:
         utils.AssertPeer(False, "Invalid method")
 
 def update_profile(conn, cur):
-    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
+    session_id = request.cookies.get('session_id')
+    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login')
@@ -715,97 +764,21 @@ def update_profile(conn, cur):
         country_code = validated_fields['country_code']
         gender = validated_fields['gender']
 
-        query_string = "UPDATE users SET "
-        fields_list = []
-        updated_fields = []
+        result_data = front_office.post_update_profile(cur=cur, conn=conn,first_name=first_name, last_name=last_name,
+                                        email=email, password_=password_, 
+                                        address=address, phone=phone, 
+                                        country_code=country_code, gender=gender, 
+                                        session_id=session_id)
 
-        name_regex = r'^[A-Za-z]+$'
+        session['home_message'] = f"You successfully updated your {result_data['updated_fields_message']}."
 
-        if first_name:
-            if len(first_name) < 3 or len(first_name) > 50 or not re.match(name_regex, first_name):
-                session['settings_error'] = 'First name must be between 3 and 50 letters and contain no special characters or digits'
-                return redirect('/profile')
-            query_string += "first_name = %s, "
-            fields_list.append(first_name)
-            updated_fields.append("first name")
-        if last_name:
-            if len(last_name) < 3 or len(last_name) > 50 or not re.match(name_regex, last_name):
-                session['settings_error'] = 'Last name must be between 3 and 50 letters'
-                return redirect('/profile')
-            query_string += "last_name = %s, "
-            fields_list.append(last_name)
-            updated_fields.append("last name")
-        if email:
-            regex = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-            if not (re.fullmatch(regex, email)):
-                session['settings_error'] = 'Invalid email'
-                return redirect('/profile')
-            query_string += "email = %s, "
-            fields_list.append(email)
-            updated_fields.append("email")
-        if password_:
-            if len(password_) < 8 or len(password_) > 20:
-                session['settings_error'] = 'Password must be between 8 and 20 symbols'
-                return redirect('/profile')
-            query_string += "password = %s, "
-            hashed_password = utils.hash_password(password_)
-            fields_list.append(hashed_password)
-            updated_fields.append("password")
-        if address:
-            if len(address) < 5 or len(address) > 50:
-                session['settings_error'] = 'Address must be between 3 and 50 letters'
-                return redirect('/profile')
-            query_string +="address = %s, "
-            fields_list.append(address)
-            updated_fields.append("address")
-        else:
-            query_string +="address = %s, "
-            fields_list.append(address)
-            # updated_fields.append("address")
-
-        if phone:
-            if len(str(phone)) < 7 or len(str(phone)) > 15:
-                session['settings_error'] = 'Phone must be between 7 and 15 digits'
-                return redirect('/profile')
-            query_string += "phone = %s, "
-            fields_list.append(phone)
-            updated_fields.append("phone")
-
-        if country_code:
-            cur.execute("SELECT * FROM country_codes WHERE code = %s", (country_code,))
-            country_code_row = cur.fetchone()
-
-            query_string += "country_code_id = %s, "
-            fields_list.append(country_code_row['id'])
-            updated_fields.append("country code")
-
-        if gender:
-            if gender != 'male' and gender != 'female' and gender != 'other':
-                session['settings_error'] = 'Gender must be between male, female or other'
-            query_string += "gender = %s, "
-            fields_list.append(gender)
-            updated_fields.append("gender")
-
-        if first_name == "" and last_name == "" and email == "" and password_ == "" and address == "" and phone == "" and gender == "":
-            session['settings_error'] = 'You have to insert data in at least one field'
-            return redirect('/profile')
-
-        query_string = query_string[:-2]
-        query_string += " WHERE email = %s"
-
-        email_in_session = sessions.get_current_user(request=request, cur=cur, conn=conn)
-        fields_list.append(email_in_session)
-
-        cur.execute(query_string, (fields_list))
-        
-        updated_fields_message = ', '.join(updated_fields)
-        session['home_message'] = f"You successfully updated your {updated_fields_message}."
         return redirect('/home/1')
     else:
         utils.AssertPeer(False, "Invalid method")
 
 def delete_account(conn, cur):
-    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
+    session_id = request.cookies.get('session_id')
+    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login')
@@ -950,7 +923,8 @@ def login_with_token(conn, cur):
 
         cur.execute("DELETE FROM tokens WHERE id = %s", (token_id,))
 
-        session_id = sessions.create_session(os=os, datetime=datetime, timedelta=timedelta, session_data= email, cur=cur, conn=conn, is_front_office=True)
+        session_id = sessions.create_session(session_data= email, cur=cur, conn=conn, is_front_office=True)
+
         response = make_response(redirect('/home/1'))
         response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
 
@@ -969,7 +943,8 @@ def log_exception(exception_type, message ,email):
     cur_new.close()
 
 def add_product(conn, cur):
-    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
+    session_id = request.cookies.get('session_id')
+    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login')
@@ -1017,161 +992,14 @@ def serve_image(product_id, cur):
     image_blob = cur.fetchone()['image']
     return Response(image_blob, mimetype='jpeg')
 
-def add_to_cart(conn, cur, user_id, product_id, quantity):
-    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
-
-    utils.trace("ENTERED ADD TO CART METHODDDDDDDDDDDDDDDD")
-    utils.trace("authenticated_user")
-    utils.trace(authenticated_user)
-
-    utils.trace("conn")
-    utils.trace(conn)
-    utils.trace("cur")
-    utils.trace(cur)
-    utils.trace("user_id")
-    utils.trace(user_id)
-    utils.trace("product_id")
-    utils.trace(product_id)
-    utils.trace("quantity")
-    utils.trace(quantity)
-
-    cur.execute("""
-                    SELECT 
-                        products.*,
-                        settings.vat 
-                    FROM products
-                        JOIN settings ON products.vat_id = settings.id
-                    WHERE 
-                        products.id = %s
-            """, (product_id, ))
-
-    products_settings_rows = cur.fetchone()
-
-    vat = products_settings_rows['vat']
-
-    if authenticated_user == None:
-
-        utils.trace("ENTERED authenticated_user == None")
-
-        cur.execute("SELECT * FROM carts WHERE session_id = %s", (user_id,))
-        cart_row = cur.fetchone()
-
-        if cart_row:
-            utils.trace("ENTERED already present cart")
-            cart_id = cart_row['cart_id']
-        else:
-            utils.trace("ENTERED inserted new cart with anonym sesession")
-            cur.execute("INSERT INTO carts(session_id) VALUES (%s) RETURNING cart_id", (user_id,))
-            cart_id = cur.fetchone()['cart_id']
-
-    else:
-
-        utils.trace("ENTERED authenticated_user IS NOT NONE")
-
-        cur.execute("SELECT * FROM carts WHERE user_id = %s", (user_id,))
-        cart_row = cur.fetchone() 
-
-        if cart_row:
-
-            utils.trace("ENTERED ALREADY CREATED CART FOR AUTH USER")
-
-            cart_id = cart_row['cart_id']
-        else:
-
-            utils.trace("ENTERED CREATING CART FOR AUTH USER")
-
-            cur.execute("INSERT INTO carts(user_id) VALUES (%s) RETURNING cart_id", (user_id,))
-            cart_id = cur.fetchone()['cart_id']
-       
-    utils.trace("cart_id")
-    utils.trace(cart_id)
-
-    cur.execute("SELECT * FROM cart_itmes WHERE cart_id = %s AND product_id = %s", (cart_id, product_id))
-    cart_items_row = cur.fetchone()
-
-    if cart_items_row is not None:
-        cart_items_id = cart_items_row['id']
-
-    if cart_items_row:
-        utils.trace("ENTERED cart_items_row is NOT None")
-
-        cur.execute("UPDATE cart_itmes SET quantity = quantity + %s WHERE id = %s", (quantity, cart_items_id))
-
-        utils.trace("added same item, quantity was increased")
-
-        return "You successfully added same item, quantity was increased."
-    else:
-        utils.trace("ENTERED cart_items_row is None")
-
-        cur.execute("INSERT INTO cart_itmes (cart_id, product_id, quantity, vat) VALUES (%s, %s, %s, %s)", (cart_id, product_id, quantity, vat))
-
-        utils.trace("INSERTED ITEMS")
-
-        return "You successfully added item."
-
-#TODO: cart_itmes REFACTOR
-#TODO: na vsichki fetchall da ima assertDev za duljina na redove ot bazata | assertPeer na post na cart
-def view_cart(conn, cur, user_id):
-    cur.execute("""
-                SELECT 
-                    products.name, 
-                    products.price, 
-                    cart_itmes.quantity, 
-                    products.id, 
-                    currencies.symbol, 
-                    settings.vat
-                FROM carts
-                    JOIN cart_itmes  ON carts.cart_id         = cart_itmes.cart_id 
-                    JOIN products    ON cart_itmes.product_id = products.id
-                    JOIN currencies  ON products.currency_id  = currencies.id
-                    JOIN settings    ON products.vat_id       = settings.id
-                WHERE carts.user_id = %s
-                """, (user_id,))
-
-    items = cur.fetchall()
-
-    utils.AssertDev(len(items) <= 1000, "Fetched too many rows in view_cart function")
-
-    return items
-
-def get_cart_items_count(conn, cur, user_id):
-
-    query = """
-            SELECT 
-                products.name, 
-                products.price, 
-                cart_itmes.quantity, 
-                products.id 
-            FROM carts 
-                JOIN cart_itmes  ON carts.cart_id         = cart_itmes.cart_id 
-                JOIN products    ON cart_itmes.product_id = products.id 
-            WHERE
-    """
-
-    if isinstance(user_id, str):
-        query += f" carts.session_id = %s"
-
-    else:
-        query += f" carts.user_id = %s"
-
-    cur.execute(query, (user_id,))
-
-    items = cur.fetchall()
-
-    utils.AssertDev(len(items) <= 1000, "Fetched too many rows in get_cart_items_count function")
-
-    return len(items)
-
-def remove_from_cart(conn, cur, item_id):
-    cur.execute("DELETE FROM cart_itmes where product_id = %s", (item_id,))
-    return "You successfully deleted item."
-
 def add_to_cart_meth(conn, cur):
-    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
+    session_cookie_id = request.cookies.get('session_id')
+    authenticated_user =  sessions.get_current_user(session_id=session_cookie_id, cur=cur, conn=conn)
 
-    product_id = request.form['product_id']
-    quantity = request.form.get('quantity', 1)
-    # conn, cur, user_id, product_id, quantity
+        if session_id_unauthenticated_user == None:
+
+            session_id = str(uuid.uuid4())
+
     if authenticated_user == None:
 
         session_id_unauthenticated_user = request.cookies.get('session_id_unauthenticated_user')
@@ -1180,15 +1008,15 @@ def add_to_cart_meth(conn, cur):
 
             session_id = str(uuid.uuid4())
 
-            response_message = add_to_cart(conn, cur, session_id, product_id, quantity)
-            newCartCount = get_cart_items_count(conn, cur, session_id)
+            response_message = front_office.add_to_cart(conn, cur, session_id, product_id, quantity, session_cookie_id)
+            newCartCount = front_office.get_cart_items_count(conn, cur, session_id)
 
             response = make_response(jsonify({'message': response_message, 'newCartCount': newCartCount}))
             response.set_cookie('session_id_unauthenticated_user', session_id, httponly=True, samesite='Lax')
 
         else:
-            response_message = add_to_cart(conn, cur, session_id_unauthenticated_user, product_id, quantity)
-            newCartCount = get_cart_items_count(conn, cur, session_id_unauthenticated_user)
+            response_message = front_office.add_to_cart(conn, cur, session_id_unauthenticated_user, product_id, quantity, session_cookie_id)
+            newCartCount = front_office.get_cart_items_count(conn, cur, session_id_unauthenticated_user)
 
             response = make_response(jsonify({'message': response_message, 'newCartCount': newCartCount}))
     else:
@@ -1196,36 +1024,16 @@ def add_to_cart_meth(conn, cur):
         user_row = cur.fetchone()
         user_id = user_row['id']
 
-        response_message = add_to_cart(conn, cur, user_id, product_id, quantity)
-        newCartCount = get_cart_items_count(conn, cur, user_id)
+        response_message = front_office.add_to_cart(conn, cur, user_id, product_id, quantity, session_cookie_id)
+        newCartCount = front_office.get_cart_items_count(conn, cur, user_id)
 
         response = make_response(jsonify({'message': response_message, 'newCartCount': newCartCount}))
 
     return response
 
-def merge_cart(conn, cur, user_id, session_id):
-    cur.execute("SELECT * FROM carts WHERE session_id = %s", (session_id,))
-    cart_row = cur.fetchone()
-    cart_id = cart_row['cart_id']
-    cur.execute("UPDATE carts SET user_id = %s, session_id = null WHERE cart_id = %s and session_id = %s", (user_id, cart_id, session_id))
-    # if cart_row:
-    #     old_cart_id = cart_row['cart_id']
-        
-    #     cur.execute("SELECT * FROM cart_items WHERE cart_id = %s", (old_cart_id,))
-    #     items = cur.fetchall()
-
-    #     cur.execute("INSERT INTO carts (user_id) VALUES (%s) RETURNING cart_id", (user_id,))
-    #     new_cart_id = cur.fetchone()['cart_id']
-
-    #     for item in items:
-    #         cur.execute("INSERT INTO cart_items (cart_id, product_id, quantity, added_at, vat) VALUES (%s, %s, %s, %s, %s)",
-    #                     (new_cart_id, item['product_id'], item['quantity'], item['added_at'], item['vat']))
-
-    #     cur.execute("DELETE FROM cart_items WHERE cart_id = %s", (old_cart_id,))
-    #     cur.execute("DELETE FROM carts WHERE session_id = %s", (session_id,))
-
 def cart(conn, cur):
-    authenticated_user = sessions.get_current_user(request=request, cur=cur, conn=conn)
+    session_id = request.cookies.get('session_id')
+    authenticated_user = sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
     if authenticated_user == None:
         session['login_message_unauth_user'] = "You have to login to see your cart"
@@ -1238,35 +1046,17 @@ def cart(conn, cur):
             recovery_data_stack = session.get('recovery_data_stack', [])
             if len(recovery_data_stack) == 1:
                 recovery_data = recovery_data_stack.pop()
+                #TODO assert
+            else:
+                utils.AssertDev(False, "Too many values in recovery_data_stack")
         else:
-            recovery_data = None
+            recovery_data = None 
 
-        cur.execute("SELECT users.*, settings.vat FROM users, settings WHERE email = %s", (authenticated_user,))
-        user_settings_row = cur.fetchone()
+        result_data = front_office.get_cart_method_data(cur=cur, conn=conn,authenticated_user=authenticated_user)
 
-        user_id = user_settings_row['id']
-        first_name = user_settings_row['first_name']
-        last_name = user_settings_row['last_name']
-        vat_in_persent = user_settings_row['vat']
-
-        country_codes = cache_impl.get_country_codes(cur=cur)
-
-        items = view_cart(conn, cur, user_id)
-
-        total_sum = 0
-
-        total_sum_with_vat = 0
-
-        for item in items:
-            vat_float = (Decimal(item['vat']) / 100)
-            items_sum_without_vat = item['price'] * item['quantity']
-            total_sum += items_sum_without_vat
-            vat = items_sum_without_vat * vat_float
-            total_sum_with_vat += items_sum_without_vat + vat
-
-        return render_template('cart.html', items=items, total_sum_with_vat=round(total_sum_with_vat, 2), 
-                                total_sum=total_sum,country_codes=country_codes, recovery_data=recovery_data, 
-                                first_name=first_name, last_name=last_name, email=authenticated_user, vat=vat_in_persent)
+        return render_template('cart.html', items=result_data['items'], total_sum_with_vat=round(result_data['total_sum_with_vat'],2), 
+                                total_sum=round(result_data['total_sum'],2),country_codes=result_data['country_codes'], recovery_data=recovery_data, 
+                                first_name=result_data['first_name'], last_name=result_data['last_name'], email=authenticated_user, vat=result_data['vat_in_persent'])
    
     elif request.method == 'POST':
         recovery_data = request.form.to_dict()
@@ -1283,7 +1073,7 @@ def cart(conn, cur):
         regex_phone = r'^\d{7,15}$'
         regex_email = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
 
-        # Check fields
+        # Check fields 
         utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
         utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
         utils.AssertUser(re.fullmatch(regex_email, email), "Email is not valid")
@@ -1309,16 +1099,16 @@ def cart(conn, cur):
         #------------------------------------------------ edna zaqvka
         cur.execute("""
                     SELECT 
-                        cart_itmes.product_id, 
+                        cart_items.product_id, 
                         products.name, 
-                        cart_itmes.quantity, 
+                        cart_items.quantity, 
                         products.price, 
                         currencies.symbol, 
-                        cart_itmes.vat 
-                    FROM cart_itmes
-                    JOIN products   ON cart_itmes.product_id = products.id
+                        cart_items.vat 
+                    FROM cart_items
+                    JOIN products   ON cart_items.product_id = products.id
                     JOIN currencies ON products.currency_id  = currencies.id
-                    WHERE cart_itmes.cart_id = %s
+                    WHERE cart_items.cart_id = %s
                     """,
                     (cart_id,))
 
@@ -1340,7 +1130,7 @@ def cart(conn, cur):
             db_items_quantity.append(item_quantity_db)
 
         #------------------------------------------------
-
+        # TODO: CODE REVIEW - I/O read - write
         # Check and change quantity 
         for item in cart_items:
 
@@ -1438,8 +1228,9 @@ def cart(conn, cur):
             vatt = items_sum_without_vat * vat_float
             total_sum_with_vat += items_sum_without_vat + vatt
 
-        # When the purchase is made we empty the user cart 
-        cur.execute("DELETE FROM cart_itmes WHERE cart_id = %s", (cart_id,))
+        # When the purchase is made we empty the user cart
+        # TODO: cart_items -> CART_ITEMS 
+        cur.execute("DELETE FROM cart_items WHERE cart_id = %s", (cart_id,))
 
         cur.execute("""
                     SELECT 
@@ -1457,6 +1248,7 @@ def cart(conn, cur):
         cur.execute("SELECT * FROM settings")
         settings_row = cur.fetchone()
 
+        #TODO: Move into job queue -> pattern 
         send_email = False
         try:
             utils.trace("ENTERED TRY BLOCK")
@@ -1491,18 +1283,22 @@ def cart(conn, cur):
         utils.AssertPeer(False, "Invalid method")
 
 def remove_from_cart_meth(conn, cur):
-    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
+    session_id = request.cookies.get('session_id')
+    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login')
 
     item_id = request.form['item_id']
-    response = remove_from_cart(conn, cur, item_id)
+
+    response = front_office.remove_from_cart(conn, cur, item_id)
+
     session['cart_message'] = response
     return redirect('/cart')
 
 def finish_payment(conn, cur):
-    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
+    session_id = request.cookies.get('session_id')
+    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login')
@@ -1663,7 +1459,6 @@ def finish_payment(conn, cur):
             session['send_mail_data'] = send_mail_data
 
             session['home_message'] = "You paid the order successful"
-
             return redirect('/home/1')
 
         except Exception as e:
@@ -1688,7 +1483,7 @@ def staff_login(conn, cur):
 
         session['staff_username'] = username
 
-        session_id = sessions.create_session(os=os, datetime=datetime, timedelta=timedelta, session_data=username, cur=cur, conn=conn, is_front_office=False)
+        session_id = sessions.create_session(session_data=username, cur=cur, conn=conn, is_front_office=False)
         response = make_response(redirect('/staff_portal'))
         response.set_cookie('session_id', session_id, httponly=True, samesite='Lax')
 
@@ -1697,7 +1492,8 @@ def staff_login(conn, cur):
         utils.AssertPeer(False, "Invalid method")
 
 def staff_portal(conn, cur):
-    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
+    session_id = request.cookies.get('session_id')
+    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/staff_login')
@@ -1758,7 +1554,7 @@ def update_cart_quantity(conn, cur):
     price, vat_rate = cur.fetchone()
     new_total = price * quantity_
 
-    cur.execute("UPDATE cart_itmes SET quantity = %s WHERE product_id = %s", (quantity_, item_id))
+    cur.execute("UPDATE cart_items SET quantity = %s WHERE product_id = %s", (quantity_, item_id))
 
     return jsonify(success=True, new_total=new_total, vat_rate=vat_rate)
 
@@ -1776,14 +1572,15 @@ def update_cart_quantity(conn, cur):
 #         return "No image found"
 
 def user_orders(conn, cur):
-    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
+    session_id = request.cookies.get('session_id')
+    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/login')
 
     if request.method == 'GET':
 
-        fields = utils.check_request_arg_fields(cur, request, datetime)
+        fields = utils.check_request_arg_fields(cur, request)
 
         sort_by = fields['sort_by']
         sort_order = fields['sort_order']
@@ -1902,7 +1699,8 @@ def get_active_users(sort_by='id', sort_order='desc', name=None, email=None, use
     return active_users
 
 def back_office_manager(conn, cur, *params):
-    authenticated_user =  sessions.get_current_user(request=request, cur=cur, conn=conn)
+    session_id = request.cookies.get('session_id')
+    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
     if authenticated_user == None:
        return redirect('/staff_login')
@@ -1916,7 +1714,8 @@ def back_office_manager(conn, cur, *params):
     if request.path == f'/active_users':
 
         if request.method == 'GET':
-            validated_request_args_fields = utils.check_request_arg_fields(cur=cur, request=request, datetime=datetime)
+
+            validated_request_args_fields = utils.check_request_arg_fields(cur=cur, request=request)
 
             sort_by = validated_request_args_fields['sort_by']
             sort_order = validated_request_args_fields['sort_order']
@@ -1975,7 +1774,7 @@ def back_office_manager(conn, cur, *params):
 
         if request.method == 'GET':
         
-            validated_request_args_fields = utils.check_request_arg_fields(cur=cur, request=request, datetime=datetime)
+            validated_request_args_fields = utils.check_request_arg_fields(cur=cur, request=request)
 
             sort_by = validated_request_args_fields['sort_by']
             sort_order = validated_request_args_fields['sort_order']
@@ -2389,7 +2188,7 @@ def back_office_manager(conn, cur, *params):
         print("Enterd crud_products read successfully", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read', authenticated_user), "You don't have permission to this resource")
 
-        validated_request_args_fields = utils.check_request_arg_fields(cur=cur, request=request, datetime=datetime)
+        validated_request_args_fields = utils.check_request_arg_fields(cur=cur, request=request)
 
         sort_by = validated_request_args_fields['sort_by']
         sort_order = validated_request_args_fields['sort_order']
@@ -2576,7 +2375,7 @@ def back_office_manager(conn, cur, *params):
 
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read', authenticated_user), "You don't have permission for this resource")
 
-        validated_fields = utils.check_request_arg_fields(cur, request, datetime)
+        validated_fields = utils.check_request_arg_fields(cur, request)
 
         sort_by = validated_fields['sort_by']
         sort_order = validated_fields['sort_order']
@@ -2788,7 +2587,7 @@ def back_office_manager(conn, cur, *params):
 
         if request.method == 'GET':
 
-            fields = utils.check_request_arg_fields(cur, request, datetime)
+            fields = utils.check_request_arg_fields(cur, request)
 
             cur.execute("SELECT DISTINCT verification_status FROM users")
             statuses = cur.fetchall()
@@ -3081,16 +2880,21 @@ def map_function(map_route):
 def handle_request(username=None, path=''):
     conn = None
     cur = None
+    session_id = request.cookies.get('session_id')
     try:
         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
         cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
         # traceback.print_stack()
+        utils.trace("conn main.py")
+        utils.trace(conn)
+        utils.trace("cur main.py")
+        utils.trace(cur)
 
         utils.trace("request.path")
         utils.trace(request.path)
 
         #TODO Validaciq na cookie prez bazata + req.args
-        authenticated_user = sessions.get_current_user(request=request, cur=cur, conn=conn)
+        authenticated_user = sessions.get_current_user(session_id, cur=cur, conn=conn)
 
         utils.trace("authenticated_user")
         utils.trace(authenticated_user)
@@ -3102,7 +2906,7 @@ def handle_request(username=None, path=''):
         flag_office = None
 
         if authenticated_user is not None:
-            flag_office = sessions.get_session_cookie_type(request, cur)
+            flag_office = sessions.get_session_cookie_type(session_id, cur)
         else:
             flag_office = True
 
@@ -3135,11 +2939,21 @@ def handle_request(username=None, path=''):
 
         if send_email:
             utils.trace("ENTERED SEND MAIL TRUE")
-            send_mail.send_mail(products=send_mail_data['products'], shipping_details=send_mail_data['shipping_details'], total_sum=send_mail_data['total_sum'],
-                                total_with_vat=send_mail_data['total_with_vat'], provided_sum=send_mail_data['provided_sum'], 
-                                user_email=send_mail_data['user_email'],
-                                cur=send_mail_data['cur'], conn=send_mail_data['conn'], email_type=send_mail_data['email_type'], 
-                                app=send_mail_data['app'], mail=send_mail_data['mail'])
+
+            send_mail.send_mail(
+                products=send_mail_data['products'],
+                shipping_details=send_mail_data['shipping_details'],
+                total_sum=send_mail_data['total_sum'],
+                total_with_vat=send_mail_data['total_with_vat'], 
+                provided_sum=send_mail_data['provided_sum'],                 
+                user_email=send_mail_data['user_email'],
+                cur=send_mail_data['cur'], 
+                conn=send_mail_data['conn'], 
+                email_type=send_mail_data['email_type'], 
+                app=send_mail_data['app'],
+                mail=send_mail_data['mail']
+            )
+
             session['send_email'] = False
             session['send_mail_data'] = {}
 
@@ -3147,7 +2961,7 @@ def handle_request(username=None, path=''):
 
     except Exception as message:
 
-        user_email = sessions.get_current_user(request=request, cur=cur, conn=conn)
+        user_email = sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
         traceback_details = traceback.format_exc()
 
         log_exception(exception_type=message.__class__.__name__, message=str(message), email=user_email)

@@ -210,7 +210,7 @@ def adapt_datetime(dt):
 
 register_adapter(datetime, adapt_datetime)
 
-def check_request_arg_fields(cur, request, datetime):
+def check_request_arg_fields(cur, request):
 
     valid_sort_columns = {'id', 'date', 'first_name', 'last_name', 'email', 'name', 'price', 'quantity', 'category'}
     valid_sort_orders = {'asc', 'desc'}
@@ -267,6 +267,7 @@ def check_request_arg_fields(cur, request, datetime):
     return validated_params
 
 def check_request_form_fields(request):
+    # TODO da vidq greshkata i da viq request tochno
     parameters = {
         'first_name': (request.form['first_name'], str),
         'last_name': (request.form['last_name'],str),
@@ -292,10 +293,15 @@ def check_request_form_fields(request):
 
     return validated_params
 
+
+# This is not used anywhere 
 def check_request_form_fields_ab(needed_fields):
     parameters = {}
 
     for request_field, request_value in needed_fields.items():
+
+        #TODO for loop 
+>>>>>>> dev
 
         if request_field == 'first_name':
             parameters[request_field] = (request_value, str)

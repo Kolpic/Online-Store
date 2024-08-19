@@ -1,7 +1,9 @@
 from project import utils
 import psycopg2.extras
+from datetime import timedelta, datetime
+import os
 
-def create_session(os, datetime, timedelta, session_data, cur, conn, is_front_office):
+def create_session(session_data, cur, conn, is_front_office):
     session_id = os.urandom(20).hex()
     expires_at = datetime.now() + timedelta(hours=1)
 
@@ -28,8 +30,7 @@ def create_session(os, datetime, timedelta, session_data, cur, conn, is_front_of
 
     return session_id
 
-def get_current_user(request, cur, conn):
-    session_id = request.cookies.get('session_id')
+def get_current_user(session_id, cur, conn):
 
     if not session_id:
         return None
@@ -83,9 +84,7 @@ def clear_expired_sessions(cur, conn):
 def get_user_session_id(request):
     return request.cookies.get('session_id')
 
-def get_session_cookie_type(request, cur):
-
-    session_id = request.cookies.get('session_id')
+def get_session_cookie_type(session_id, cur):
 
     cur.execute("SELECT user_id, staff_id FROM custom_sessions WHERE session_id = %s AND is_active = True", (session_id,))
     user_id, staff_id = cur.fetchone()
