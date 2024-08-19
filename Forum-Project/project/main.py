@@ -498,7 +498,9 @@ def home(conn, cur, page = 1):
     if authenticated_user == None:
        # return redirect('/login') 
         cur.execute("SELECT DISTINCT(category) FROM products")
-        categories = cur.fetchall()
+        
+        categories_db = cur.fetchall()
+        categories = [category[0] for category in categories_db]
 
         cart_count = 0
         first_name = ""

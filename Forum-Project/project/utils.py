@@ -293,22 +293,12 @@ def check_request_form_fields(request):
 
     return validated_params
 
-<<<<<<< HEAD
-
-=======
->>>>>>> dev
 # This is not used anywhere 
 def check_request_form_fields_ab(needed_fields):
     parameters = {}
 
     for request_field, request_value in needed_fields.items():
-<<<<<<< HEAD
-
         #TODO for loop 
->>>>>>> dev
-=======
-        #TODO for loop 
->>>>>>> dev
 
         if request_field == 'first_name':
             parameters[request_field] = (request_value, str)

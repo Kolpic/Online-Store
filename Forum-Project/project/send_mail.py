@@ -60,25 +60,34 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
 
     vat_total = 0
     currency_sumbol = ""
+
     for item in products:
         if email_type == 'purchase_mail':
             product_id, product_name, quantity, price, symbol, vat = item
         elif email_type == 'payment_mail':
             product_name, quantity, price, symbol, vat = item
 
-        utils.trace(vat)
-        utils.trace(type(vat))
-
         float_vat = float(vat)
 
-        utils.trace(float_vat)
-        utils.trace(type(float_vat))
-
         currency_sumbol = symbol
+<<<<<<< HEAD
         price_total = float(price) * int(quantity) # 250
         total_price += price_total
         vat_total += price_total * (float_vat / 100) #62,5
         total_product_price_with_vat = round(price_total + vat_total, 2)
+=======
+
+        price_total = float(price) * int(quantity) # 250
+
+        total_price += price_total
+
+        vat_current_product = price_total * (float_vat / 100) #62,5
+
+        vat_total += vat_current_product 
+
+        total_product_price_with_vat = round(price_total + vat_current_product, 2)
+
+>>>>>>> dev
         products_html += f"""
         <tr>
             <td>{product_name}</td>

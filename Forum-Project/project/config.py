@@ -6,10 +6,6 @@ MAIL_USE_TLS = False
 MAIL_USE_SSL = True
 
 cache = []
-<<<<<<< HEAD
-
-=======
->>>>>>> dev
 CACHE_TIMEOUT = 60000
 
 # TODO: work database -> user_registration, laptop database -> users_registration

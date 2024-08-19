@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-=======
 import pytest
 import bcrypt
 from project.main import app as flask_app
@@ -703,4 +701,3 @@ def test_user_flow(setup_database):
 #         assert responce.status_code == 302
 #         assert initial_verification_code != changed_verification_code
 #         assert '/verify' in responce.headers['Location']
->>>>>>> dev
