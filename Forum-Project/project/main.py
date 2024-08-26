@@ -822,147 +822,12 @@ def serve_image(product_id, cur):
     image_blob = cur.fetchone()['image']
     return Response(image_blob, mimetype='jpeg')
 
-
-def add_to_cart(conn, cur, user_id, product_id, quantity):
-    session_id = request.cookies.get('session_id')
-    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
-
-    cur.execute("""
-                    SELECT 
-                        products.*,
-                        settings.vat 
-                    FROM products
-                        JOIN settings ON products.vat_id = settings.id
-                    WHERE 
-                        products.id = %s
-            """, (product_id, ))
-
-    products_settings_rows = cur.fetchone()
-
-    vat = products_settings_rows['vat']
-
-    if authenticated_user == None:
-
-        utils.trace("ENTERED authenticated_user == None")
-
-        cur.execute("SELECT * FROM carts WHERE session_id = %s", (user_id,))
-        cart_row = cur.fetchone()
-
-        if cart_row:
-            utils.trace("ENTERED already present cart")
-            cart_id = cart_row['cart_id']
-        else:
-            utils.trace("ENTERED inserted new cart with anonym sesession")
-            cur.execute("INSERT INTO carts(session_id) VALUES (%s) RETURNING cart_id", (user_id,))
-            cart_id = cur.fetchone()['cart_id']
-
-    else:
-
-        utils.trace("ENTERED authenticated_user IS NOT NONE")
-
-        cur.execute("SELECT * FROM carts WHERE user_id = %s", (user_id,))
-        cart_row = cur.fetchone() 
-
-        if cart_row:
-
-            utils.trace("ENTERED ALREADY CREATED CART FOR AUTH USER")
-
-            cart_id = cart_row['cart_id']
-        else:
-
-            utils.trace("ENTERED CREATING CART FOR AUTH USER")
-
-            cur.execute("INSERT INTO carts(user_id) VALUES (%s) RETURNING cart_id", (user_id,))
-            cart_id = cur.fetchone()['cart_id']
-       
-    utils.trace("cart_id")
-    utils.trace(cart_id)
-
-    cur.execute("SELECT * FROM cart_itmes WHERE cart_id = %s AND product_id = %s", (cart_id, product_id))
-    cart_items_row = cur.fetchone()
-
-    if cart_items_row is not None:
-        cart_items_id = cart_items_row['id']
-
-    if cart_items_row:
-        utils.trace("ENTERED cart_items_row is NOT None")
-
-        cur.execute("UPDATE cart_itmes SET quantity = quantity + %s WHERE id = %s", (quantity, cart_items_id))
-
-        utils.trace("added same item, quantity was increased")
-
-        return "You successfully added same item, quantity was increased."
-    else:
-        utils.trace("ENTERED cart_items_row is None")
-
-        cur.execute("INSERT INTO cart_itmes (cart_id, product_id, quantity, vat) VALUES (%s, %s, %s, %s)", (cart_id, product_id, quantity, vat))
-
-        utils.trace("INSERTED ITEMS")
-
-        return "You successfully added item."
-
-#TODO: cart_itmes REFACTOR
-#TODO: na vsichki fetchall da ima assertDev za duljina na redove ot bazata | assertPeer na post na cart
-def view_cart(conn, cur, user_id):
-    cur.execute("""
-                SELECT 
-                    products.name, 
-                    products.price, 
-                    cart_itmes.quantity, 
-                    products.id, 
-                    currencies.symbol, 
-                    settings.vat
-                FROM carts
-                    JOIN cart_itmes  ON carts.cart_id         = cart_itmes.cart_id 
-                    JOIN products    ON cart_itmes.product_id = products.id
-                    JOIN currencies  ON products.currency_id  = currencies.id
-                    JOIN settings    ON products.vat_id       = settings.id
-                WHERE carts.user_id = %s
-                """, (user_id,))
-
-    items = cur.fetchall()
-
-    utils.AssertDev(len(items) <= 1000, "Fetched too many rows in view_cart function")
-
-    return items
-
-def get_cart_items_count(conn, cur, user_id):
-
-    query = """
-            SELECT 
-                products.name, 
-                products.price, 
-                cart_itmes.quantity, 
-                products.id 
-            FROM carts 
-                JOIN cart_itmes  ON carts.cart_id         = cart_itmes.cart_id 
-                JOIN products    ON cart_itmes.product_id = products.id 
-            WHERE
-    """
-
-    if isinstance(user_id, str):
-        query += f" carts.session_id = %s"
-
-    else:
-        query += f" carts.user_id = %s"
-
-    cur.execute(query, (user_id,))
-
-    items = cur.fetchall()
-
-    utils.AssertDev(len(items) <= 1000, "Fetched too many rows in get_cart_items_count function")
-
-    return len(items)
-
-def remove_from_cart(conn, cur, item_id):
-    cur.execute("DELETE FROM cart_itmes where product_id = %s", (item_id,))
-    return "You successfully deleted item."
-
 def add_to_cart_meth(conn, cur):
     session_cookie_id = request.cookies.get('session_id')
     authenticated_user =  sessions.get_current_user(session_id=session_cookie_id, cur=cur, conn=conn)
 
-        session_id_unauthenticated_user = request.cookies.get('session_id_unauthenticated_user')
+    product_id = request.form['product_id']
+    quantity = request.form.get('quantity', 1)
 
     if authenticated_user == None:
 
@@ -2414,7 +2279,7 @@ def handle_request(username=None, path=''):
                 app=send_mail_data['app'],
                 mail=send_mail_data['mail']
             )
-            
+
             session['send_email'] = False
             session['send_mail_data'] = {}
 

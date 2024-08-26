@@ -125,10 +125,6 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
             <td style="text-align: {text_align};">{vat}%</td>
         </tr>
         <tr>
-            <td colspan='3' style="text-align: {text_align};">VAT %:</td>
-            <td style="text-align: {text_align};">{vat}%</td>
-        </tr>
-        <tr>
             <td colspan='3' style="text-align: {text_align};">Total Order Price With VAT:</td>
             <td style="text-align: {text_align};">{total_with_vat_rounded} {currency_sumbol}</td>
         </tr>
