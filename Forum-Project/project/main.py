@@ -66,13 +66,6 @@ app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=[
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
 app.add_url_rule("/<username>/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
 
-def assertIsProvidedMethodsTrue(*args):
-    if len(args) == 2:
-        if not request.method == 'GET' and not request.method == 'POST': raise exception.MethodNotAllowed("You tried to asscess resources, you don't have permission for")
-    else:
-        method_type = str(args[0]).upper()
-        if not request.method == method_type: raise exception.MethodNotAllowed("You tried to asscess resources, you don't have permission for")
-
 def refresh_captcha(conn, cur):
     first_captcha_number = random.randint(0, 100)
     second_captcha_number = random.randint(0, 100)
@@ -177,9 +170,6 @@ FIELD_CONFIG = {
     }
 }
 
-# special_field_handlers = {
-#     'image': lambda field_data: handle_image_field(field_data)
-# }
 
 def get_field_config(interface, method):
     return FIELD_CONFIG.get(interface, {}).get(method, {}) # return the right fields for the interface with the metod we provided
@@ -213,13 +203,17 @@ def validate_field(field_name, value, config):
 
     return value
 
-def process_form(interface, method):
+def process_form(interface, method, form_data_fields, files_data):
     form_data = {}
     nested_data = {}
     nested_flag = False
 
     field_config = get_field_config(interface, method)
 
+    print("form_data_fields", flush=True)
+    print(form_data_fields, flush=True)
+    print("files_data", flush=True)
+    print(files_data, flush=True)
     print("field_config", flush=True)
     print(field_config, flush=True)
 
@@ -238,10 +232,10 @@ def process_form(interface, method):
             value = None
 
             if config_dict['type'] == 'file':
-                value = request.files.get(section)
+                value = files_data.get(section)
                 value = config_dict['handler'](value)
             else:
-                value = request.form.get(section)
+                value = form_data_fields.get(section)
 
             print("section", flush=True)
             print(section, flush=True)
@@ -262,10 +256,10 @@ def process_form(interface, method):
                 value = None
 
                 if config['type'] == 'file':
-                    value = request.files.get(field)
+                    value = files_data.get.get(field)
                     value = special_field_handlers['image'](value) if field == 'image' else value
                 else:
-                    value = request.form.get(field)
+                    value = form_data_fields.get(field)
 
                 validated_value = validate_field(field, value, config)
                 nested_data[section][field] = validated_value
@@ -357,7 +351,6 @@ def registration(conn, cur):
         gender = request.form['gender']
 
         captcha_ = int(request.form['captcha'])
-
         captcha_id = request.form.get('captcha_id')
 
         hashed_password = utils.hash_password(password_)
@@ -491,18 +484,18 @@ def login(conn, cur):
         utils.AssertPeer(False, "Invalid method")
 
 def home(conn, cur, page = 1):
-
     session_id = request.cookies.get('session_id')
     authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
 
     if authenticated_user == None:
-       # return redirect('/login') 
+        session_id_unauthenticated_user = request.cookies.get('session_id_unauthenticated_user')
+
         cur.execute("SELECT DISTINCT(category) FROM products")
         
         categories_db = cur.fetchall()
         categories = [category[0] for category in categories_db]
 
-        cart_count = 0
+        cart_count = front_office.get_cart_items_count(conn=conn, cur=cur, user_id=session_id_unauthenticated_user)
         first_name = ""
         last_name = ""
         email = ""
@@ -524,7 +517,7 @@ def home(conn, cur, page = 1):
         first_name = results[0][2]
         last_name = results[0][3]
 
-        cart_count = front_office.get_cart_items_count(conn, cur, user_id)
+        cart_count = front_office.get_cart_items_count(conn=conn, cur=cur, user_id=user_id)
 
     validated_fields = utils.check_request_arg_fields(cur, request)
 
@@ -661,7 +654,6 @@ def send_recovey_password_email(user_email, recovery_password):
 
 # TODO: Този метод се замести със send_login_link 
 def resend_verf_code(conn, cur):
-    assertIsProvidedMethodsTrue('POST')
     
     email = request.form['resend_verf_code']
 
@@ -830,9 +822,147 @@ def serve_image(product_id, cur):
     image_blob = cur.fetchone()['image']
     return Response(image_blob, mimetype='jpeg')
 
+
+def add_to_cart(conn, cur, user_id, product_id, quantity):
+    session_id = request.cookies.get('session_id')
+    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+
+    cur.execute("""
+                    SELECT 
+                        products.*,
+                        settings.vat 
+                    FROM products
+                        JOIN settings ON products.vat_id = settings.id
+                    WHERE 
+                        products.id = %s
+            """, (product_id, ))
+
+    products_settings_rows = cur.fetchone()
+
+    vat = products_settings_rows['vat']
+
+    if authenticated_user == None:
+
+        utils.trace("ENTERED authenticated_user == None")
+
+        cur.execute("SELECT * FROM carts WHERE session_id = %s", (user_id,))
+        cart_row = cur.fetchone()
+
+        if cart_row:
+            utils.trace("ENTERED already present cart")
+            cart_id = cart_row['cart_id']
+        else:
+            utils.trace("ENTERED inserted new cart with anonym sesession")
+            cur.execute("INSERT INTO carts(session_id) VALUES (%s) RETURNING cart_id", (user_id,))
+            cart_id = cur.fetchone()['cart_id']
+
+    else:
+
+        utils.trace("ENTERED authenticated_user IS NOT NONE")
+
+        cur.execute("SELECT * FROM carts WHERE user_id = %s", (user_id,))
+        cart_row = cur.fetchone() 
+
+        if cart_row:
+
+            utils.trace("ENTERED ALREADY CREATED CART FOR AUTH USER")
+
+            cart_id = cart_row['cart_id']
+        else:
+
+            utils.trace("ENTERED CREATING CART FOR AUTH USER")
+
+            cur.execute("INSERT INTO carts(user_id) VALUES (%s) RETURNING cart_id", (user_id,))
+            cart_id = cur.fetchone()['cart_id']
+       
+    utils.trace("cart_id")
+    utils.trace(cart_id)
+
+    cur.execute("SELECT * FROM cart_itmes WHERE cart_id = %s AND product_id = %s", (cart_id, product_id))
+    cart_items_row = cur.fetchone()
+
+    if cart_items_row is not None:
+        cart_items_id = cart_items_row['id']
+
+    if cart_items_row:
+        utils.trace("ENTERED cart_items_row is NOT None")
+
+        cur.execute("UPDATE cart_itmes SET quantity = quantity + %s WHERE id = %s", (quantity, cart_items_id))
+
+        utils.trace("added same item, quantity was increased")
+
+        return "You successfully added same item, quantity was increased."
+    else:
+        utils.trace("ENTERED cart_items_row is None")
+
+        cur.execute("INSERT INTO cart_itmes (cart_id, product_id, quantity, vat) VALUES (%s, %s, %s, %s)", (cart_id, product_id, quantity, vat))
+
+        utils.trace("INSERTED ITEMS")
+
+        return "You successfully added item."
+
+#TODO: cart_itmes REFACTOR
+#TODO: na vsichki fetchall da ima assertDev za duljina na redove ot bazata | assertPeer na post na cart
+def view_cart(conn, cur, user_id):
+    cur.execute("""
+                SELECT 
+                    products.name, 
+                    products.price, 
+                    cart_itmes.quantity, 
+                    products.id, 
+                    currencies.symbol, 
+                    settings.vat
+                FROM carts
+                    JOIN cart_itmes  ON carts.cart_id         = cart_itmes.cart_id 
+                    JOIN products    ON cart_itmes.product_id = products.id
+                    JOIN currencies  ON products.currency_id  = currencies.id
+                    JOIN settings    ON products.vat_id       = settings.id
+                WHERE carts.user_id = %s
+                """, (user_id,))
+
+    items = cur.fetchall()
+
+    utils.AssertDev(len(items) <= 1000, "Fetched too many rows in view_cart function")
+
+    return items
+
+def get_cart_items_count(conn, cur, user_id):
+
+    query = """
+            SELECT 
+                products.name, 
+                products.price, 
+                cart_itmes.quantity, 
+                products.id 
+            FROM carts 
+                JOIN cart_itmes  ON carts.cart_id         = cart_itmes.cart_id 
+                JOIN products    ON cart_itmes.product_id = products.id 
+            WHERE
+    """
+
+    if isinstance(user_id, str):
+        query += f" carts.session_id = %s"
+
+    else:
+        query += f" carts.user_id = %s"
+
+    cur.execute(query, (user_id,))
+
+    items = cur.fetchall()
+
+    utils.AssertDev(len(items) <= 1000, "Fetched too many rows in get_cart_items_count function")
+
+    return len(items)
+
+def remove_from_cart(conn, cur, item_id):
+    cur.execute("DELETE FROM cart_itmes where product_id = %s", (item_id,))
+    return "You successfully deleted item."
+
 def add_to_cart_meth(conn, cur):
     session_cookie_id = request.cookies.get('session_id')
     authenticated_user =  sessions.get_current_user(session_id=session_cookie_id, cur=cur, conn=conn)
+
+        session_id_unauthenticated_user = request.cookies.get('session_id_unauthenticated_user')
 
     if authenticated_user == None:
 
@@ -878,7 +1008,7 @@ def cart(conn, cur):
 
         if 'recovery_data_stack' in session:
             recovery_data_stack = session.get('recovery_data_stack', [])
-            if len(recovery_data_stack) == 1:
+            if len(recovery_data_stack) >= 1:
                 recovery_data = recovery_data_stack.pop()
                 #TODO assert
             else:
@@ -904,183 +1034,11 @@ def cart(conn, cur):
         country_code = request.form['country_code']
         phone = request.form['phone'].strip()
 
-        regex_phone = r'^\d{7,15}$'
-        regex_email = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
-
-        # Check fields 
-        utils.AssertUser(len(first_name) >= 3 and len(first_name) <= 50, "First name is must be between 3 and 50 symbols")
-        utils.AssertUser(len(last_name) >= 3 and len(last_name) <= 50, "Last name must be between 3 and 50 symbols")
-        utils.AssertUser(re.fullmatch(regex_email, email), "Email is not valid")
-        utils.AssertUser(re.fullmatch(regex_phone, phone), "Phone number format is not valid. The number should be between 7 and 15 digits")
-        utils.AssertUser(phone[0] != "0", "Phone number format is not valid.")
-
-        # Retrieve cart items for the user
-        cur.execute("""
-                    SELECT 
-                        *
-                    FROM users      
-                    JOIN carts ON users.id = carts.user_id
-                    WHERE users.email = %s
-                    """, 
-                    (authenticated_user,))
-
-        users_carts_row = cur.fetchone()
-        user_id = users_carts_row['id']
-        user_first_name = users_carts_row['first_name']
-        user_last_name = users_carts_row['last_name']
-        cart_id = users_carts_row['cart_id']
-
-        #------------------------------------------------ edna zaqvka
-        cur.execute("""
-                    SELECT 
-                        cart_items.product_id, 
-                        products.name, 
-                        cart_items.quantity, 
-                        products.price, 
-                        currencies.symbol, 
-                        cart_items.vat 
-                    FROM cart_items
-                    JOIN products   ON cart_items.product_id = products.id
-                    JOIN currencies ON products.currency_id  = currencies.id
-                    WHERE cart_items.cart_id = %s
-                    """,
-                    (cart_id,))
-
-        cart_items = cur.fetchall()
-
-        db_items_quantity = []
-
-        for item in cart_items:
-            cur.execute("""
-                        SELECT 
-                            quantity 
-                        FROM products 
-                        WHERE id = %s
-                        """, 
-                        (item['product_id'],))
-
-            item_quantity_db = cur.fetchone()[0]
-
-            db_items_quantity.append(item_quantity_db)
-
-        #------------------------------------------------
-        # TODO: CODE REVIEW - I/O read - write
-        # Check and change quantity 
-        for item in cart_items:
-
-            product_id_, name, quantity, price, symbol, vat = item
-            quantity_db = db_items_quantity.pop(0)
-
-            if quantity > quantity_db:
-                session['cart_error'] = "We don't have " + str(quantity) + " from product: " + str(name) + " in our store. You can purchase less or to remove the product from your cart"
-                utils.add_recovery_data_in_session(session.get('recovery_data'))
-                return redirect('/cart')
-
-            cur.execute("UPDATE products SET quantity = quantity - %s WHERE id = %s", (quantity, product_id_))
-
-        price_mismatch = False
-        for item in cart_items:
-
-            product_id, name, quantity, cart_price, symbol, vat = item
-
-            cur.execute("SELECT price FROM products WHERE id = %s", (product_id,))
-            current_price = cur.fetchone()['price']
-
-            if current_price != cart_price:
-                # Price can be updated here
-                price_mismatch = True
-                break
-
-        utils.AssertUser(not price_mismatch, "The price on some of your product's in the cart has been changed, you can't make the purchase")
-
-        # First make order, then make shipping_details #
-        formatted_datetime = datetime.now().strftime('%Y-%m-%d')
-        cur.execute("""
-                    INSERT INTO orders (
-                        user_id, 
-                        status, 
-                        order_date) 
-                    VALUES (%s, %s, CURRENT_TIMESTAMP) 
-                    RETURNING order_id
-                    """, 
-                    (user_id, "Ready for Paying")) #formatted_datetime
-
-        order_id = cur.fetchone()['order_id']
-
-        # Insert order products into order_items table
-        for item in cart_items:
-
-            item_id = item['product_id']
-            item_quantity = item['quantity']
-            item_price = item['price']
-            item_vat = item['vat']
-
-            cur.execute("""
-                        INSERT INTO order_items (
-                            order_id, 
-                            product_id, 
-                            quantity, 
-                            price, 
-                            vat) 
-                        VALUES (%s, %s, %s, %s, %s)
-                        """, 
-                        (order_id, item_id, item_quantity, item_price, item_vat))
-
-        cur.execute("""
-                    SELECT 
-                        * 
-                    FROM country_codes 
-                    WHERE code = %s
-                    """, 
-                    (country_code,))
-
-        country_code_row = cur.fetchone()
-        country_code_id = country_code_row['id']
-
-        cur.execute("""
-                    INSERT INTO shipping_details (
-                            order_id, 
-                            email, 
-                            first_name, 
-                            last_name, town, 
-                            address, phone, 
-                            country_code_id  ) 
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                    """, 
-                    (order_id, email, first_name, last_name, town, address, phone, country_code_id))
-
-        # Total sum to be passed to the payment.html
-        # Total sum with vat to be passed to the payment.html
-        total_sum = 0
-
-        total_sum_with_vat = 0
-
-        for item in cart_items:
-            vat_float = (float(item['vat']) / 100)
-            items_sum_without_vat = float(item['quantity'] * item['price'])
-            total_sum += items_sum_without_vat
-            vatt = items_sum_without_vat * vat_float
-            total_sum_with_vat += items_sum_without_vat + vatt
-
-        # When the purchase is made we empty the user cart
-        # TODO: cart_items -> CART_ITEMS 
-        cur.execute("DELETE FROM cart_items WHERE cart_id = %s", (cart_id,))
-
-        cur.execute("""
-                    SELECT 
-                        shipping_details.*, 
-                        country_codes.code 
-                    FROM shipping_details
-                        JOIN orders        ON shipping_details.order_id        = orders.order_id 
-                        JOIN country_codes ON shipping_details.country_code_id = country_codes.id 
-                    WHERE orders.order_id = %s
-                    """, 
-                    (order_id,))
-
-        shipping_details = cur.fetchall()
-
-        cur.execute("SELECT * FROM settings")
-        settings_row = cur.fetchone()
+        response_post_cart = front_office.post_cart_method(cur=cur, email=authenticated_user, first_name=first_name, last_name=last_name, 
+                                                        town=town, address=address, country_code=country_code, 
+                                                        phone=phone, authenticated_user=authenticated_user)
+        utils.trace("response_post_cart")
+        utils.trace(response_post_cart)
 
         #TODO: Move into job queue -> pattern 
         send_email = False
@@ -1088,10 +1046,10 @@ def cart(conn, cur):
             utils.trace("ENTERED TRY BLOCK")
 
             send_mail_data = {
-                "products": cart_items,
-                "shipping_details": shipping_details[0],
-                "total_sum": total_sum,
-                "total_with_vat": total_sum_with_vat,
+                "products": response_post_cart['cart_items'],
+                "shipping_details": response_post_cart['shipping_details'],
+                "total_sum": round(response_post_cart['total_sum'],2),
+                "total_with_vat": round(response_post_cart['total_sum_with_vat'],2),
                 "provided_sum": 0,
                 "user_email": authenticated_user,
                 "cur": cur,
@@ -1104,12 +1062,12 @@ def cart(conn, cur):
             session['send_email'] = True
             session['send_mail_data'] = send_mail_data
 
-            session['payment_message'] = "You successful made an order with id = " + str(order_id)
+            session['payment_message'] = "You successful made an order with id = " + str(response_post_cart['order_id'])
 
-            return render_template('payment.html', order_id=order_id, order_products=cart_items, 
-                                    shipping_details=shipping_details, total_sum_with_vat=round(total_sum_with_vat, 2 ),
-                                    total_sum=round(total_sum, 2), first_name=user_first_name, 
-                                    last_name=user_last_name, email=authenticated_user, vat_in_persent = settings_row['vat'])
+            return render_template('payment.html', order_id=response_post_cart['order_id'], order_products=response_post_cart['cart_items'], 
+                                    shipping_details=response_post_cart['shipping_details'], total_sum_with_vat=round(response_post_cart['total_sum_with_vat'],2),
+                                    total_sum=round(response_post_cart['total_sum'],2), first_name=response_post_cart['user_first_name'], 
+                                    last_name=response_post_cart['user_last_name'], email=authenticated_user, vat_in_persent = response_post_cart['vat_in_persent'])
         except Exception as e:
             conn.rollback()
             raise e
@@ -1139,147 +1097,34 @@ def finish_payment(conn, cur):
     
     if request.method == 'GET':
 
-        order_id = session.get('order_id')
+        order_id = request.args.get('order_id')
 
-        cur.execute("SELECT users.*, settings.vat FROM users, settings WHERE email = %s", (authenticated_user,))
-        user_settings_row = cur.fetchone()
+        response = front_office.get_finish_payment(cur=cur, authenticated_user=authenticated_user, order_id=order_id)
 
-        cur.execute("""
-
-                    SELECT 
-                        order_items.product_id, 
-                        products.name, 
-                        order_items.quantity, 
-                        order_items.price, 
-                        currencies.symbol, 
-                        order_items.vat 
-                    FROM order_items  
-                        JOIN products   ON order_items.product_id = products.id 
-                        JOIN currencies ON products.currency_id   = currencies.id 
-                        WHERE order_id = %s
-
-                    """, (order_id,))
-
-        order_products = cur.fetchall()
-
-        utils.AssertDev(len(order_products) <= 1000, "More than 1000 products where fetched from the db in finish_payment method")
-
-        total_summ = sum(int(product['quantity']) * Decimal(product['price']) for product in order_products)
-        total_sum = round(total_summ, 2)
-
-        total_with_vat = 0
-        for product in order_products:
-
-            total_with_vat += (int(product['quantity']) * float(product['price'])) + (((float(product['vat']) / 100)) * (int(product['quantity']) * float(product['price'])))
-
-        cur.execute("SELECT * FROM shipping_details WHERE order_id = %s", (order_id,))
-        shipping_details = cur.fetchall()
-
-        session['order_id'] = order_id
-
-        return render_template('payment.html', order_products=order_products, shipping_details=shipping_details, 
-                                total_sum=total_sum, total_sum_with_vat=round(total_with_vat, 2), 
-                                first_name = user_settings_row['first_name'], last_name = user_settings_row['last_name'], 
-                                email = user_settings_row['email'], vat_in_persent=user_settings_row['vat'])
+        return render_template('payment.html', order_id=order_id,order_products=response['order_products'], shipping_details=response['shipping_details'], 
+                                total_sum=round(response['total_sum'], 2), total_sum_with_vat=round(response['total_with_vat'], 2), 
+                                first_name = response['first_name'], last_name = response['last_name'], 
+                                email = response['email'], vat_in_persent=response['vat_in_persent'])
 
     elif request.method == 'POST':
 
         order_id = request.form.get('order_id')
+        payment_amount = request.form.get('payment_amount')
 
         if order_id == "":
             order_id = session.get('order_id')
 
-        utils.AssertUser(isinstance(float(request.form.get('payment_amount')), float), "You must enter a number")
-
-        payment_amountt = float(request.form.get('payment_amount'))
-        payment_amount = round(float(payment_amountt), 2)
-
-        cur.execute("SELECT quantity, price, vat FROM order_items WHERE order_id = %s", (order_id,))
-        all_products_from_the_order = cur.fetchall()
-
-        cur.execute("""
-
-                    SELECT
-                        orders.*,
-                        shipping_details.*,
-                        country_codes.code AS country_codes_code
-                    FROM 
-                        orders,
-                        shipping_details
-
-                        JOIN country_codes ON shipping_details.country_code_id = country_codes.id
-                    WHERE
-                        orders.order_id = %s 
-                        AND 
-                        shipping_details.order_id = %s
-
-            """, (order_id, order_id))
-
-        orders_shipping_details_row = cur.fetchone()
-        order_status = orders_shipping_details_row['status']
-        # shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code_id, country_codes_code  = shipping_details
-        shipping_details = []
-        shipping_details.append(orders_shipping_details_row['shipping_id'])
-        shipping_details.append(orders_shipping_details_row['order_id'])
-        shipping_details.append(orders_shipping_details_row['email'])
-        shipping_details.append(orders_shipping_details_row['first_name'])
-        shipping_details.append(orders_shipping_details_row['last_name'])
-        shipping_details.append(orders_shipping_details_row['town'])
-        shipping_details.append(orders_shipping_details_row['address'])
-        shipping_details.append(orders_shipping_details_row['phone'])
-        shipping_details.append(orders_shipping_details_row['country_code_id'])
-        shipping_details.append(orders_shipping_details_row['country_codes_code'])
-
-        utils.trace(shipping_details)
-
-        total = 0
-        for product in all_products_from_the_order:
-            total += int(product[0]) * Decimal(product[1])
-
-        total_with_vat = 0
-        for product in all_products_from_the_order:
-            total_with_vat += (int(product[0]) * float(product[1])) + (((float(product[2]) / 100)) * (int(product[0]) * float(product[1])))
-
-        utils.AssertUser(order_status == 'Ready for Paying', "This order is not ready for payment or has already been paid")
-
-        if payment_amount < round(total_with_vat, 2):
-            session['order_id'] = order_id
-            session['payment_error'] = "You entered amout, which is less than the order you have"
-            return redirect('/finish_payment')
-        if payment_amount > round(total_with_vat, 2):
-            session['order_id'] = order_id
-            session['payment_error'] = "You entered amout, which is bigger than the order you have"
-            return redirect('/finish_payment')
-
-        # formatted_datetime = datetime.now().strftime('%Y-%m-%d')
-        cur.execute("UPDATE orders SET status = 'Paid' WHERE order_id = %s", (order_id,))
-
-        cur.execute("""
-
-            SELECT 
-                products.name, 
-                order_items.quantity, 
-                order_items.price,
-                currencies.symbol,
-                order_items.vat
-            FROM order_items      
-                JOIN products   ON order_items.product_id = products.id
-                JOIN currencies ON products.currency_id = currencies.id
-            WHERE order_id = %s
-
-            """, (order_id,))
-
-        products_from_order = cur.fetchall()
+        response_post = front_office.post_payment_method(cur=cur, payment_amount=payment_amount, order_id=order_id)
 
         send_email = False
         try:
             utils.trace("ENTERED TRY BLOCK")
 
             send_mail_data = {
-                "products": products_from_order,
-                "shipping_details": shipping_details,
-                "total_sum": total,
-                "total_with_vat": total_with_vat,
+                "products": response_post['products_from_order'],
+                "shipping_details": response_post['shipping_details'],
+                "total_sum": response_post['total'],
+                "total_with_vat": response_post['total_with_vat'],
                 "provided_sum": payment_amount,
                 "user_email": authenticated_user,
                 "cur": cur,
@@ -1312,11 +1157,9 @@ def staff_login(conn, cur):
         username = request.form['username']
         password = request.form['password']
 
-        cur.execute("SELECT * FROM staff WHERE username = %s AND password = %s", (username, password))
-        staff_row = cur.fetchone()
-        utils.AssertUser(staff_row is not None, "There is no registration with this staff username and password")
+        response = back_office.post_staff_login(cur=cur, username=username, password=password)
 
-        session['staff_username'] = username
+        session['staff_username'] = response['username']
 
         session_id = sessions.create_session(session_data=username, cur=cur, conn=conn, is_front_office=False)
         response = make_response(redirect('/staff_portal'))
@@ -1540,12 +1383,6 @@ def back_office_manager(conn, cur, *params):
     if authenticated_user == None:
        return redirect('/staff_login')
 
-    print("back_office_manager request.path", flush=True)
-    print(request.path, flush=True)
-
-    print("len(request.path.split('/')", flush=True)
-    print(len(request.path.split('/')), flush=True)
-
     if request.path == f'/active_users':
 
         if request.method == 'GET':
@@ -1613,17 +1450,9 @@ def back_office_manager(conn, cur, *params):
             sort_by = validated_request_args_fields['sort_by']
             sort_order = validated_request_args_fields['sort_order']
 
-            query = "SELECT * FROM exception_logs"
+            response = back_office.get_error_logs(cur=cur, sort_by=sort_by, sort_order=sort_order)
 
-            if sort_by and sort_order:
-                query += f" ORDER BY {sort_by} {sort_order}"
-
-            cur.execute(query)
-            log_exceptions = cur.fetchall()
-
-            utils.AssertDev(len(log_exceptions) <= 100000, "Too much fetched values from db /error_logs")
-
-            return render_template('logs.html', log_exceptions = log_exceptions, sort_by=sort_by, sort_order=sort_order)
+            return render_template('logs.html', log_exceptions = response['log exceptions'], sort_by=sort_by, sort_order=sort_order)
         else:
             utils.AssertPeer(False, "Invalid method")
     
@@ -1634,17 +1463,17 @@ def back_office_manager(conn, cur, *params):
 
             current_settings = utils.get_current_settings(cur)
 
-            cur.execute("SELECT * FROM settings")
-            settings_row = cur.fetchone()
+            response = back_office.get_settings(cur)
 
-            limitation_rows = settings_row['report_limitation_rows']
-            vat = settings_row['vat']
-            background_color = settings_row['send_email_template_background_color']
-            text_align = settings_row['send_email_template_text_align']
-            border = settings_row['send_email_template_border']
-            border_collapse = settings_row['send_email_template_border_collapse']
-
-            return render_template('captcha_settings.html', vat=vat,limitation_rows=limitation_rows, border_collapse=border_collapse,border=border,text_align=text_align,background_color=background_color,**current_settings)
+            return render_template(
+                'captcha_settings.html', 
+                vat=response['vat'],
+                limitation_rows=response['limitation_rows'], 
+                border_collapse=response['border_collapse'],
+                border=response['border'],
+                text_align=response['text_align'],
+                background_color=response['background_color'],
+                **current_settings)
 
         elif request.method == 'POST':
             utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
@@ -1652,20 +1481,10 @@ def back_office_manager(conn, cur, *params):
             new_max_attempts = request.form['max_captcha_attempts']
             new_timeout_minutes = request.form['captcha_timeout_minutes']
 
-            utils.AssertUser(not(new_max_attempts and int(new_max_attempts)) <= 0, "Captcha attempts must be possitive number")
-            utils.AssertUser(not(new_timeout_minutes and int(new_timeout_minutes)) <= 0, "Timeout minutes must be possitive number")
-
-            str_message = ""
-
-            if new_max_attempts:
-                cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'max_captcha_attempts'", (new_max_attempts,))
-                str_message += 'You updated captcha attempts. '
-            if new_timeout_minutes:
-                cur.execute("UPDATE captcha_settings SET value = %s WHERE name = 'captcha_timeout_minutes'", (new_timeout_minutes,))
-                str_message += 'You updated timeout minutes.'
+            response = back_office.post_captcha_settings(cur, new_max_attempts, new_timeout_minutes)
         
-            if str_message != "":
-                session['staff_message'] = str_message
+            if response['message'] != "":
+                session['staff_message'] = response['message']
 
             return redirect(f'/staff_portal')
         else:
@@ -1677,12 +1496,9 @@ def back_office_manager(conn, cur, *params):
 
             limitation_rows = int(request.form['report_limitation_rows'])
 
-            utils.AssertUser(limitation_rows >= 0 and limitation_rows <= 50000, "You can't enter zero or negative number. The maximum number is 50000")
+            response = back_office.post_update_limitation_rows(cur=cur, limitation_rows=limitation_rows)
 
-            query = ("UPDATE settings SET report_limitation_rows = %s")
-            cur.execute(query, (limitation_rows,))
-
-            session['staff_message'] = "You changed the limitation number of every report to: " + str(limitation_rows)
+            session['staff_message'] = response['message']
 
             return redirect(f'/staff_portal')
         else:
@@ -1716,17 +1532,13 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/update_vat_for_all_products':
         if request.method == 'POST':
+
             utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
             vat_for_all_products = request.form['vat_for_all_products']
 
-            try:
-                vat_for_all_products = int(vat_for_all_products)
-            except:
-                utils.AssertUser(False,"Enter a number !!!, Without the '%' sign")
+            response = back_office.post_vat_for_all_products(cur=cur, vat_for_all_products=vat_for_all_products)
 
-            cur.execute("UPDATE settings SET vat = %s", (vat_for_all_products,))
-
-            session['staff_message'] = "You changed the VAT for all products successfully"
+            session['staff_message'] = response['message']
 
             return redirect(f'/staff_portal')
         else:
@@ -1747,10 +1559,6 @@ def back_office_manager(conn, cur, *params):
         
         elif request.method == 'POST':
 
-            cur.execute("SELECT * FROM settings")
-            settings_rows = cur.fetchone()
-            limitation_rows = settings_rows['report_limitation_rows']
-
             date_from = request.form.get('date_from')
             date_to = request.form.get('date_to')
 
@@ -1762,70 +1570,29 @@ def back_office_manager(conn, cur, *params):
             page = request.args.get('page', 1, type=int)
             per_page = 1000  
 
-            utils.AssertUser(date_from or date_to, "You have to select date from and date to")
+            response = back_office.post_report_sales(
+                cur = cur, 
+                date_from = date_from, 
+                date_to = date_to, 
+                group_by = group_by, 
+                status = status, 
+                filter_by_status = filter_by_status, 
+                order_id = order_id, 
+                page = page)
+            
 
-            params = []
-
-            query = "SELECT "
-
-            if group_by == '':
-                query += "users.id, orders.order_id, to_char(orders.order_date, 'YYYY-MM-DD HH24:MI:SS') AS order_date, users.first_name, "
-            else:
-                query += f"'-' AS id, '-' AS order_id, date_trunc('{group_by}', order_date) AS order_date, '-' AS first_name, "
-
-            if status == '' and group_by == '':
-                query += "orders.status, "
-            elif status == '' and group_by != '':
-                query += "'-' as status, "
-            elif status != '' and group_by != '':
-                query += "orders.status, "
-
-            query += "sum(order_items.price * order_items.quantity) As total, "
-            query += "round(sum(order_items.price * order_items.quantity * (CAST(order_items.vat as numeric) / 100)),2) as vat, "
-            query += "round(sum(order_items.price * order_items.quantity) + sum(order_items.price * order_items.quantity * (cast(order_items.vat as numeric) / 100)),2) as total_with_vat "
-
-            query += """
-                    FROM orders 
-                    JOIN order_items ON orders.order_id = order_items.order_id
-                    JOIN users       ON users.id        = orders.user_id
-                    WHERE order_date >= %s AND order_date <= %s 
-            """
-
-            params.append(date_from)
-            params.append(date_to)
-
-            if filter_by_status:
-                query += "AND orders.status = %s "
-                params.append(filter_by_status)
-
-            if order_id:
-                query += "AND orders.order_id = %s "
-                params.append(order_id)
-
-            query += "GROUP BY 1, 2, 3, 4, 5 ORDER BY order_date DESC LIMIT %s"
-
-            query_for_total_rows = query[:len(query)-8]
-            cur.execute(query_for_total_rows, params)
-            total_records = len(cur.fetchall())
-
-            params.append(limitation_rows)
-
-            cur.execute(query, params)
-
-            report = cur.fetchall()
-            utils.trace(report)
-
-            utils.AssertUser(report[0][0] != None and report[0][1] != None and report[0][2] != None and report[0][3] != None, "No result with this filter")
-
-            # total_records = len(report)
-
-            total_price = sum(row[5] for row in report)
-            total_vat = sum(row[6] for row in report if row[6] is not None)
-            total_price_with_vat = sum(row[7] for row in report if row[7] is not None)
-
-            report_json = utils.serialize_report(report)
-
-            return render_template('report.html', limitation_rows=int(limitation_rows), filter_by_status=filter_by_status,report=report, total_records=total_records, total_price_with_vat=total_price_with_vat,total_vat=total_vat,total_price=total_price, report_json=report_json, default_to_date=date_to, default_from_date=date_from)
+            return render_template(
+                'report.html', 
+                limitation_rows = response['limitation_rows'], 
+                filter_by_status = response['filter_by_status'],
+                report = response['report'], 
+                total_records =response['total_records'], 
+                total_price_with_vat = response['total_price_with_vat'],
+                total_vat = response['total_vat'],
+                total_price = response['total_price'], 
+                report_json = response['report_json'], 
+                default_to_date = response['default_to_date'], 
+                default_from_date = response['default_from_date'])
         else:
             utils.AssertPeer(False, "Invalid url")
 
@@ -2019,7 +1786,6 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/crud_products' and len(request.path.split('/')) == 2:
 
-        print("Enterd crud_products read successfully", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read', authenticated_user), "You don't have permission to this resource")
 
         validated_request_args_fields = utils.check_request_arg_fields(cur=cur, request=request)
@@ -2029,56 +1795,33 @@ def back_office_manager(conn, cur, *params):
         price_min = validated_request_args_fields['price_min']
         price_max = validated_request_args_fields['price_max']
 
-        base_query = """
-                        SELECT 
-                            products.id, 
-                            products.name, 
-                            products.price, 
-                            products.quantity, 
-                            products.category, 
-                            currencies.symbol,
-                            settings.vat,
-                            products.price + (products.price * (CAST(settings.vat AS numeric) / 100)) AS product_vat_price
-                        FROM products 
-                            JOIN currencies ON products.currency_id = currencies.id
-                            JOIN settings   ON products.vat_id      = settings.id
-                        WHERE 1=1
-                    """
-        query_params = []
+        response = back_office.get_crud_products(
+            cur = cur, 
+            sort_by = sort_by, 
+            sort_order = sort_order, 
+            price_min = price_min, 
+            price_max = price_max)
 
-        if price_min is not '' and price_max is not '':
-            base_query += " AND products.price + (products.price * (CAST(settings.vat AS numeric) / 100)) BETWEEN %s AND %s"
-            query_params.extend([price_min, price_max])
-        
-        base_query += f"ORDER BY {sort_by} {sort_order} LIMIT 100"
-
-        cur.execute(base_query, query_params)
-        products = cur.fetchall()
-
-        return render_template('crud.html', products=products, sort_by=sort_by, sort_order=sort_order, price_min=price_min or '', price_max=price_max or '')
+        return render_template('crud.html', products=response['products'], sort_by=sort_by, sort_order=sort_order, price_min=price_min or '', price_max=price_max or '')
 
     elif request.path == f'/crud_products/add_product' and len(request.path.split('/')) == 3:
 
-        print("Enterd crud_products add successfully", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'create', authenticated_user), "You don't have permission to this resource")
 
         if request.method == 'GET':
 
-            cur.execute("SELECT symbol, id FROM currencies")
-            all_currencies = cur.fetchall()
+            response = back_office.get_crud_add_product(cur)
 
-
-            cur.execute("SELECT DISTINCT(category) FROM products")
-            categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
-
-            return render_template('add_product_staff.html', categories=categories, currencies=all_currencies)
+            return render_template('add_product_staff.html', categories=response['categories'], currencies=response['all_currencies'])
 
         elif request.method == 'POST':
-            data = process_form('CRUD Products', 'create')
-            
-            cur.execute(f"INSERT INTO products ({ data['fields'] }) VALUES ({ data['placeholders'] })", data['values'])
 
-            session['crud_message'] = "Item was added successfully"
+            form_data = {field: request.form.get(field) for field in request.form}
+            files_data = {file_field: request.files.get(file_field) for file_field in request.files}
+
+            response = back_office.post_crud_add_product(cur, form_data, files_data)
+
+            session['crud_message'] = response['message']
 
             return redirect(f'/crud_products')
         else:
@@ -2086,32 +1829,23 @@ def back_office_manager(conn, cur, *params):
 
     elif re.match(r'^/crud_products/edit_product/\d+$', request.path) and len(request.path.split('/')) == 4:
 
-        print("Enterd crud_products edit successfully", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'update', authenticated_user), "You don't have permission to this resource")
 
         product_id = request.path.split('/')[3]
 
         if request.method == 'GET':
-            cur.execute("SELECT symbol, id FROM currencies")
-            all_currencies = cur.fetchall()
 
-            cur.execute("SELECT * FROM products WHERE id = %s", (product_id,))
-            product = cur.fetchone()
+            response = back_office.get_edit_product(cur=cur, product_id=product_id)
 
-            print(product, flush=True)
-
-            utils.AssertUser(product, "Invalid product")
-
-            return render_template('edit_product.html', product=product, product_id=product_id, currencies = all_currencies)
+            return render_template('edit_product.html', product=response['product'], product_id=product_id, currencies = response['all_currencies'])
 
         elif request.method == 'POST':
-            data = process_form('CRUD Products', 'edit')
 
-            print(data, flush=True)
+            form_data = {field: request.form.get(field) for field in request.form}
 
-            cur.execute("UPDATE products SET name = %s, price = %s, quantity = %s, category = %s, currency_id = %s WHERE id = %s", (data['values'][0], data['values'][1], data['values'][2], data['values'][3], data['values'][4],product_id))
-            
-            session['crud_message'] = "Product was updated successfully with id = " + str(product_id)
+            response = back_office.post_edit_product(cur=cur, form_data=form_data, files_data="", product_id=product_id)
+
+            session['crud_message'] = response['message']
 
             return redirect(f'/crud_products')
         else:
@@ -2119,60 +1853,48 @@ def back_office_manager(conn, cur, *params):
 
     elif re.match(r'/crud_products/delete_product/\d+$', request.path) and len(request.path.split('/')) == 4:
 
-        print("Enterd crud_products delete successfully", flush=True)
-        
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'delete', authenticated_user), "You don't have permission to this resource")
 
         product_id = request.path.split('/')[3]
-        cur.execute("UPDATE products SET quantity = 0 WHERE id = %s", (product_id,))
 
-        session['crud_message'] = "Product was set to be unavailable successful with id = " + str(product_id)
+        response = back_office.delete_product(cur=cur, product_id=product_id)
+
+        session['crud_message'] = response['message']
 
         return redirect(f'/crud_products')
 
     elif request.path == f'/crud_staff' and len(request.path.split('/')) == 2:
 
-        print("Enterd crud_staff read successfully", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read', authenticated_user), "You don't have permission to this resource")
 
-        cur.execute("SELECT s.username, r.role_name, sr.staff_id, sr.role_id FROM staff_roles sr JOIN staff s ON s.id = sr.staff_id JOIN roles r ON r.role_id = sr.role_id")
-        relations = cur.fetchall()
+        response = back_office.get_crud_staff(cur)
 
-        return render_template('staff_role_assignment.html', relations=relations)
+        return render_template('staff_role_assignment.html', relations=response['relations'])
 
     elif request.path == f'/crud_staff/add_role_staff' and len(request.path.split('/')) == 3:
 
-        print("Enterd crud_staff add successfully", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create', authenticated_user), "You don't have permission to this resource")
 
         if request.method == 'GET':
-            cur.execute("SELECT id, username FROM staff")
-            staff = cur.fetchall()
+            
+            response = back_office.get_add_role_staff(cur)
 
-            cur.execute("SELECT role_id, role_name FROM roles")
-            roles = cur.fetchall()
-
-            return render_template('add_staff_role.html', staff=staff, roles=roles)
+            return render_template('add_staff_role.html', staff=response['staff'], roles=response['roles'])
 
         elif request.method == 'POST':
-            data = process_form('Staff roles', 'create_staff_roles')
 
-            cur.execute("SELECT id FROM staff WHERE username = %s", (data['values'][0],))
-            staff_id = cur.fetchone()[0]
+            form_data = {field: request.form.get(field) for field in request.form}
 
-            cur.execute("SELECT role_id FROM roles WHERE role_name = %s", (data['values'][1],))
-            role_id = cur.fetchone()[0]
+            response = back_office.post_add_role_staff(cur=cur, form_data=form_data, files_data="")
 
-            cur.execute(f"INSERT INTO staff_roles ({data['fields']}) VALUES ({data['placeholders']})", (staff_id, role_id))
+            session['staff_message'] = response['message']
 
-            session['staff_message'] = "You successful gave a role: " + str(data['values'][1]) + " to user: " + str(data['values'][0])
             return redirect('/staff_portal')
         else:
             utils.AssertDev(False, "Different method")
 
     elif request.path == f'/crud_staff/add_staff' and len(request.path.split('/')) == 3:
 
-        print("Enterd crud_staff add staff successfully", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create', authenticated_user), "You don't have permission to this resource")
 
         if request.method == 'GET':
@@ -2180,32 +1902,29 @@ def back_office_manager(conn, cur, *params):
             return render_template('add_staff.html')
 
         elif request.method == 'POST':
-            data = process_form('Staff roles', 'create_staff')
 
-            print(data, flush=True)
+            form_data = {field: request.form.get(field) for field in request.form}
 
-            cur.execute(f"INSERT INTO staff ({data['fields']}) VALUES ({data['placeholders']})", (data['values']))
+            response = back_office.post_add_staff(cur=cur, form_data=form_data, files_data="")
 
-            session['staff_message'] = "You successful made new user with name: " + str(data['values'][0]) 
+            session['staff_message'] = response['message']
             return redirect('/staff_portal')
         else:
             utils.AssertDev(False, "Different method")
 
     elif re.match(r'/crud_staff/delete_role/\d+/\d+$', request.path) and len(request.path.split('/')) == 5:
 
-        print("Enterd crud_staff delete successfully", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'delete', authenticated_user), "You don't have permission to this resource")
 
         staff_id = request.path.split('/')[3]
         role_id = request.path.split('/')[4]
-        cur.execute('DELETE FROM staff_roles WHERE staff_id = %s AND role_id = %s', (staff_id, role_id))
 
-        session['staff_message'] = "You successful deleted a role"
+        response = back_office.delete_crud_staff_role(cur=cur, staff_id=staff_id, role_id=role_id)
+
+        session['staff_message'] = response['message']
         return redirect(f'/staff_portal')
 
     elif request.path == f'/crud_orders' and len(request.path.split('/')) == 2:
-
-        print("Enterd crud_orders read successful", flush=True)
 
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read', authenticated_user), "You don't have permission for this resource")
 
@@ -2224,194 +1943,97 @@ def back_office_manager(conn, cur, *params):
         per_page = validated_fields['per_page']
         offset = validated_fields['offset']
 
-        cur.execute("SELECT DISTINCT status FROM orders")
-        statuses = cur.fetchall()
+        response = back_office.get_crud_orders(
+            cur = cur, 
+            sort_by = sort_by, 
+            sort_order = sort_order, 
+            price_min = price_min, 
+            price_max = price_max, 
+            order_by_id = order_by_id, 
+            date_from = date_from, 
+            date_to = date_to, 
+            status = status, 
+            page = page, 
+            per_page = per_page, 
+            offset = offset)
 
-        query = """
-            SELECT 
-                o.order_id, 
-                u.first_name || ' ' || u.last_name                    AS user_names, 
-                array_agg(p.name)                                     AS product_names,
-                to_char(sum(oi.quantity * oi.price),'FM999999990.00') AS order_price, 
-                o.status, 
-                to_char(o.order_date, 'MM-DD-YYYY HH:MI:SS')          AS formatted_order_date,
-                c.symbol,
-                oi.vat
-            FROM orders      AS o 
-            JOIN users       AS u  ON o.user_id     = u.id 
-            JOIN order_items AS oi ON o.order_id    = oi.order_id 
-            JOIN products    AS p  ON oi.product_id = p.id
-            JOIN currencies  AS c  ON p.currency_id = c.id
-            WHERE 1=1
-        """
-
-        params = []
-        if order_by_id:
-            query += " AND o.order_id = %s"
-            params.append(order_by_id)
-
-        if date_from and date_to:
-            query += " AND o.order_date >= %s AND o.order_date <= %s"
-            params.extend([date_from, date_to])
-        else:
-            default_to_date = datetime.now()
-            dafault_from_date = default_to_date - timedelta(days=30)
-
-            query += " AND o.order_date >= %s AND o.order_date <= %s"
-            params.extend([dafault_from_date, default_to_date])
-
-        if status:
-            query += " AND o.status = %s"
-            params.append(status)
-
-        # AND products.price + (products.price * (CAST(settings.value AS numeric) / 100)) BETWEEN %s AND %s"
-        if price_min and price_max:
-            query += """
-                        GROUP BY 
-                            o.order_id, 
-                            user_names, 
-                            c.symbol, 
-                            oi.vat 
-                            HAVING sum((oi.quantity * oi.price) + ((oi.quantity * oi.price) * (CAST(oi.vat AS numeric) / 100))) >= %s AND sum((oi.quantity * oi.price) + ((oi.quantity * oi.price) * (CAST(oi.vat AS numeric) / 100))) <= %s
-                    """
-            params.extend([price_min, price_max])
-
-        if price_min == '' and price_max == '':
-            query += " GROUP BY o.order_id, user_names, c.symbol, oi.vat "
-
-        query += f" ORDER BY o.order_{sort_by} {sort_order} "
-
-        cur.execute("SELECT count(*) FROM orders")
-        total_length_query = cur.fetchone()[0]
-
-        query += "LIMIT %s OFFSET %s"
-        params.extend([per_page, offset])
-
-        cur.execute(query, params)
-        orders = cur.fetchall()
-
-        loaded_orders = len(orders)
-
-        return render_template('crud_orders.html', page=page,total_pages=total_length_query // per_page ,orders=orders, statuses=statuses, 
-            current_status=status, price_min=price_min, price_max=price_max, order_by_id=order_by_id, 
-            date_from=date_from, date_to=date_to, per_page=per_page, sort_by=sort_by, sort_order=sort_order)
+        return render_template(
+            'crud_orders.html', 
+            page=response['page'],
+            total_pages=response['total_pages'],
+            orders=response['orders'], 
+            statuses=response['statuses'], 
+            current_status=response['current_status'], 
+            price_min=price_min, 
+            price_max=price_max, 
+            order_by_id=order_by_id, 
+            date_from=date_from, 
+            date_to=date_to, 
+            per_page=per_page, 
+            sort_by=sort_by, 
+            sort_order=sort_order)
 
     elif request.path == f'/crud_orders/add_order' and len(request.path.split('/')) == 3:
 
-        print("Enterd crud_orders add successful", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'create', authenticated_user), "You don't have permission for this resource")
 
         if request.method == 'GET':
-            cur.execute("SELECT DISTINCT status FROM orders")
-            statuses = cur.fetchall()
-            return render_template('add_order.html', statuses=statuses)
+            
+            response = back_office.get_crud_orders_add_order(cur=cur)
+
+            return render_template('add_order.html', statuses=response['statuses'])
 
         elif request.method == 'POST':
-            print("Enterd crud_orders add POST successful", flush=True)
-            data = process_form('CRUD Orders', 'create')        
 
-            order_data = data['orders']
-            item_data = data['order_items']
+            form_data = {field: request.form.get(field) for field in request.form}
 
-            cur.execute("SELECT id FROM users WHERE id = %s", (order_data['values'][0],))
+            response = back_office.post_crud_orders_add_order(cur, form_data=form_data, files_data="")
 
-            utils.AssertUser(cur.fetchone() != None, "There is no such product with id " + str(order_data['values'][0]))
-        
-            try:
-                #TODO: Insert da bude v otdelna fukciq i da se podavat parametrite, koito trqbva da se insertnat
+            session['crud_message'] = response['message']
 
-                query_one = f"INSERT INTO orders ({ order_data['fields'] }) VALUES ({ order_data['placeholders'] }) RETURNING order_id"
-                cur.execute(query_one, order_data['values'])
-                order_id = cur.fetchone()[0]
-
-                order_item_values = (order_id,) + item_data['values']
-                query_two = f"INSERT INTO order_items (order_id, {item_data['fields']}) VALUES (%s, {item_data['placeholders']})"
-                cur.execute(query_two, order_item_values)
-
-                session['crud_message'] = "Successfully added new order with id: " + str(order_id)
-                return redirect(f'/crud_orders')
-
-            except Exception as e:
-                session['crud_error'] = "Failed to add order. Please try again."
-                return redirect(f'/crud_orders')
+            return redirect(f'/crud_orders')
         else:
             utils.AssertUser(False, "Invalid operation")
 
     elif re.match(r'/crud_orders/edit_order/\d+$', request.path) and len(request.path.split('/')) == 4:
 
-        print("Enterd crud_orders edit successful", flush=True)
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'update', authenticated_user), "You don't have permission for this resource")
 
         order_id = request.path.split('/')[3]
 
         if request.method == 'GET':
 
-            # order_id = request.path.split('/')[5]
+            response = back_office.get_crud_orders_edit_order(cur=cur, order_id=order_id)
 
-            cur.execute("SELECT DISTINCT status FROM orders")
-            statuses = cur.fetchall()
-
-            cur.execute("SELECT order_date FROM orders WHERE order_id = %s", (order_id,))
-            order_date = cur.fetchone()[0]
-
-            formatted_date = order_date.strftime('%Y-%m-%dT%H:%M:%S')
-
-            cur.execute("""
-                    SELECT 
-                        p.id, 
-                        p.name, 
-                        oi.quantity, 
-                        oi.price, 
-                        sum(oi.quantity * oi.price) AS total_price,
-                        c.symbol,
-                        oi.vat
-                    FROM order_items                AS oi 
-                        JOIN products               AS p ON oi.product_id = p.id 
-                        JOIN currencies             AS c ON p.currency_id = c.id
-                    WHERE order_id = %s 
-                        GROUP BY 
-                            p.id, 
-                            p.name, 
-                            oi.quantity, 
-                            oi.price, 
-                            c.symbol,
-                            oi.vat
-                """, (order_id,))
-
-            products_from_order = cur.fetchall()
-
-            all_products_sum_with_vat = 0
-            for product in products_from_order:
-                all_products_sum_with_vat += float(product[2] * product[3]) + (float(product[2] * product[3]) * (float(product[6]) / 100))
-
-            return render_template('edit_order.html', order_id=order_id,statuses=statuses, order_date = formatted_date, products_from_order=products_from_order, all_products_sum=round(all_products_sum_with_vat,2))
+            return render_template(
+                'edit_order.html', 
+                order_id=order_id, 
+                statuses=response['statuses'], 
+                order_date = response['order_date'], 
+                products_from_order=response['products_from_order'], 
+                all_products_sum=response['all_products_sum'])
 
         elif request.method == 'POST':
 
-            print("Enterd crud_orders edit POST successful", flush=True)
-            data = process_form('CRUD Orders', 'edit')
+            form_data = {field: request.form.get(field) for field in request.form}
 
-            cur.execute("UPDATE orders SET status = %s, order_date = %s WHERE order_id = %s", (data['values'][0], data['values'][1], order_id))
+            response = back_office.post_crud_orders_edit_order(cur=cur, order_id=order_id, form_data=form_data, files_data="")
             
-            session['crud_message'] = "Order was updated successfully with id = " + str(order_id)
-            return redirect(f'/crud_orders')
+            session['crud_message'] = response['message']
 
+            return redirect(f'/crud_orders')
         else:
             utils.AssertUser(False, "Invalid operation")
 
     elif re.match(r'/crud_orders/delete_order/\d+$', request.path) and len(request.path.split('/')) == 4:
 
-        print("Enterd crud_orders delete successful", flush=True)
-
         utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'delete', authenticated_user), "You don't have permission to this resource")
 
         order_id = request.path.split('/')[3]
 
-        cur.execute('DELETE FROM shipping_details WHERE order_id = %s', (order_id,))
-        cur.execute("DELETE FROM order_items WHERE order_id = %s", (order_id,))
-        cur.execute('DELETE FROM orders WHERE order_id = %s', (order_id,))
+        response = back_office.delete_crud_orders_edit_order(cur=cur, order_id=order_id)
 
-        session['crud_message'] = "You successful deleted a  order with id: " + str(order_id)       
+        session['crud_message'] = response['message']       
 
         return redirect(f'/crud_orders')
 
@@ -2422,6 +2044,12 @@ def back_office_manager(conn, cur, *params):
         if request.method == 'GET':
 
             fields = utils.check_request_arg_fields(cur, request)
+
+            sort_by = fields['sort_by']
+            sort_order = fields['sort_order']
+            email = fields['email']
+            user_by_id = fields['user_by_id']
+            status = fields['status']
 
             cur.execute("SELECT DISTINCT verification_status FROM users")
             statuses = cur.fetchall()
@@ -2773,7 +2401,6 @@ def handle_request(username=None, path=''):
 
         if send_email:
             utils.trace("ENTERED SEND MAIL TRUE")
-
             send_mail.send_mail(
                 products=send_mail_data['products'],
                 shipping_details=send_mail_data['shipping_details'],
@@ -2787,7 +2414,7 @@ def handle_request(username=None, path=''):
                 app=send_mail_data['app'],
                 mail=send_mail_data['mail']
             )
-
+            
             session['send_email'] = False
             session['send_mail_data'] = {}
 

@@ -61,21 +61,30 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
     vat_total = 0
     currency_sumbol = ""
 
+    utils.trace("products mail")
+    utils.trace(products)
+
     for item in products:
         if email_type == 'purchase_mail':
-            product_id, product_name, quantity, price, symbol, vat = item
+
+            product_id = item[4]
+            product_name = item[5]
+            quantity = item[6] 
+            price = item[7] 
+            symbol = item[8]
+            vat = item[9]
+
         elif email_type == 'payment_mail':
-            product_name, quantity, price, symbol, vat = item
+
+            product_name = item[0]
+            quantity = item[1]  
+            price = item[2] 
+            symbol = item[3] 
+            vat = item[4]
 
         float_vat = float(vat)
 
         currency_sumbol = symbol
-<<<<<<< HEAD
-        price_total = float(price) * int(quantity) # 250
-        total_price += price_total
-        vat_total += price_total * (float_vat / 100) #62,5
-        total_product_price_with_vat = round(price_total + vat_total, 2)
-=======
 
         price_total = float(price) * int(quantity) # 250
 
@@ -87,7 +96,6 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
 
         total_product_price_with_vat = round(price_total + vat_current_product, 2)
 
->>>>>>> dev
         products_html += f"""
         <tr>
             <td>{product_name}</td>
@@ -97,15 +105,24 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
         </tr>
         """
     
-    _total_price = round(total_price, 2)
+    _total_price = round(float(total_price), 2)
+    total_sum_rounded = round(float(total_sum), 2)
+    total_vat_rounded = round(float(vat_total), 2)
+    total_with_vat_rounded = round(float(total_with_vat), 2)
+    provided_sum_rounded = round(float(provided_sum), 2)
+
     products_html += f"""
         <tr>
             <td colspan='3' style="text-align: {text_align};">Total Order Price Without VAT:</td>
-            <td style="text-align: {text_align};">{round(total_sum, 2)} {currency_sumbol}</td>
+            <td style="text-align: {text_align};">{total_sum_rounded} {currency_sumbol}</td>
         </tr>
         <tr>
             <td colspan='3' style="text-align: {text_align};">VAT:</td>
-            <td style="text-align: {text_align};">{round(vat_total, 2)} {currency_sumbol}</td>
+            <td style="text-align: {text_align};">{total_vat_rounded} {currency_sumbol}</td>
+        </tr>
+        <tr>
+            <td colspan='3' style="text-align: {text_align};">VAT %:</td>
+            <td style="text-align: {text_align};">{vat}%</td>
         </tr>
         <tr>
             <td colspan='3' style="text-align: {text_align};">VAT %:</td>
@@ -113,7 +130,7 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
         </tr>
         <tr>
             <td colspan='3' style="text-align: {text_align};">Total Order Price With VAT:</td>
-            <td style="text-align: {text_align};">{round(total_with_vat, 2)} {currency_sumbol}</td>
+            <td style="text-align: {text_align};">{total_with_vat_rounded} {currency_sumbol}</td>
         </tr>
     """
 
@@ -121,14 +138,14 @@ def send_mail(products, shipping_details, total_sum, total_with_vat, provided_su
         products_html += f"""
             <tr>
                 <td colspan='3' style="text-align: {text_align};">You paid:</td>
-                <td style="text-align: {text_align};">{round(provided_sum, 2)} {currency_sumbol}</td>
+                <td style="text-align: {text_align};">{provided_sum_rounded} {currency_sumbol}</td>
             </tr>
         </table>
         """
     elif email_type == 'purchase_mail':
         products_html += "</table>"
 
-    shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code_id, country_codes_code  = shipping_details
+    shipping_id, order_id, email, first_name, last_name, town, address, phone, country_code_id, country_codes_code  = shipping_details[0]
 
     shipping_html = f"""
     <table border="{border}" cellpadding="5" cellspacing="3" style="border-collapse: {border_collapse};">

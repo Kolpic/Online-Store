@@ -32,10 +32,10 @@
             <tbody>
                 {% for product in order_products %}
                     <tr>
-                        <td>{{ product[1]}}</td>
-                        <td>{{ product[2] }}</td>
-                        <td class="text-right">{{ (product[3]|float + (product[3]|float * (product[5]|float / 100)))|round(2) }} {{ product[4] }}</td>
-                        <td class="text-right">{{ ((product[3]|float * product[2]) + ((product[3]|float * product[2]) * (product[5]|float / 100)))|round(2) }}</td>
+                        <td>{{ product[5]}}</td>
+                        <td>{{ product[6] }}</td>
+                        <td class="text-right">{{ (product[7]|float + (product[7]|float * (product[9]|float / 100)))|round(2) }} {{ product[8] }}</td>
+                        <td class="text-right">{{ ((product[7]|float * product[6]) + ((product[7]|float * product[6]) * (product[9]|float / 100)))|round(2) }}</td>
                     </tr>
                 {% endfor %}
             </tbody>
