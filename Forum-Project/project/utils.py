@@ -1,4 +1,4 @@
-from flask import session
+from flask import session, request
 import bcrypt, json
 import psycopg2
 from project import config, exception
@@ -151,7 +151,7 @@ def fetch_batches(conn, date_from, date_to, offset, batch_size=10000):
             FROM orders AS o
             JOIN users       AS u  ON o.user_id  = u.id
             JOIN order_items AS oi ON o.order_id = oi.order_id
-            WHERE o.order_date >= '2023-01-01 21:00:00' AND o.order_date <= '2024-01-01 00:00:00'
+            WHERE o.order_date >= '2023-01-01 21:00:00' AND o.order_date <= '2025-01-01 00:00:00'
             GROUP BY 
                     date,
                     o.order_id,
@@ -293,55 +293,35 @@ def check_request_form_fields(request):
 
     return validated_params
 
-# This is not used anywhere 
-def check_request_form_fields_ab(needed_fields):
-    parameters = {}
+def check_request_form_fields_post_method(path, needed_fields, form_data):
 
-    for request_field, request_value in needed_fields.items():
-        #TODO for loop 
+    if path not in needed_fields:
+        pass
+    else:
+        # Get the required fields and their constraints for the path
+        fields_constraints = needed_fields[path]
 
-        if request_field == 'first_name':
-            parameters[request_field] = (request_value, str)
+        # Iterate over each field and its constraints
+        for field_name, constraints in fields_constraints.items():
 
-        elif request_field == 'last_name':
-            parameters[request_field] = (request_value, str)
+            field_value = form_data.get(field_name)
 
-        elif request_field == 'email':
-            parameters[request_field] = (request_value, str)
+            # Check if the field is required and is missing
+            is_field_required = constraints.get('required')
 
-        elif request_field == 'password':
-            parameters[request_field] = (request_value, str)
+            if is_field_required:
+                AssertUser(field_value, f"{field_name} is required.")
+            else:
+                pass
 
-        elif request_field == 'confirm_password':
-            parameters[request_field] = (request_value, str)
+            # Check the type of the field
+            try:
+                constraint_type = constraints['type']
+                field_value_converted = constraint_type(field_value)
+            except:
+                AssertUser(False, f"Invalid value for {field_name}. Expected type {field_name.__name__}.")
 
-        elif request_field == 'address':
-            parameters[request_field] = (request_value, str)
-
-        elif request_field == 'country_code':
-            parameters[request_field] = (request_value, str)
-
-        elif request_field == 'phone':
-            parameters[request_field] = (request_value, int)
-
-        elif request_field == 'gender':
-            parameters[request_field] = (request_value, str)
-
-        elif request_field == 'captcha':
-            parameters[request_field] = (request_value, int)
-
-    validated_params = {}
-
-    for key, (value, expected_value, length) in parameters.items():
-
-        try:
-            validated_params[key] = expected_value(value)
-        except:
-            AssertUser(False, f"Invalid value for {key}. Expected type {expected_value.__name__}.")
-
-        # min_value = int(length.split("-")[0])
-        # max_value = int(length.split("-")[1])
-
-        # AssertUser(len(value) >= min_value and len(value) <= max_value, f"{key} must be between {min_value} and {max_value} symbols")
-
-    return validated_params
+            # Check custom conditions for length or regex
+            if 'conditions' in constraints:
+                for condition, error_message in constraints['conditions']:
+                    AssertUser(condition(field_value), error_message)

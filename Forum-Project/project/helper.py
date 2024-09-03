@@ -83,19 +83,19 @@ FIELD_CONFIG = {
             'verification_status': {'type': bool, 'required': True, 'conditions': [(lambda x: x == True or x == False, "The status can be only true or false")]}
         }
     },
-    'Template email': {
+    'Verification Email': {
         'edit': {
             'subject': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 5 and len(x) <= 30, "Email subject should be between 5 and 30 symbols")]},
             'body': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},
         }
     },
-    'Template email purchase': {
+    'Purchase Email': {
         'edit': {
             'subject_purchase': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 5 and len(x) <= 30, "Email subject should be between 5 and 30 symbols")]},
             'body_purchase': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},
         }
     },
-    'Template email payment': {
+    'Payment Email': {
         'edit': {
             'subject_payment': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 5 and len(x) <= 30, "Email subject should be between 5 and 30 symbols")]},
             'body_payment': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},

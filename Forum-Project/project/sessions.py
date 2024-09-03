@@ -57,6 +57,11 @@ def _get_user_by_session(session_id, cur):
     (session_id,))
 
     custom_sessions_user_row = cur.fetchone()
+
+    cur.execute("SELECT * FROM settings")
+    settings_row = cur.fetchone()
+
+    utils.AssertDev(settings_row, "No information in db about settings")
     
     if custom_sessions_user_row is None:
         return None
@@ -70,9 +75,27 @@ def _get_user_by_session(session_id, cur):
 
     is_active = custom_sessions_user_row['is_active']
 
+    data_to_return = {
+        'user_row': {
+            'session_id': custom_sessions_user_row['session_id'],
+            'data': data,
+            'user_id': custom_sessions_user_row['user_id'],
+            'is_active': is_active,
+            'expires_at': custom_sessions_user_row['expires_at']
+        },
+        'settings_row': {
+            'id': settings_row['id'],
+            'vat': settings_row['vat'],
+            'report_limitation_rows': settings_row['report_limitation_rows'],
+            'send_email_template_background_color': settings_row['send_email_template_background_color'],
+            'send_email_template_text_align': settings_row['send_email_template_text_align'],
+            'send_email_template_border': settings_row['send_email_template_border'],
+            'send_email_template_border_collapse': settings_row['send_email_template_border_collapse'],
+        } 
+    }
 
     if is_active and data:
-        return data
+        return data_to_return
     else:
         return None
 

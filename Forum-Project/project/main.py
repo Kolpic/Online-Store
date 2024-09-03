@@ -59,253 +59,23 @@ user = config.user
 password = config.password
 host = config.host
 
-ALLOWED_EXTENSIONS = {'jpg', 'jpeg'}
-MAX_FILE_SIZE = 10 * 1024 * 1024  # Maximum file size in bytes (e.g., 10MB)
-
 app.add_url_rule("/", defaults={'path':''}, endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])  
 app.add_url_rule("/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
 app.add_url_rule("/<username>/<path:path>", endpoint="handle_request", methods=['GET', 'POST', 'PUT', 'DELETE'])
 
-def refresh_captcha(conn, cur):
+def refresh_captcha_handler(conn, cur, authenticated_user):
     first_captcha_number = random.randint(0, 100)
     second_captcha_number = random.randint(0, 100)
+
     cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING id", 
                 (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
-    # conn.commit()
+
     captcha_id = cur.fetchone()[0]
     session["captcha_id"] = captcha_id
 
     return jsonify({'first': first_captcha_number, 'second': second_captcha_number, 'captcha_id': captcha_id})
-
-def handle_image_field(image_data):
-    print("image_data.filename.split('.')[-1]", flush=True)
-    print(image_data.filename.split('.')[-1], flush=True)
-
-    utils.AssertUser(image_data.filename.split('.')[-1] in FIELD_CONFIG['CRUD Products']['create']['image']['conditions_image'], "Invalid image file extension (must be one of jpg, jpeg, png)")
-    filename = secure_filename(image_data.filename)
-    image_data = validate_image_size(image_data.stream)
-    return image_data
-
-# Configuration for each field
-FIELD_CONFIG = {
-    'CRUD Products': {
-        'create': {
-            'name': {'type': str, 'required': True},
-            'price': {'type': float, 'required': True, 'conditions': [(lambda x: x > 0, "Price must be a positive number")]},
-            'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "Quantity must be a positive number")]},
-            'category': {'type': str, 'required': True},
-            'image': {'type': 'file', 'required': True, 'conditions_image': ALLOWED_EXTENSIONS,'handler': handle_image_field},
-            'currency_id': {'type': int, 'required': True},
-        },
-        'edit': {
-            'name': {'type': str, 'required': True},
-            'price': {'type': float, 'required': True, 'conditions': [(lambda x: x > 0, "Price must be a positive number")]},
-            'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x >= 0, "Quantity must not be negative")]},
-            'category': {'type': str, 'required': True},
-            'currency': {'type': int, 'required': True},
-        }
-    },
-    'Staff roles': {
-        'create_staff_roles': {
-            'staff_id': {'type': str, 'required': True},
-            'role_id': {'type': str, 'required': True}
-        },
-        'create_staff':{
-            'username': {'type': str, 'required': True, 'conditions': [(lambda x: len(x.split(' ')) == 1, "You have to type name without intervals")]},
-            'password': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) <= 20, "Password must be below 20 symbols")]},
-        }
-    },
-    'CRUD Orders': {
-        'create': {
-            'orders': {
-                'user_id': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "User id must be possitive")]},
-                'status': {'type': str, 'required': True},
-                'order_date': {'type': datetime, 'required': True, 'conditions': [(lambda x: datetime.strptime(x, '%Y-%m-%dT%H:%M') <= datetime.now(), "You can't make orders with future date")]},
-            },
-            'order_items': {
-                'product_id': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "Product id must be possitive")]},
-                'price': {'type': float, 'required': True, 'conditions': [(lambda x: x > 0, "Price must be possitive")]},
-                'quantity': {'type': int, 'required': True, 'conditions': [(lambda x: x > 0, "Quantity must be possitive")]},
-            }
-        },
-        'edit': {
-            'status': {'type': str, 'required': True},
-            'order_date': {'type': datetime, 'required': True},
-        }
-    },
-    'CRUD Users': {
-        'create': {
-            'first_name': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >=4 and len(x) <= 15, "First name must be al least 4 symbols long and under 16 symbols")]},
-            'last_name': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >= 4 and len(x) <= 15, "Last name must be al least 4 symbols long and under 16 symbols")]},
-            'email': {'type': str, 'required': True, 'conditions': [(lambda x: '@' in x, "Invalid email")]},
-            'password': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >=4 and len(x) <= 20, "Password must be between 4 and 20 symbols")]},
-            # 'confirm_password': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >=4 and len(x) <= 20, "Password must be between 4 and 20 symbols")]},
-            'verification_code': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >=10 and len(x) <= 20, "Verification code must be between 10 and 20 symbols")] },
-            'verification_status': {'type': bool, 'required': True, 'conditions': [(lambda x: x == True or x == False, "The status can be only true or false")]}
-        },
-        'edit': {
-            'first_name': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >=4 and len(x) <= 15, "First name must be al least 4 symbols long and under 16 symbols")]},
-            'last_name': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) >= 4 and len(x) <= 15, "Last name must be al least 4 symbols long and under 16 symbols")]},
-            'email': {'type': str, 'required': True, 'conditions': [(lambda x: '@' in x, "Invalid email")]},
-            'verification_status': {'type': bool, 'required': True, 'conditions': [(lambda x: x == True or x == False, "The status can be only true or false")]}
-        }
-    },
-    'Template email': {
-        'edit': {
-            'subject': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 5 and len(x) <= 30, "Email subject should be between 5 and 30 symbols")]},
-            'body': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},
-        }
-    },
-    'Template email purchase': {
-        'edit': {
-            'subject_purchase': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 5 and len(x) <= 30, "Email subject should be between 5 and 30 symbols")]},
-            'body_purchase': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},
-        }
-    },
-    'Template email payment': {
-        'edit': {
-            'subject_payment': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 5 and len(x) <= 30, "Email subject should be between 5 and 30 symbols")]},
-            'body_payment': {'type': str, 'required': True, 'conditions': [(lambda x: len(x) > 10 and len(x) <= 255, "Email subject should be under 255 symbols")]},
-        }
-    }
-}
-
-
-def get_field_config(interface, method):
-    return FIELD_CONFIG.get(interface, {}).get(method, {}) # return the right fields for the interface with the metod we provided
-
-def validate_field(field_name, value, config):
-
-    print("==== Entered validate_field method ======",flush=True)
-    print(isinstance(value, str), flush=True)
-
-    utils.AssertUser(config['required'] and value, f"You must add information in every field: {field_name}")
-
-    if 'type' in config and config['type'] in [float, int, bool]:
-        print("==== Entered type validation ======",flush=True)
-        try:
-            value = config['type'](value)
-        except ValueError:
-            raise ValueError(f"{field_name} is not a valid {config['type'].__name__}")
-
-    if 'conditions' in config:
-        print("==== Entered conditions validation ======",flush=True)
-        for condition, message in config['conditions']:
-            print("==== Entered conditions validation ======",flush=True)
-            print("condition", flush=True)
-            print(condition, flush=True)
-            print("value", flush=True)
-            print(value, flush=True)
-            utils.AssertUser(condition(value), message)
-
-    if field_name == 'password':
-        value = utils.hash_password(value)
-
-    return value
-
-def process_form(interface, method, form_data_fields, files_data):
-    form_data = {}
-    nested_data = {}
-    nested_flag = False
-
-    field_config = get_field_config(interface, method)
-
-    print("form_data_fields", flush=True)
-    print(form_data_fields, flush=True)
-    print("files_data", flush=True)
-    print(files_data, flush=True)
-    print("field_config", flush=True)
-    print(field_config, flush=True)
-
-    for section, config_dict in field_config.items():
-        nested_data[section] = {}
-
-        print("section", flush=True)
-        print(section, flush=True)
-        print("config_dict", flush=True)
-        print(config_dict, flush=True)
-        print("field_config.items()", flush=True)
-        print(field_config.items(), flush=True)
-
-        if section != 'orders' and section != 'order_items':
-            print("No nested for", flush=True)
-            value = None
-
-            if config_dict['type'] == 'file':
-                value = files_data.get(section)
-                value = config_dict['handler'](value)
-            else:
-                value = form_data_fields.get(section)
-
-            print("section", flush=True)
-            print(section, flush=True)
-            print("value", flush=True)
-            print(value, flush=True)
-            print("config_dict", flush=True)
-            print(config_dict, flush=True)
-
-            validated_value = validate_field(section, value, config_dict)
-            form_data[section] = validated_value
-
-            print("form_data[section]", flush=True)
-            print(form_data[section], flush=True)
-        else:
-            print("Nested for", flush=True)
-            for field, config in config_dict.items():
-
-                value = None
-
-                if config['type'] == 'file':
-                    value = files_data.get.get(field)
-                    value = special_field_handlers['image'](value) if field == 'image' else value
-                else:
-                    value = form_data_fields.get(field)
-
-                validated_value = validate_field(field, value, config)
-                nested_data[section][field] = validated_value
-
-            form_data.update(nested_data)
-            nested_flag = True
-
-    values_to_insert_db = {}
-
-    print("form_data", flush=True)
-    print(form_data, flush=True)
-    print("nested_flag", flush=True)
-    print(nested_flag, flush=True)
-
-    if nested_flag == False:
-        print("YES", flush=True)
-        values_to_insert_db = {
-            'fields': ', '.join(form_data.keys()),
-            'placeholders': ', '.join(['%s'] * len(form_data)),
-            'values': tuple(form_data.values())
-        }
-
-        print("values_to_insert_db", flush=True)
-        print(values_to_insert_db, flush=True)
-    else:
-        print("NO", flush=True)
-        for table_name, fields_data in form_data.items():
-
-            fields = ', '.join(fields_data.keys())
-            placeholders = ', '.join(['%s'] * len(fields_data))
-            values = tuple(fields_data.values())
-
-            table_data = {
-                'fields': fields,
-                'placeholders': placeholders,
-                'values': values
-            }
-
-            values_to_insert_db[table_name] = table_data
-
-            print("values_to_insert_db", flush=True)
-            print(values_to_insert_db, flush=True)
     
-    return values_to_insert_db
-    
-def registration(conn, cur):
+def registration_handler(conn, cur, authenticated_user):
     user_ip = request.remote_addr
 
     if request.method == 'GET':
@@ -323,9 +93,10 @@ def registration(conn, cur):
         first_captcha_number = random.randint(0,100)
         second_captcha_number = random.randint(0,100)
 
-        prepared_data = front_office.prepare_get_registration_return_data(cur=cur, 
-                                                                        first_captcha_number=first_captcha_number, 
-                                                                        second_captcha_number=second_captcha_number)
+        prepared_data = front_office.prepare_registration_data(
+            cur=cur, 
+            first_captcha_number=first_captcha_number, 
+            second_captcha_number=second_captcha_number)
 
         rendered_template =  render_template('registration.html', 
             country_codes=prepared_data['country_codes'], 
@@ -356,9 +127,22 @@ def registration(conn, cur):
         hashed_password = utils.hash_password(password_)
         verification_code = os.urandom(24).hex()
 
-        front_office.check_post_registration_fields_data(cur, first_name, last_name, email, password_, confirm_password_, 
-                                                phone, gender, captcha_id, captcha_,user_ip, hashed_password, 
-                                                verification_code, country_code, address)
+        front_office.registration(
+            cur=cur, 
+            first_name=first_name, 
+            last_name=last_name, 
+            email=email, 
+            password_=password_,
+            confirm_password_=confirm_password_, 
+            phone=phone, 
+            gender=gender, 
+            captcha_id=captcha_id, 
+            captcha_=captcha_,
+            user_ip=user_ip, 
+            hashed_password=hashed_password, 
+            verification_code=verification_code, 
+            country_code=country_code, 
+            address=address)
 
         send_verification_email(email, verification_code, cur)
 
@@ -408,7 +192,7 @@ def send_verification_email(user_email, verification_code, cur):
         utils.AssertDev(False, "No information in the database")
 
 
-def verify(conn, cur):
+def verify_handler(conn, cur, authenticated_user):
 
     if request.method == 'GET':
 
@@ -430,7 +214,10 @@ def verify(conn, cur):
         email = request.form['email']
         verification_code = request.form['verification_code']
         
-        front_office.post_verify_method(cur=cur, email=email, verification_code=verification_code)
+        front_office.verify(
+            cur=cur, 
+            email=email, 
+            verification_code=verification_code)
 
         session['login_message'] = 'Successful verification'
         return redirect("/login")
@@ -438,7 +225,7 @@ def verify(conn, cur):
     else:
         utils.AssertPeer(False, "Invalid method")
 
-def login(conn, cur):
+def login_handler(conn, cur, authenticated_user):
 
     if request.method == 'GET':
 
@@ -460,7 +247,7 @@ def login(conn, cur):
         email = request.form['email']
         password_ = request.form['password']
 
-        user_data = front_office.post_login_method(cur=cur, email=email, password_=password_)
+        user_data = front_office.login(cur=cur, email=email, password_=password_)
 
         session_id = sessions.create_session(session_data=email, cur=cur, conn=conn, is_front_office=True)
 
@@ -483,9 +270,7 @@ def login(conn, cur):
     else:
         utils.AssertPeer(False, "Invalid method")
 
-def home(conn, cur, page = 1):
-    session_id = request.cookies.get('session_id')
-    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+def home_handler(conn, cur, authenticated_user, page = 1):
 
     if authenticated_user == None:
         session_id_unauthenticated_user = request.cookies.get('session_id_unauthenticated_user')
@@ -500,6 +285,7 @@ def home(conn, cur, page = 1):
         last_name = ""
         email = ""
     else:
+        email = authenticated_user['user_row']['data']
         query = """
             WITH categories AS (
                 SELECT DISTINCT(category) FROM products
@@ -509,7 +295,7 @@ def home(conn, cur, page = 1):
             CROSS JOIN (SELECT * FROM users WHERE email = %s) u
         """
         
-        cur.execute(query, (authenticated_user,))
+        cur.execute(query, (authenticated_user['user_row']['data'],))
         results = cur.fetchall()
 
         categories = [row[0] for row in results]
@@ -533,38 +319,43 @@ def home(conn, cur, page = 1):
     price_min = validated_fields['price_min']
     price_max = validated_fields['price_max']
 
-    results_from_home_page_query = front_office.get_home_query_data(cur=cur, sort_by=sort_by, sort_order=sort_order, products_per_page=products_per_page, 
-                                                        page=page, offset=offset, product_name=product_name, 
-                                                        product_category=product_category, price_min=price_min, price_max=price_max)
+    results_from_home_page_query = front_office.prepare_home_data(
+        cur=cur, 
+        sort_by=sort_by, 
+        sort_order=sort_order, 
+        products_per_page=products_per_page, 
+        page=page, 
+        offset=offset, 
+        product_name=product_name, 
+        product_category=product_category, 
+        price_min=price_min, 
+        price_max=price_max)
 
     products = results_from_home_page_query['products']
     total_pages = results_from_home_page_query['total_pages']
 
     return render_template('home.html', first_name=first_name, last_name=last_name, 
-                                email = authenticated_user, products=products, products_per_page=products_per_page, 
+                                email = email, products=products, products_per_page=products_per_page, 
                                 price_min=price_min, price_max=price_max,page=page, total_pages=total_pages, 
                                 sort_by=sort_by, sort_order=sort_order, product_name=product_name, 
                                 product_category=product_category, cart_count=cart_count, categories=categories)
 
-def logout(conn, cur):
-    session_id = request.cookies.get('session_id')
+def logout_handler(conn, cur, authenticated_user):
 
-    cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (session_id,))
+    cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (authenticated_user['user_row']['session_id'],))
 
     response = make_response(redirect('/login'))
     response.set_cookie('session_id', '', expires=0)
     return response
 
-def profile(conn, cur):
-    session_id = request.cookies.get('session_id')
-    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+def profile_handler(conn, cur, authenticated_user):
 
     if authenticated_user == None:
        return redirect('/login') 
     
     if request.method == 'GET':
 
-        result_data = front_office.get_profile_data(cur=cur, authenticated_user=authenticated_user)
+        result_data = front_office.prepare_profile_data(cur=cur, authenticated_user=authenticated_user['user_row']['data'])
 
         if result_data:
             return render_template('profile.html', first_name=result_data['first_name'], last_name=result_data['last_name'],
@@ -575,9 +366,7 @@ def profile(conn, cur):
     else:
         utils.AssertPeer(False, "Invalid method")
 
-def update_profile(conn, cur):
-    session_id = request.cookies.get('session_id')
-    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+def update_profile_handler(conn, cur, authenticated_user):
 
     if authenticated_user == None:
        return redirect('/login')
@@ -595,11 +384,11 @@ def update_profile(conn, cur):
         country_code = validated_fields['country_code']
         gender = validated_fields['gender']
 
-        result_data = front_office.post_update_profile(cur=cur, conn=conn,first_name=first_name, last_name=last_name,
+        result_data = front_office.update_profile(cur=cur, conn=conn,first_name=first_name, last_name=last_name,
                                         email=email, password_=password_, 
                                         address=address, phone=phone, 
                                         country_code=country_code, gender=gender, 
-                                        session_id=session_id)
+                                        authenticated_user=authenticated_user['user_row']['data'])
 
         session['home_message'] = f"You successfully updated your {result_data['updated_fields_message']}."
 
@@ -607,22 +396,20 @@ def update_profile(conn, cur):
     else:
         utils.AssertPeer(False, "Invalid method")
 
-def delete_account(conn, cur):
-    session_id = request.cookies.get('session_id')
-    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+def delete_account_handler(conn, cur, authenticated_user):
 
     if authenticated_user == None:
        return redirect('/login')
 
-    cur.execute("DELETE FROM users WHERE email = %s", (authenticated_user,))
+    cur.execute("DELETE FROM users WHERE email = %s", (authenticated_user['user_row']['data'],))
 
-    cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (session_id,))
+    cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (authenticated_user['user_row']['session_id'],))
     response = make_response(redirect('/login'))
     response.set_cookie('session_id', '', expires=0)
     session['login_message'] = 'You successful deleted your account'
     return response
 # 
-def recover_password(conn, cur):
+def recover_password_handler(conn, cur, authenticated_user):
 
     if request.method == 'POST':
         email = request.form['recovery_email']
@@ -675,7 +462,7 @@ def resend_verf_code(conn, cur):
     session['verification_message'] = 'A new verification code has been sent to your email.'
     return redirect('/verify')
 
-def send_login_link(conn, cur):
+def send_login_link_handler(conn, cur, authenticated_user):
 
     if request.method == 'POST':
 
@@ -720,7 +507,7 @@ def send_verification_link(user_email, verification_link):
     msg.body = 'Click the link to go directly to your profile: ' + verification_link
     mail.send(msg)
 
-def login_with_token(conn, cur):
+def login_with_token_handler(conn, cur, authenticated_user):
 
     if request.method == 'GET':
     
@@ -772,40 +559,6 @@ def log_exception(exception_type, message ,email):
     conn_new.close()
     cur_new.close()
 
-def add_product(conn, cur):
-    session_id = request.cookies.get('session_id')
-    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
-
-    if authenticated_user == None:
-       return redirect('/login')
-
-    if request.method == 'GET':
-        cur.execute("SELECT DISTINCT(category) FROM products")
-        categories = [row[0] for row in cur.fetchall()]  # Extract categories from tuples
-        return render_template('add_product_staff.html', categories=categories)
-
-    name = request.form['name']
-    price = request.form['price']
-    quantity = request.form['quantity']
-    category = request.form['category']
-    image = request.files['image']
-
-    utils.AssertUser(name and price and quantity and category and image, "You must add information in every field.")
-    utils.AssertUser(isinstance(float(price), float), "Price is not a number")
-    utils.AssertUser(isinstance(int(quantity), int), "Quantity is not a number")
-    utils.AssertUser(float(price) > 0, "Price must be possitive number")
-    utils.AssertUser(int(quantity) > 0, "Quantity must be possitive")
-    
-    if image and allowed_file(image.filename):
-        filename = secure_filename(image.filename)
-        image_data = image.stream
-        image_ = validate_image_size(image_data)
-
-    cur.execute("INSERT INTO products (name, price, quantity, category, image) VALUES (%s, %s, %s, %s, %s)", (name, price, quantity, category, image_))
-
-    session['crud_message'] = "Item was added successful"
-    return redirect('/crud')
-
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -816,15 +569,13 @@ def validate_image_size(image_stream):
     utils.AssertUser(file_size < MAX_FILE_SIZE, "The image file size must not exceed 10MB.")
     return image_stream.read()
 
-def serve_image(product_id, cur):
+def serve_image_handler(product_id, cur, authenticated_user):
     pr_id = request.path.split("/")[2]
     cur.execute("SELECT * FROM products WHERE id = %s", (pr_id,))
     image_blob = cur.fetchone()['image']
     return Response(image_blob, mimetype='jpeg')
 
-def add_to_cart_meth(conn, cur):
-    session_cookie_id = request.cookies.get('session_id')
-    authenticated_user =  sessions.get_current_user(session_id=session_cookie_id, cur=cur, conn=conn)
+def add_to_cart_handler(conn, cur, authenticated_user):
 
     product_id = request.form['product_id']
     quantity = request.form.get('quantity', 1)
@@ -837,32 +588,28 @@ def add_to_cart_meth(conn, cur):
 
             session_id = str(uuid.uuid4())
 
-            response_message = front_office.add_to_cart(conn, cur, session_id, product_id, quantity, session_cookie_id)
+            response_message = front_office.add_to_cart(conn, cur, session_id, product_id, quantity, authenticated_user)
             newCartCount = front_office.get_cart_items_count(conn, cur, session_id)
 
             response = make_response(jsonify({'message': response_message, 'newCartCount': newCartCount}))
             response.set_cookie('session_id_unauthenticated_user', session_id, httponly=True, samesite='Lax')
 
         else:
-            response_message = front_office.add_to_cart(conn, cur, session_id_unauthenticated_user, product_id, quantity, session_cookie_id)
+            response_message = front_office.add_to_cart(conn, cur, session_id_unauthenticated_user, product_id, quantity, authenticated_user)
             newCartCount = front_office.get_cart_items_count(conn, cur, session_id_unauthenticated_user)
 
             response = make_response(jsonify({'message': response_message, 'newCartCount': newCartCount}))
     else:
-        cur.execute("SELECT * FROM users WHERE email = %s", (authenticated_user,))
-        user_row = cur.fetchone()
-        user_id = user_row['id']
+        user_id = authenticated_user['user_row']['user_id']
 
-        response_message = front_office.add_to_cart(conn, cur, user_id, product_id, quantity, session_cookie_id)
+        response_message = front_office.add_to_cart(conn, cur, user_id, product_id, quantity, authenticated_user)
         newCartCount = front_office.get_cart_items_count(conn, cur, user_id)
 
         response = make_response(jsonify({'message': response_message, 'newCartCount': newCartCount}))
 
     return response
 
-def cart(conn, cur):
-    session_id = request.cookies.get('session_id')
-    authenticated_user = sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+def cart_handler(conn, cur, authenticated_user):
 
     if authenticated_user == None:
         session['login_message_unauth_user'] = "You have to login to see your cart"
@@ -881,11 +628,11 @@ def cart(conn, cur):
         else:
             recovery_data = None 
 
-        result_data = front_office.get_cart_method_data(cur=cur, conn=conn,authenticated_user=authenticated_user)
+        result_data = front_office.prepare_cart_data(cur=cur, conn=conn,authenticated_user=authenticated_user)
 
         return render_template('cart.html', items=result_data['items'], total_sum_with_vat=round(result_data['total_sum_with_vat'],2), 
                                 total_sum=round(result_data['total_sum'],2),country_codes=result_data['country_codes'], recovery_data=recovery_data, 
-                                first_name=result_data['first_name'], last_name=result_data['last_name'], email=authenticated_user, vat=result_data['vat_in_persent'])
+                                first_name=result_data['first_name'], last_name=result_data['last_name'], email=authenticated_user['user_row']['data'], vat=result_data['vat_in_persent'])
    
     elif request.method == 'POST':
         recovery_data = request.form.to_dict()
@@ -899,7 +646,7 @@ def cart(conn, cur):
         country_code = request.form['country_code']
         phone = request.form['phone'].strip()
 
-        response_post_cart = front_office.post_cart_method(cur=cur, email=authenticated_user, first_name=first_name, last_name=last_name, 
+        response_post_cart = front_office.cart(cur=cur, email=email, first_name=first_name, last_name=last_name, 
                                                         town=town, address=address, country_code=country_code, 
                                                         phone=phone, authenticated_user=authenticated_user)
         utils.trace("response_post_cart")
@@ -916,7 +663,7 @@ def cart(conn, cur):
                 "total_sum": round(response_post_cart['total_sum'],2),
                 "total_with_vat": round(response_post_cart['total_sum_with_vat'],2),
                 "provided_sum": 0,
-                "user_email": authenticated_user,
+                "user_email": authenticated_user['user_row']['data'],
                 "cur": cur,
                 "conn": conn,
                 "email_type": 'purchase_mail',
@@ -932,16 +679,15 @@ def cart(conn, cur):
             return render_template('payment.html', order_id=response_post_cart['order_id'], order_products=response_post_cart['cart_items'], 
                                     shipping_details=response_post_cart['shipping_details'], total_sum_with_vat=round(response_post_cart['total_sum_with_vat'],2),
                                     total_sum=round(response_post_cart['total_sum'],2), first_name=response_post_cart['user_first_name'], 
-                                    last_name=response_post_cart['user_last_name'], email=authenticated_user, vat_in_persent = response_post_cart['vat_in_persent'])
+                                    last_name=response_post_cart['user_last_name'], email=authenticated_user['user_row']['data'], 
+                                    vat_in_persent = response_post_cart['vat_in_persent'])
         except Exception as e:
             conn.rollback()
             raise e
     else:
         utils.AssertPeer(False, "Invalid method")
 
-def remove_from_cart_meth(conn, cur):
-    session_id = request.cookies.get('session_id')
-    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+def remove_from_cart_handler(conn, cur, authenticated_user):
 
     if authenticated_user == None:
        return redirect('/login')
@@ -953,9 +699,7 @@ def remove_from_cart_meth(conn, cur):
     session['cart_message'] = response
     return redirect('/cart')
 
-def finish_payment(conn, cur):
-    session_id = request.cookies.get('session_id')
-    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+def finish_payment_handler(conn, cur, authenticated_user):
 
     if authenticated_user == None:
        return redirect('/login')
@@ -964,7 +708,7 @@ def finish_payment(conn, cur):
 
         order_id = request.args.get('order_id')
 
-        response = front_office.get_finish_payment(cur=cur, authenticated_user=authenticated_user, order_id=order_id)
+        response = front_office.prepare_finish_payment_data(cur=cur, authenticated_user=authenticated_user, order_id=order_id)
 
         return render_template('payment.html', order_id=order_id,order_products=response['order_products'], shipping_details=response['shipping_details'], 
                                 total_sum=round(response['total_sum'], 2), total_sum_with_vat=round(response['total_with_vat'], 2), 
@@ -979,7 +723,7 @@ def finish_payment(conn, cur):
         if order_id == "":
             order_id = session.get('order_id')
 
-        response_post = front_office.post_payment_method(cur=cur, payment_amount=payment_amount, order_id=order_id)
+        response_post = front_office.payment_method(cur=cur, payment_amount=payment_amount, order_id=order_id)
 
         send_email = False
         try:
@@ -991,7 +735,7 @@ def finish_payment(conn, cur):
                 "total_sum": response_post['total'],
                 "total_with_vat": response_post['total_with_vat'],
                 "provided_sum": payment_amount,
-                "user_email": authenticated_user,
+                "user_email": authenticated_user['user_row']['data'],
                 "cur": cur,
                 "conn": conn,
                 "email_type": 'payment_mail',
@@ -1012,7 +756,7 @@ def finish_payment(conn, cur):
     else:
         utils.AssertPeer(False, "Invalid method")
 
-def staff_login(conn, cur):
+def staff_login(conn, cur, authenticated_user):
 
     if request.method == 'GET':
         return render_template('staff_login.html')
@@ -1022,7 +766,7 @@ def staff_login(conn, cur):
         username = request.form['username']
         password = request.form['password']
 
-        response = back_office.post_staff_login(cur=cur, username=username, password=password)
+        response = back_office.staff_login(cur=cur, username=username, password=password)
 
         session['staff_username'] = response['username']
 
@@ -1034,9 +778,7 @@ def staff_login(conn, cur):
     else:
         utils.AssertPeer(False, "Invalid method")
 
-def staff_portal(conn, cur):
-    session_id = request.cookies.get('session_id')
-    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+def staff_portal(conn, cur, authenticated_user):
 
     if authenticated_user == None:
        return redirect('/staff_login')
@@ -1051,10 +793,9 @@ def staff_portal(conn, cur):
         username = request.path.split('/')[1]
         return render_template('staff_portal.html', username=username)
     
-def logout_staff(conn, cur):
-    session_id = request.cookies.get('session_id')
+def logout_staff(conn, cur, authenticated_user):
 
-    cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (session_id,))
+    cur.execute("DELETE FROM custom_sessions WHERE session_id = %s", (authenticated_user['user_row']['session_id'],))
     response = make_response(redirect('/staff_login'))
     response.set_cookie('session_id', '', expires=0)
     return response
@@ -1084,7 +825,7 @@ def generate_orders(conn, cur):
 
     return "Successfully imported products: " + str(number_products_to_import)
         
-def update_cart_quantity(conn, cur):
+def update_cart_quantity_handler(conn, cur, authenticated_user):
     item_id = request.form['item_id']
     quantity = request.form['quantity']
 
@@ -1114,9 +855,7 @@ def update_cart_quantity(conn, cur):
 #     else:
 #         return "No image found"
 
-def user_orders(conn, cur):
-    session_id = request.cookies.get('session_id')
-    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+def user_orders_handler(conn, cur, authenticated_user):
 
     if authenticated_user == None:
        return redirect('/login')
@@ -1159,7 +898,7 @@ def user_orders(conn, cur):
             WHERE u.email = %s 
             """
 
-        params.append(authenticated_user)
+        params.append(authenticated_user['user_row']['data'])
 
         if order_by_id:
             query += " AND o.order_id = %s"
@@ -1207,10 +946,20 @@ def user_orders(conn, cur):
 
         orders = list(orders_generator)
 
-        cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (authenticated_user,))
+        cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (authenticated_user['user_row']['data'],))
         user_details = cur.fetchone()
 
-        return render_template('user_orders.html', orders = orders, statuses = statuses, price_min=price_min, price_max=price_max, date_from=date_from, date_to=date_to, order_by_id=order_by_id, first_name=user_details[0], last_name=user_details[1], email=authenticated_user)
+        return render_template('user_orders.html', 
+            orders = orders, 
+            statuses = statuses, 
+            price_min=price_min, 
+            price_max=price_max, 
+            date_from=date_from, 
+            date_to=date_to, 
+            order_by_id=order_by_id, 
+            first_name=user_details[0], 
+            last_name=user_details[1],
+             email=authenticated_user['user_row']['data'])
     else:
         utils.AssertUser(False, "Invalid method")
 
@@ -1241,9 +990,7 @@ def get_active_users(sort_by='id', sort_order='desc', name=None, email=None, use
     active_users = query.all()
     return active_users
 
-def back_office_manager(conn, cur, *params):
-    session_id = request.cookies.get('session_id')
-    authenticated_user =  sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+def back_office_manager(conn, cur, authenticated_user, *params):
 
     if authenticated_user == None:
        return redirect('/staff_login')
@@ -1306,7 +1053,7 @@ def back_office_manager(conn, cur, *params):
         return redirect(f'/crud_products')
 
     elif request.path == f'/error_logs':     
-        utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read', authenticated_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Logs', 'read', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
         if request.method == 'GET':
         
@@ -1315,20 +1062,20 @@ def back_office_manager(conn, cur, *params):
             sort_by = validated_request_args_fields['sort_by']
             sort_order = validated_request_args_fields['sort_order']
 
-            response = back_office.get_error_logs(cur=cur, sort_by=sort_by, sort_order=sort_order)
+            response = back_office.prepare_error_logs_data(cur=cur, sort_by=sort_by, sort_order=sort_order)
 
             return render_template('logs.html', log_exceptions = response['log exceptions'], sort_by=sort_by, sort_order=sort_order)
         else:
             utils.AssertPeer(False, "Invalid method")
     
     elif request.path == f'/update_captcha_settings':
-        utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'read', authenticated_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'read', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
         if request.method == 'GET':
 
             current_settings = utils.get_current_settings(cur)
 
-            response = back_office.get_settings(cur)
+            response = back_office.prepare_settings_data(cur)
 
             return render_template(
                 'captcha_settings.html', 
@@ -1341,12 +1088,12 @@ def back_office_manager(conn, cur, *params):
                 **current_settings)
 
         elif request.method == 'POST':
-            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
+            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
             new_max_attempts = request.form['max_captcha_attempts']
             new_timeout_minutes = request.form['captcha_timeout_minutes']
 
-            response = back_office.post_captcha_settings(cur, new_max_attempts, new_timeout_minutes)
+            response = back_office.captcha_settings(cur, new_max_attempts, new_timeout_minutes)
         
             if response['message'] != "":
                 session['staff_message'] = response['message']
@@ -1357,7 +1104,7 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/update_report_limitation_rows':
         if request.method == 'POST':
-            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
+            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
             limitation_rows = int(request.form['report_limitation_rows'])
 
@@ -1371,25 +1118,21 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/update_email_templates_table':
         if request.method == 'POST':
-            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
+            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
             background_color = request.form['background_color']
             text_align = request.form['text_align']
             border = request.form['border']
             border_collapse = request.form['border_collapse']
 
-            utils.AssertUser(int(border) <= 10 and int(border) >= 1, "Border can be between 1 and 10")
+            response = back_office.edit_email_table(
+                cur=cur, 
+                background_color=background_color, 
+                text_align=text_align, 
+                border=border, 
+                border_collapse=border_collapse)
 
-            if background_color:
-                cur.execute("UPDATE settings SET send_email_template_background_color = %s", (background_color,))
-            if text_align:
-                cur.execute("UPDATE settings SET send_email_template_text_align = %s", (text_align,))
-            if border:
-                cur.execute("UPDATE settings SET send_email_template_border = %s", (border,))
-            if border_collapse:
-                cur.execute("UPDATE settings SET send_email_template_border_collapse = %s", (border_collapse,))
-
-            session['staff_message'] = "You changed the email template table look successfully"
+            session['staff_message'] = response['message']
 
             return redirect(f'/staff_portal')
         else:
@@ -1398,10 +1141,10 @@ def back_office_manager(conn, cur, *params):
     elif request.path == f'/update_vat_for_all_products':
         if request.method == 'POST':
 
-            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user), "You don't have permission to this resource")
+            utils.AssertUser(utils.has_permission(cur, request, 'Captcha Settings', 'update', authenticated_user['user_row']['data']), "You don't have permission to this resource")
             vat_for_all_products = request.form['vat_for_all_products']
 
-            response = back_office.post_vat_for_all_products(cur=cur, vat_for_all_products=vat_for_all_products)
+            response = back_office.vat_for_all_products(cur=cur, vat_for_all_products=vat_for_all_products)
 
             session['staff_message'] = response['message']
 
@@ -1410,7 +1153,7 @@ def back_office_manager(conn, cur, *params):
             utils.AssertPeer(False, "Invalid method")      
 
     elif request.path == f'/report_sales':
-        utils.AssertUser(utils.has_permission(cur, request, 'Report sales', 'read', authenticated_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Report sales', 'read', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
         default_to_date = datetime.now()
         dafault_from_date = default_to_date - timedelta(days=90)
@@ -1435,7 +1178,7 @@ def back_office_manager(conn, cur, *params):
             page = request.args.get('page', 1, type=int)
             per_page = 1000  
 
-            response = back_office.post_report_sales(
+            response = back_office.report_sales(
                 cur = cur, 
                 date_from = date_from, 
                 date_to = date_to, 
@@ -1465,46 +1208,11 @@ def back_office_manager(conn, cur, *params):
 
         form_data = {key: request.form.get(key, '') for key in ['date_from', 'date_to', 'format']}
 
-        if form_data['format'] == 'csv':
-            def generate():
-                conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
+        response_generate = back_office.download_report(form_data=form_data)
 
-                si = io.StringIO()
-                cw = csv.writer(si)
-                headers = ['Date', 'Order ID', 'Customer Name', 'Total Price', 'Status']
-                cw.writerow(headers)
-                si.seek(0)
-                yield si.getvalue()
-                si.truncate(0)
-                si.seek(0)
-                
-                offset = 0
-
-                # while True:
-                # rows_fetched = False
-                batch = utils.fetch_batches(conn, form_data['date_from'], form_data['date_to'], offset)               
-
-                for row in batch:
-                    rows_fetched = True
-
-                    for innerRow in row:
-                    
-                        cw.writerow(innerRow)
-                        si.seek(0)
-                        yield si.getvalue()
-                        si.truncate(0)
-
-                    # if not rows_fetched: 
-                    #     break
-                    offset += 10000
-
-                si.close()
-                conn.close()
-
-            response = Response(stream_with_context(generate()), mimetype='text/csv')
-            response.headers['Content-Disposition'] = f'attachment; filename=Sales_report.csv'
-            return response
-
+        response = Response(stream_with_context(response_generate()), mimetype='text/csv')
+        response.headers['Content-Disposition'] = f'attachment; filename=Sales_report.csv'
+        return response
 
     elif request.path == f'/download_report':
 
@@ -1599,9 +1307,15 @@ def back_office_manager(conn, cur, *params):
             utils.AssertDev(False, "Invalid download format")
 
     elif request.path == f'/role_permissions':
-        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read', authenticated_user), "You don't have permission to this resource")
 
-        # interfaces = ['Logs', 'CRUD Products', 'Captcha Settings', 'Report sales', 'Staff roles', 'CRUD Orders', 'CRUD Users']
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read', authenticated_user['user_row']['data']), "You don't have permission to this resource")
+
+        role = request.path.split('/')[1]
+
+        cur.execute("SELECT role_id, role_name FROM roles")
+        roles = cur.fetchall()
+
+        selected_role = int(request.args.get('role', roles[0][0] if roles else None))
 
         cur.execute("SELECT DISTINCT interface FROM permissions ORDER BY interface ASC")
 
@@ -1610,48 +1324,36 @@ def back_office_manager(conn, cur, *params):
             interfaces.append(interface[0])
 
         if request.method == 'GET':
-            role = request.path.split('/')[1]
-            cur.execute('SELECT role_id, role_name FROM roles')
-            roles = cur.fetchall()
+            
+            response = back_office.prepare_role_permissions_data(cur=cur, role=role, selected_role=selected_role, interfaces=interfaces)
 
-            selected_role = int(request.args.get('role', roles[0][0] if roles else None))
-
-            cur.execute('SELECT role_id, role_name FROM roles WHERE role_id = %s', (selected_role,))
-            role_to_display = cur.fetchall()
-
-            role_permissions = {role[0]: {interface: {'create': False, 'read': False, 'update': False, 'delete': False} for interface in interfaces} for role in role_to_display}
-
-            cur.execute('SELECT rp.role_id, p.interface, p.permission_name FROM role_permissions AS rp JOIN permissions AS p ON rp.permission_id=p.permission_id')
-            permissions = cur.fetchall()
-
-            for role_id, interface, permission_name in permissions:
-                if role_id in role_permissions and interface in role_permissions[role_id]:
-                    role_permissions[role_id][interface][permission_name] = True
-
-            return render_template('role_permissions.html', roles=roles,interfaces=interfaces, role_permissions=role_permissions, selected_role=selected_role, role_to_display=role)
+            return render_template(
+                'role_permissions.html', 
+                roles=response['roles'],
+                interfaces=response['interfaces'], 
+                role_permissions=response['role_permissions'], 
+                selected_role=selected_role, 
+                role_to_display=role)
     
-        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'update', authenticated_user), "You don't have permission to this resource")
+        elif request.method == 'POST':
 
-        role_id = request.form['role']
-        cur.execute('DELETE FROM role_permissions WHERE role_id = %s', (role_id,))
-        for interface in interfaces:
-            for action in ['create', 'read', 'update', 'delete']:
-                if f'{interface}_{action}' in request.form:
-                    cur.execute("SELECT permission_id FROM permissions WHERE permission_name = %s AND interface = %s", (action, interface))
-                    permission_id = cur.fetchone()[0]
-                    cur.execute('INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)', 
-                                (role_id, permission_id))
+            utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'update', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
-        cur.execute("SELECT role_name FROM roles WHERE role_id = %s", (role_id,))
-        role_name = cur.fetchone()[0]
+            role_id = request.form['role']
 
-        session['role_permission_message'] = f'You successfully updated permissions for role: {role_name}'
+            form_data = {field: request.form.get(field) for field in request.form}
 
-        return redirect(f'/role_permissions?role=' + role_id)
+            response = back_office.role_permissions(cur=cur, role_id=role_id, form_data=form_data, interfaces=interfaces)
+
+            session['role_permission_message'] = response['message']
+
+            return redirect(f'/role_permissions?role=' + role_id)
+        else:
+            utils.AssertPeer(False, "Invalid method")
 
     elif request.path == f'/crud_products' and len(request.path.split('/')) == 2:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read', authenticated_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'read', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
         validated_request_args_fields = utils.check_request_arg_fields(cur=cur, request=request)
 
@@ -1660,7 +1362,7 @@ def back_office_manager(conn, cur, *params):
         price_min = validated_request_args_fields['price_min']
         price_max = validated_request_args_fields['price_max']
 
-        response = back_office.get_crud_products(
+        response = back_office.prepare_crud_products_data(
             cur = cur, 
             sort_by = sort_by, 
             sort_order = sort_order, 
@@ -1671,11 +1373,11 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/crud_products/add_product' and len(request.path.split('/')) == 3:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'create', authenticated_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'create', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
         if request.method == 'GET':
 
-            response = back_office.get_crud_add_product(cur)
+            response = back_office.prepare_crud_add_product_data(cur=cur)
 
             return render_template('add_product_staff.html', categories=response['categories'], currencies=response['all_currencies'])
 
@@ -1684,7 +1386,7 @@ def back_office_manager(conn, cur, *params):
             form_data = {field: request.form.get(field) for field in request.form}
             files_data = {file_field: request.files.get(file_field) for file_field in request.files}
 
-            response = back_office.post_crud_add_product(cur, form_data, files_data)
+            response = back_office.crud_add_product(cur, form_data, files_data)
 
             session['crud_message'] = response['message']
 
@@ -1694,13 +1396,13 @@ def back_office_manager(conn, cur, *params):
 
     elif re.match(r'^/crud_products/edit_product/\d+$', request.path) and len(request.path.split('/')) == 4:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'update', authenticated_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'update', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
         product_id = request.path.split('/')[3]
 
         if request.method == 'GET':
 
-            response = back_office.get_edit_product(cur=cur, product_id=product_id)
+            response = back_office.prepare_edit_product_data(cur=cur, product_id=product_id)
 
             return render_template('edit_product.html', product=response['product'], product_id=product_id, currencies = response['all_currencies'])
 
@@ -1708,7 +1410,7 @@ def back_office_manager(conn, cur, *params):
 
             form_data = {field: request.form.get(field) for field in request.form}
 
-            response = back_office.post_edit_product(cur=cur, form_data=form_data, files_data="", product_id=product_id)
+            response = back_office.edit_product(cur=cur, form_data=form_data, files_data="", product_id=product_id)
 
             session['crud_message'] = response['message']
 
@@ -1718,7 +1420,7 @@ def back_office_manager(conn, cur, *params):
 
     elif re.match(r'/crud_products/delete_product/\d+$', request.path) and len(request.path.split('/')) == 4:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'delete', authenticated_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Products', 'delete', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
         product_id = request.path.split('/')[3]
 
@@ -1730,19 +1432,19 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/crud_staff' and len(request.path.split('/')) == 2:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read', authenticated_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'read', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
-        response = back_office.get_crud_staff(cur)
+        response = back_office.prepare_crud_staff_data(cur=cur)
 
         return render_template('staff_role_assignment.html', relations=response['relations'])
 
     elif request.path == f'/crud_staff/add_role_staff' and len(request.path.split('/')) == 3:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create', authenticated_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
         if request.method == 'GET':
             
-            response = back_office.get_add_role_staff(cur)
+            response = back_office.prepare_add_role_staff_data(cur=cur)
 
             return render_template('add_staff_role.html', staff=response['staff'], roles=response['roles'])
 
@@ -1750,7 +1452,7 @@ def back_office_manager(conn, cur, *params):
 
             form_data = {field: request.form.get(field) for field in request.form}
 
-            response = back_office.post_add_role_staff(cur=cur, form_data=form_data, files_data="")
+            response = back_office.add_role_staff(cur=cur, form_data=form_data, files_data="")
 
             session['staff_message'] = response['message']
 
@@ -1760,7 +1462,7 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/crud_staff/add_staff' and len(request.path.split('/')) == 3:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create', authenticated_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'create', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
         if request.method == 'GET':
 
@@ -1770,7 +1472,7 @@ def back_office_manager(conn, cur, *params):
 
             form_data = {field: request.form.get(field) for field in request.form}
 
-            response = back_office.post_add_staff(cur=cur, form_data=form_data, files_data="")
+            response = back_office.add_staff(cur=cur, form_data=form_data, files_data="")
 
             session['staff_message'] = response['message']
             return redirect('/staff_portal')
@@ -1779,7 +1481,7 @@ def back_office_manager(conn, cur, *params):
 
     elif re.match(r'/crud_staff/delete_role/\d+/\d+$', request.path) and len(request.path.split('/')) == 5:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'delete', authenticated_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'Staff roles', 'delete', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
         staff_id = request.path.split('/')[3]
         role_id = request.path.split('/')[4]
@@ -1791,7 +1493,7 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/crud_orders' and len(request.path.split('/')) == 2:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read', authenticated_user), "You don't have permission for this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'read', authenticated_user['user_row']['data']), "You don't have permission for this resource")
 
         validated_fields = utils.check_request_arg_fields(cur, request)
 
@@ -1808,7 +1510,7 @@ def back_office_manager(conn, cur, *params):
         per_page = validated_fields['per_page']
         offset = validated_fields['offset']
 
-        response = back_office.get_crud_orders(
+        response = back_office.prepare_crud_orders_data(
             cur = cur, 
             sort_by = sort_by, 
             sort_order = sort_order, 
@@ -1840,11 +1542,11 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/crud_orders/add_order' and len(request.path.split('/')) == 3:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'create', authenticated_user), "You don't have permission for this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'create', authenticated_user['user_row']['data']), "You don't have permission for this resource")
 
         if request.method == 'GET':
             
-            response = back_office.get_crud_orders_add_order(cur=cur)
+            response = back_office.prepare_crud_orders_add_order_data(cur=cur)
 
             return render_template('add_order.html', statuses=response['statuses'])
 
@@ -1852,7 +1554,7 @@ def back_office_manager(conn, cur, *params):
 
             form_data = {field: request.form.get(field) for field in request.form}
 
-            response = back_office.post_crud_orders_add_order(cur, form_data=form_data, files_data="")
+            response = back_office.crud_orders_add_order(cur, form_data=form_data, files_data="")
 
             session['crud_message'] = response['message']
 
@@ -1862,13 +1564,13 @@ def back_office_manager(conn, cur, *params):
 
     elif re.match(r'/crud_orders/edit_order/\d+$', request.path) and len(request.path.split('/')) == 4:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'update', authenticated_user), "You don't have permission for this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'update', authenticated_user['user_row']['data']), "You don't have permission for this resource")
 
         order_id = request.path.split('/')[3]
 
         if request.method == 'GET':
 
-            response = back_office.get_crud_orders_edit_order(cur=cur, order_id=order_id)
+            response = back_office.prepare_crud_orders_edit_order_data(cur=cur, order_id=order_id)
 
             return render_template(
                 'edit_order.html', 
@@ -1882,7 +1584,7 @@ def back_office_manager(conn, cur, *params):
 
             form_data = {field: request.form.get(field) for field in request.form}
 
-            response = back_office.post_crud_orders_edit_order(cur=cur, order_id=order_id, form_data=form_data, files_data="")
+            response = back_office.crud_orders_edit_order(cur=cur, order_id=order_id, form_data=form_data, files_data="")
             
             session['crud_message'] = response['message']
 
@@ -1892,7 +1594,7 @@ def back_office_manager(conn, cur, *params):
 
     elif re.match(r'/crud_orders/delete_order/\d+$', request.path) and len(request.path.split('/')) == 4:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'delete', authenticated_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Orders', 'delete', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
         order_id = request.path.split('/')[3]
 
@@ -1904,7 +1606,7 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/crud_users' and len(request.path.split('/')) == 2:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'read', authenticated_user), "You don't have permission for this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'read', authenticated_user['user_row']['data']), "You don't have permission for this resource")
 
         if request.method == 'GET':
 
@@ -1916,40 +1618,15 @@ def back_office_manager(conn, cur, *params):
             user_by_id = fields['user_by_id']
             status = fields['status']
 
-            cur.execute("SELECT DISTINCT verification_status FROM users")
-            statuses = cur.fetchall()
+            response = back_office.prepare_crud_users_data(
+                cur=cur, 
+                email=email, 
+                user_by_id=user_by_id, 
+                status=status, 
+                sort_by=sort_by, 
+                sort_order=sort_order)
 
-            params = []
-            query = """
-                SELECT  id, 
-                        first_name, 
-                        last_name, 
-                        email, 
-                        verification_status, 
-                        verification_code, 
-                        last_active 
-                FROM users
-                WHERE 1=1
-                """
-
-            if fields['email']:
-                query += " AND email = %s"
-                params.append(fields['email'])
-
-            if fields['user_by_id']:
-                query += " AND id = %s"
-                params.append(fields['user_by_id'])
-
-            if fields['status']:
-                query += " AND verification_status = %s"
-                params.append(fields['status'])
-
-            query += f" ORDER BY {fields['sort_by']} {fields['sort_order']}"
-
-            cur.execute(query, params)
-            users = cur.fetchall()
-
-            return render_template('crud_users.html', users=users, statuses=statuses, email=fields['email'], user_by_id=fields['user_by_id'])
+            return render_template('crud_users.html', users=response['users'], statuses=response['statuses'], email=fields['email'], user_by_id=fields['user_by_id'])
 
         elif request.method == 'POST':
 
@@ -1961,27 +1638,21 @@ def back_office_manager(conn, cur, *params):
 
     elif request.path == f'/crud_users/add_user' and len(request.path.split('/')) == 3:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'create', authenticated_user), "You don't have permission for this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'create', authenticated_user['user_row']['data']), "You don't have permission for this resource")
 
         if request.method == 'GET':
 
-            cur.execute("SELECT DISTINCT verification_status FROM users")
-            statuses = cur.fetchall()
+            response = back_office.prepare_crud_users_add_user_data(cur=cur)
 
-            return render_template("add_user.html", statuses=statuses) 
+            return render_template("add_user.html", statuses=response['statuses']) 
 
         elif request.method == 'POST':
 
-            data = process_form('CRUD Users', 'create')
+            form_data = {field: request.form.get(field) for field in request.form}
 
-            # hashed_password = utils.hash_password(password_)
+            response = back_office.crud_users_add_user(cur=cur, form_data=form_data, files_data="")
 
-            sql_command = f"INSERT INTO users ({data['fields']}) VALUES ({data['placeholders']}) RETURNING id;"
-            cur.execute(sql_command, data['values'])
-
-            user_id = cur.fetchone()[0]
-
-            session['crud_message'] = "You successfully added new user with id: " + str(user_id)
+            session['crud_message'] = response['message']
 
             return redirect(f'/crud_users')
 
@@ -1990,32 +1661,30 @@ def back_office_manager(conn, cur, *params):
 
     elif re.match(r'/crud_users/edit_user/\d+$', request.path) and len(request.path.split('/')) == 4:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'update', authenticated_user), "You don't have permission for this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'update', authenticated_user['user_row']['data']), "You don't have permission for this resource")
 
         if request.method == 'GET':
 
             user_id = request.path.split('/')[3]
 
-            cur.execute("SELECT first_name, last_name, email, verification_status FROM users WHERE id = %s", (user_id,))
-            first_name, last_name, email, verification_status = cur.fetchall()[0]
+            response = back_office.prepare_crud_users_edit_user_data(cur=cur, user_id=user_id)
 
-            return render_template('edit_user.html', first_name=first_name, last_name=last_name, email=email, verification_status=verification_status, user_id=user_id)
+            return render_template(
+                'edit_user.html', 
+                first_name=response['first_name'], 
+                last_name=response['last_name'], 
+                email=response['email'], 
+                verification_status=response['verification_status'], 
+                user_id=user_id)
 
         elif request.method == 'POST':
 
+            form_data = {field: request.form.get(field) for field in request.form}
             user_id = request.path.split('/')[3]
-            data = process_form('CRUD Users', 'edit')
+            
+            response = back_office.crud_users_edit_user(cur=cur, form_data=form_data, files_data="", user_id=user_id)
 
-            cur.execute("""
-                UPDATE users 
-                SET 
-                    first_name = %s, 
-                    last_name = %s, 
-                    email = %s, 
-                    verification_status = %s 
-                WHERE id = %s""", (data['values'][0], data['values'][1], data['values'][2], data['values'][3], user_id))
-
-            session['crud_message'] = "You successfully edited user with id: " + str(user_id)
+            session['crud_message'] = response['message']
 
             return redirect(f'/crud_users')
 
@@ -2024,12 +1693,11 @@ def back_office_manager(conn, cur, *params):
 
     elif re.match(r'/crud_users/delete_user/\d+$', request.path) and len(request.path.split('/')) == 4:
 
-        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'delete', authenticated_user), "You don't have permission to this resource")
+        utils.AssertUser(utils.has_permission(cur, request, 'CRUD Users', 'delete', authenticated_user['user_row']['data']), "You don't have permission to this resource")
 
         user_id = request.path.split('/')[3]
 
-        cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
-        # cur.execute("UPDATE users SET verification_status = False WHERE id = %s", (user_id,))
+        response = back_office.delete_crud_users_user(cur=cur, user_id=user_id)
 
         session['crud_message'] = "You successfully deleted user with id: " + str(user_id)
 
@@ -2039,47 +1707,28 @@ def back_office_manager(conn, cur, *params):
 
         if request.method == 'GET':
 
-            cur.execute("SELECT * FROM email_template")
-            email_templates_rows = cur.fetchall()
+            response = back_office.prepare_template_email_data(cur)
 
-            cur.execute("SELECT * FROM settings")
-            settings_row = cur.fetchone()
-
-            for template in email_templates_rows:
-                if template['name'] == "Verification Email":
-                    verification_email_values = [template['name'],template['subject'],template['body'], template['sender']]
-
-                elif template['name'] == "Purchase Email":
-                    purchase_email_values = [template['name'],template['subject'],template['body'], template['sender']]
-
-                elif template['name'] == "Payment Email":
-                    payment_email_values = [template['name'],template['subject'],template['body'], template['sender']]
-
-                else:
-                    utils.AssertDev(False, "No information in db for email_template")
-
-            if verification_email_values and purchase_email_values and payment_email_values:
-                name, subject, body, sender = verification_email_values
-                name_purchase, subject_purchase, body_purchase, sender_purchase = purchase_email_values
-                name_payment, subject_payment, body_payment, sender_payment = payment_email_values
-
-                return render_template('template_email.html', subject=subject, body=body, tepmplate_subject_purchase=subject_purchase, 
-                                        tepmplate_body_purchase=body_purchase, tepmplate_subject_payment=subject_payment, tepmplate_body_payment=body_payment,
-                                        background_color=settings_row['send_email_template_background_color'], text_align=settings_row['send_email_template_text_align'],
-                                        border=settings_row['send_email_template_border'], border_collapse=settings_row['send_email_template_border_collapse'])
+            return render_template(
+                'template_email.html', 
+                subject = response['subject'], 
+                body = response['body'], 
+                tepmplate_subject_purchase = response['subject_purchase'], 
+                tepmplate_body_purchase = response['body_purchase'], 
+                tepmplate_subject_payment = response['subject_payment'], 
+                tepmplate_body_payment = response['body_payment'],
+                background_color = response['background_color'], 
+                text_align = response['text_align'],
+                border = response['border'], 
+                border_collapse = response['border_collapse'])
 
         elif request.method == 'POST':
             
-            data = process_form('Template email', 'edit')
+            form_data = {field: request.form.get(field) for field in request.form}
 
-            cur.execute("""
-                UPDATE email_template 
-                SET 
-                    subject = %s, 
-                    body = %s
-                WHERE name = 'Verification Email'""", (data['values'][0], data['values'][1]))
+            response = back_office.edit_email_template(cur=cur, template_name='Verification Email', form_data=form_data, files_data="")
 
-            session['staff_message'] = "You successfully updated template for sending emails"
+            session['staff_message'] = response['message']
 
             return redirect(f'/staff_portal')
 
@@ -2090,17 +1739,11 @@ def back_office_manager(conn, cur, *params):
 
         if request.method == 'POST':
 
-            data_purchase = process_form('Template email purchase', 'edit')
+            form_data = {field: request.form.get(field) for field in request.form}
 
-            utils.trace(data_purchase)
+            response = back_office.edit_email_template(cur=cur, template_name='Purchase Email', form_data=form_data, files_data="")
 
-            cur.execute("""
-                UPDATE email_template 
-                SET 
-                    subject = %s,
-                    body = %s 
-                WHERE name = 'Purchase Email' """, (data_purchase['values'][0],data_purchase['values'][1]))
-            session['staff_message'] = "You successfully updated template for sending purchase email"
+            session['staff_message'] = response['message']
 
             return redirect(f'/staff_portal')
 
@@ -2111,17 +1754,11 @@ def back_office_manager(conn, cur, *params):
 
         if request.method == 'POST':
 
-            data_payment = process_form('Template email payment', 'edit')
+            form_data = {field: request.form.get(field) for field in request.form}
 
-            utils.trace(data_payment)
+            response = back_office.edit_email_template(cur=cur, template_name='Payment Email', form_data=form_data, files_data="")
 
-            cur.execute("""
-                UPDATE email_template 
-                SET 
-                    subject = %s,
-                    body = %s 
-                WHERE name = 'Payment Email ' """, (data_payment['values'][0], data_payment['values'][1]))
-            session['staff_message'] = "You successfully updated template for sending payment email"
+            session['staff_message'] = response['message']
 
             return redirect(f'/staff_portal')
 
@@ -2135,59 +1772,30 @@ def back_office_manager(conn, cur, *params):
 def favicon():
     return app.send_static_file('favicon.ico')
 
-url_to_function_map = [
-    (r'(?:/[A-z]+)?/registration', registration),
-    (r'(?:/[A-z]+)?/refresh_captcha', refresh_captcha),
-    (r'(?:/[A-z]+)?/verify', verify),
-    (r'/login', login),
-    (r'/home(?:\?page=([1-9]+)\?[A-z,\=,\&]+)?', home),
-    (r'(?:/[A-z]+)?/logout', logout),
-    (r'(?:/[A-z]+)?/profile', profile),
-    (r'(?:/[A-z]+)?/update_profile', update_profile),
-    (r'(?:/[A-z]+)?/delete_account', delete_account),
-    (r'(?:/[A-z]+)?/recover_password', recover_password),
-    (r'(?:/[A-z]+)?/resend_verf_code', resend_verf_code),
-    (r'(?:/[A-z]+)?/send_login_link', send_login_link),
-    (r'/log', login_with_token),
-    (r'(?:/[A-z]+)?/image/(\d+)', serve_image),
-    # (r'(?:/[A-z]+)?(?:/back_office)?/crud_products_edit_picture/(\d+)', serve_image_crud_products_edit),
-    (r'/generate_orders', generate_orders),
-    (r'(?:/[A-z]+)?/add_to_cart', add_to_cart_meth),
-    (r'(?:/[A-z]+)?/cart', cart),
-    (r'(?:/[A-z]+)?/update_cart_quantity', update_cart_quantity),
-    (r'(?:/[A-z]+)?/remove_from_cart', remove_from_cart_meth),
-    (r'(?:/[A-z]+)?/finish_payment', finish_payment),
-    (r'(?:/[A-z]+)?/user_orders', user_orders),
-    (r'(?:/[A-z]+)?/staff_login', staff_login),
-    (r'(?:/[A-z]+)?(?:/back_office)?/staff_portal', staff_portal),
-    (r'(?:/[A-z]+)?(?:/back_office)?/logout_staff', logout_staff),
-    (r'(?:/[A-z]+)?(?:/back_office)?/(crud_products_edit_picture|error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users)(?:/[\w\d\-_/]*)?', back_office_manager),
-]
-
 
 url_to_function_map_front_office = [
-    (r'/registration', registration),
-    (r'/refresh_captcha', refresh_captcha),
-    (r'/verify', verify),
-    (r'/login', login),
-    (r'/home', home),
-    (r'/home(?:\?page=([1-9]+)\?[A-z,\=,\&]+)?', home),
-    (r'/logout', logout),
-    (r'/profile', profile),
-    (r'/update_profile', update_profile),
-    (r'/delete_account', delete_account),
-    (r'/recover_password', recover_password),
+    (r'/registration', registration_handler),
+    (r'/refresh_captcha', refresh_captcha_handler),
+    (r'/verify', verify_handler),
+    (r'/login', login_handler),
+    (r'/home', home_handler),
+    (r'/home(?:\?page=([1-9]+)\?[A-z,\=,\&]+)?', home_handler),
+    (r'/logout', logout_handler),
+    (r'/profile', profile_handler),
+    (r'/update_profile', update_profile_handler),
+    (r'/delete_account', delete_account_handler),
+    (r'/recover_password', recover_password_handler),
     (r'/resend_verf_code', resend_verf_code),
-    (r'/send_login_link', send_login_link),
-    (r'/log', login_with_token),
-    (r'/image/(\d+)', serve_image),
+    (r'/send_login_link', send_login_link_handler),
+    (r'/log', login_with_token_handler),
+    (r'/image/(\d+)', serve_image_handler),
     (r'/generate_orders', generate_orders),
-    (r'/add_to_cart', add_to_cart_meth),
-    (r'/cart', cart),
-    (r'/update_cart_quantity', update_cart_quantity),
-    (r'/remove_from_cart', remove_from_cart_meth),
-    (r'/finish_payment', finish_payment),
-    (r'/user_orders', user_orders),
+    (r'/add_to_cart', add_to_cart_handler),
+    (r'/cart', cart_handler),
+    (r'/update_cart_quantity', update_cart_quantity_handler),
+    (r'/remove_from_cart', remove_from_cart_handler),
+    (r'/finish_payment', finish_payment_handler),
+    (r'/user_orders', user_orders_handler),
 ]
 
 url_to_function_map_back_office = [
@@ -2196,6 +1804,49 @@ url_to_function_map_back_office = [
     (r'/logout_staff', logout_staff),
     (r'/(crud_products_edit_picture|error_logs|update_captcha_settings|report_sales|crud_products|crud_staff|role_permissions|download_report|crud_orders|active_users|download_report_without_generating_rows_in_the_html|upload_products|crud_users|template_email|update_report_limitation_rows|update_email_templates_table|update_vat_for_all_products)(?:/[\w\d\-_/]*)?', back_office_manager),
 ]
+
+
+url_fields_mapper = {
+    r'/registration': {
+        'first_name': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 50 and re.match(r'^[A-Za-z]+$', x)), "First name must be between 3 and 50 letters and contain no special characters or digits")]},
+        'last_name': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 50 and re.match(r'^[A-Za-z]+$', x)), "Last name must be between 3 and 50 letters and contain no special characters or digits")]},
+        'email': {'type': str, 'required': True, 'conditions': [((lambda x: re.fullmatch(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b', x)), "Email is not valid")]},
+        'password': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 8 and len(x) <= 20), "Password must be between 8 and 20 symbols")]},
+        'confirm_password': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 8 and len(x) <= 20), "Password and Confirm Password fields are different")]},
+        'address': {'type': str, 'required': False, 'conditions': [((lambda x: len(x) >= 5 and len(x) <= 50), "Address must be between 5 and 50 symbols")]},
+        'country_code': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 1 and len(x) <= 4), "Invalid country code")]},
+        'phone': {'type': str, 'required': True, 'conditions': [((lambda x: re.fullmatch(r'^\d{7,15}$', x)), "Phone number format is not valid. The number should be between 7 and 15 digits")]},
+        'gender': {'type': str, 'required': True, 'conditions': [((lambda x: x == 'male' or x == 'female' or x == 'other'), "Gender must be Male of Female or Prefere not to say")]},
+    },
+    r'/verify':{
+        'email': {'type': str, 'required': True, 'conditions': [((lambda x: re.fullmatch(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b', x)), "Email is not valid")]},
+        'verification_code': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) == 24), "Verification code is not valid")]},
+    },
+    r'/login': {
+        'email': {'type': str, 'required': True, 'conditions': [((lambda x: re.fullmatch(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b', x)), "Email is not valid")]},
+        'password': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 8 and len(x) <= 20), "Password must be between 8 and 20 symbols")]},
+    },
+    r'/update_profile': {
+        'first_name': {'type': str, 'required': False, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 50 and re.match(r'^[A-Za-z]+$', x)), "First name must be between 3 and 50 symbols")]},
+        'last_name': {'type': str, 'required': False, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 50 and re.match(r'^[A-Za-z]+$', x)), "Last name must be between 3 and 50 symbols")]},
+        'email': {'type': str, 'required': False, 'conditions': [((lambda x: re.fullmatch(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b', x)), "Email is not valid")]},
+        'password': {'type': str, 'required': False, 'conditions': [((lambda x: len(x) >= 8 and len(x) <= 20), "Password must be between 8 and 20 symbols")]},
+        'address': {'type': str, 'required': False, 'conditions': [((lambda x: len(x) >= 5 and len(x) <= 50), "Address must be between 5 and 50 symbols")]},
+        'phone': {'type': str, 'required': False, 'conditions': [((lambda x: re.fullmatch(r'^\d{7,15}$', x)), "Phone number format is not valid. The number should be between 7 and 15 digits")]},
+        'country_code': {'type': str, 'required': False, 'conditions': [((lambda x: len(x) >= 1 and len(x) <= 4), "Invalid country code")]},
+        'gender': {'type': str, 'required': False, 'conditions': [((lambda x: x == 'male' or x == 'female' or x == 'other'), "Gender must be Male of Female or Prefere not to say")]},
+    },
+    r'/cart': {
+        'email': {'type': str, 'required': True, 'conditions': [((lambda x: re.fullmatch(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b', x)), "Email is not valid")]},
+        'first_name': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 50 and re.match(r'^[A-Za-z]+$', x)), "First name must be between 3 and 50 symbols")]},
+        'last_name': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 50 and re.match(r'^[A-Za-z]+$', x)), "Last name must be between 3 and 50 symbols")]},
+        'town': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 20), "Town must be between 3 and 20 symbols")]},
+        'address': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 5 and len(x) <= 50), "Address must be between 5 and 50 symbols")]},
+        'country_code': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 1 and len(x) <= 4), "Invalid country code")]},
+        'phone': {'type': str, 'required': True, 'conditions': [((lambda x: re.fullmatch(r'^\d{7,15}$', x)), "Phone number format is not valid. The number should be between 7 and 15 digits")]},
+    }
+
+}
 
 def map_function(map_route):
     for pattern, function in map_route:
@@ -2217,14 +1868,7 @@ def handle_request(username=None, path=''):
         utils.trace("cur main.py")
         utils.trace(cur)
 
-        utils.trace("request.path")
-        utils.trace(request.path)
-
-        #TODO Validaciq na cookie prez bazata + req.args
         authenticated_user = sessions.get_current_user(session_id, cur=cur, conn=conn)
-
-        utils.trace("authenticated_user")
-        utils.trace(authenticated_user)
 
         funtion_to_call = None
         match = None
@@ -2238,26 +1882,28 @@ def handle_request(username=None, path=''):
             flag_office = True
 
         if not flag_office or request.path == '/staff_login':
-            utils.trace("Entered back office loop")
             funtion_to_call = map_function(url_to_function_map_back_office)
         else:
-            utils.trace("Entered front office loop")
+            if request.method == 'POST':
+                form_data = request.form.to_dict()
+                utils.check_request_form_fields_post_method(path=request.path, needed_fields=url_fields_mapper, form_data=form_data)
+            else:
+                pass
+
             funtion_to_call = map_function(url_to_function_map_front_office)
 
      
         if flag_office and authenticated_user is not None:
-            cur.execute("SELECT last_active FROM users WHERE email = %s", (authenticated_user,))
-            current_user_last_active = cur.fetchone()[0]
-            cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (authenticated_user,))
+            cur.execute("UPDATE users SET last_active = now() WHERE email = %s", (authenticated_user['user_row']['data'],))
         else:
             pass
 
         utils.AssertDev(callable(funtion_to_call), "You are trying to invoke something that is not a function")
 
         if match:
-            response = funtion_to_call(conn, cur, *match.groups())
+            response = funtion_to_call(conn, cur, authenticated_user,*match.groups())
         else:
-            response = funtion_to_call(conn, cur)
+            response = funtion_to_call(conn, cur, authenticated_user)
 
         conn.commit()
 
@@ -2287,7 +1933,13 @@ def handle_request(username=None, path=''):
 
     except Exception as message:
 
-        user_email = sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+        user_data = sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+        
+        if user_data is None:
+            user_email = 'Guest'
+        else:
+            user_email = user_data['user_row']['data']
+
         traceback_details = traceback.format_exc()
 
         log_exception(exception_type=message.__class__.__name__, message=str(message), email=user_email)

@@ -8,7 +8,7 @@ from project import sessions
 
 from project import utils
 
-def prepare_get_registration_return_data(cur, first_captcha_number, second_captcha_number):
+def prepare_registration_data(cur, first_captcha_number, second_captcha_number):
 
     cur.execute("INSERT INTO captcha(first_number, second_number, result) VALUES (%s, %s, %s) RETURNING *", (first_captcha_number, second_captcha_number, first_captcha_number + second_captcha_number))
     captcha_row = cur.fetchone()
@@ -26,7 +26,7 @@ def prepare_get_registration_return_data(cur, first_captcha_number, second_captc
 
     return prepared_data
 
-def check_post_registration_fields_data(cur, first_name, last_name, email, password_, confirm_password_, phone, gender, captcha_id, captcha_,user_ip, hashed_password, verification_code, country_code, address):    
+def registration(cur, first_name, last_name, email, password_, confirm_password_, phone, gender, captcha_id, captcha_,user_ip, hashed_password, verification_code, country_code, address):    
     regex_phone = r'^\d{7,15}$'
 
     utils.AssertUser(password_ == confirm_password_, "Password and Confirm Password fields are different")
@@ -83,7 +83,7 @@ def check_post_registration_fields_data(cur, first_name, last_name, email, passw
         """, 
         (first_name, last_name, email, hashed_password, verification_code, address, gender, phone,country_code_id))
 
-def post_verify_method(cur, email, verification_code):
+def verify(cur, email, verification_code):
 
     cur.execute("SELECT * FROM users WHERE email = %s", (email,))
     user_row = cur.fetchone()
@@ -99,7 +99,7 @@ def post_verify_method(cur, email, verification_code):
     
     cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", (verification_code,))
 
-def post_login_method(cur, email, password_):
+def login(cur, email, password_):
     cur.execute("""
                     SELECT 
                         *
@@ -116,7 +116,7 @@ def post_login_method(cur, email, password_):
 
     return user_data
 
-def get_home_query_data(cur, sort_by, sort_order, products_per_page, page, offset, product_name, product_category, price_min, price_max):
+def prepare_home_data(cur, sort_by, sort_order, products_per_page, page, offset, product_name, product_category, price_min, price_max):
 
     name_filter = f" AND products.name ILIKE %s" if product_name else ''
     category_filter = f" AND category ILIKE %s" if product_category else ''
@@ -175,7 +175,7 @@ def get_home_query_data(cur, sort_by, sort_order, products_per_page, page, offse
 
     return data_to_return
 
-def get_profile_data(cur, authenticated_user):
+def prepare_profile_data(cur, authenticated_user):
 
     cur.execute("""
                 SELECT 
@@ -204,7 +204,7 @@ def get_profile_data(cur, authenticated_user):
 
     return data_to_return
 
-def post_update_profile(cur, conn, first_name, last_name, email, password_, address, phone, country_code, gender, session_id):
+def update_profile(cur, conn, first_name, last_name, email, password_, address, phone, country_code, gender, authenticated_user):
 
     query_string = "UPDATE users SET "
     fields_list = []
@@ -277,8 +277,8 @@ def post_update_profile(cur, conn, first_name, last_name, email, password_, addr
     query_string = query_string[:-2]
     query_string += " WHERE email = %s"
 
-    email_in_session = sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
-    fields_list.append(email_in_session)
+    # email_in_session = sessions.get_current_user(session_id=session_id, cur=cur, conn=conn)
+    fields_list.append(authenticated_user)
 
     cur.execute(query_string, (fields_list))
     
@@ -290,8 +290,8 @@ def post_update_profile(cur, conn, first_name, last_name, email, password_, addr
 
     return data_to_return
 
-def add_to_cart(conn, cur, user_id, product_id, quantity, session_cookie_id):
-    authenticated_user =  sessions.get_current_user(session_id=session_cookie_id, cur=cur, conn=conn)
+def add_to_cart(conn, cur, user_id, product_id, quantity, authenticated_user):
+    # authenticated_user =  sessions.get_current_user(session_id=session_cookie_id, cur=cur, conn=conn)
 
     cur.execute("""
                     SELECT 
@@ -429,9 +429,9 @@ def merge_cart(conn, cur, user_id, session_id):
 
     cur.execute("UPDATE carts SET user_id = %s, session_id = null WHERE cart_id = %s and session_id = %s", (user_id, cart_id, session_id))
 
-def get_cart_method_data(cur, conn, authenticated_user):
+def prepare_cart_data(cur, conn, authenticated_user):
 
-    cur.execute("SELECT users.*, settings.vat FROM users, settings WHERE email = %s", (authenticated_user,))
+    cur.execute("SELECT users.*, settings.vat FROM users, settings WHERE email = %s", (authenticated_user['user_row']['data'],))
     user_settings_row = cur.fetchone()
 
     user_id = user_settings_row['id']
@@ -467,7 +467,7 @@ def get_cart_method_data(cur, conn, authenticated_user):
 
     return data_to_return
 
-def post_cart_method(cur, email, first_name, last_name, town, address, country_code, phone, authenticated_user):
+def cart(cur, email, first_name, last_name, town, address, country_code, phone, authenticated_user):
 
     regex_phone = r'^\d{7,15}$'
     regex_email = r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b'
@@ -499,7 +499,7 @@ def post_cart_method(cur, email, first_name, last_name, town, address, country_c
                     JOIN products   ON cart_items.product_id = products.id
                     JOIN currencies ON products.currency_id  = currencies.id
                 WHERE users.email = %s
-                """,(authenticated_user,))
+                """,(authenticated_user['user_row']['data'],))
 
     cart_items = cur.fetchall()
 
@@ -637,14 +637,14 @@ def post_cart_method(cur, email, first_name, last_name, town, address, country_c
 
     return data_to_return
 
-def get_finish_payment(cur, authenticated_user, order_id):
+def prepare_finish_payment_data(cur, authenticated_user, order_id):
 
     cur.execute("""
                 SELECT 
                     users.*, 
                     settings.vat 
                 FROM users, settings WHERE email = %s
-                """, (authenticated_user,))
+                """, (authenticated_user['user_row']['data'],))
     user_settings_row = cur.fetchone()
 
     cur.execute("""
@@ -694,7 +694,7 @@ def get_finish_payment(cur, authenticated_user, order_id):
 
     return data_to_return
 
-def post_payment_method(cur, payment_amount, order_id):
+def payment_method(cur, payment_amount, order_id):
     utils.AssertUser(isinstance(float(payment_amount), float), "You must enter a number")
 
     payment_amount_float = float(payment_amount)

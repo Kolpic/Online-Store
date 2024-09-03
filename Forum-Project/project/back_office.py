@@ -1,4 +1,7 @@
 import os, re
+import psycopg2
+import csv
+import io
 
 from decimal import Decimal
 from datetime import timedelta, datetime
@@ -7,8 +10,9 @@ from project import cache_impl, sessions
 from project import sessions
 from project import utils
 from project import helper
+from project import config
 
-def post_staff_login(cur, username, password):
+def staff_login(cur, username, password):
 	cur.execute("SELECT * FROM staff WHERE username = %s AND password = %s", (username, password))
 	staff_row = cur.fetchone()
 	utils.AssertUser(staff_row is not None, "There is no registration with this staff username and password")
@@ -19,7 +23,7 @@ def post_staff_login(cur, username, password):
 
 	return data_to_return
 
-def get_error_logs(cur, sort_by, sort_order):
+def prepare_error_logs_data(cur, sort_by, sort_order):
 
 	query = "SELECT * FROM exception_logs"
 
@@ -37,7 +41,7 @@ def get_error_logs(cur, sort_by, sort_order):
 
 	return data_to_return
 
-def get_settings(cur):
+def prepare_settings_data(cur):
 
 	cur.execute("SELECT * FROM settings")
 	settings_row = cur.fetchone()
@@ -60,7 +64,7 @@ def get_settings(cur):
 
 	return data_to_return
 
-def post_captcha_settings(cur, new_max_attempts, new_timeout_minutes):
+def captcha_settings(cur, new_max_attempts, new_timeout_minutes):
 
 	utils.AssertUser(not(new_max_attempts and int(new_max_attempts)) <= 0, "Captcha attempts must be possitive number")
 	utils.AssertUser(not(new_timeout_minutes and int(new_timeout_minutes)) <= 0, "Timeout minutes must be possitive number")
@@ -95,7 +99,7 @@ def post_update_limitation_rows(cur, limitation_rows):
 
 	return data_to_return
 
-def post_vat_for_all_products(cur, vat_for_all_products):
+def vat_for_all_products(cur, vat_for_all_products):
 
 	try:
 	    vat_for_all_products = int(vat_for_all_products)
@@ -112,7 +116,7 @@ def post_vat_for_all_products(cur, vat_for_all_products):
 
 	return data_to_return
 
-def post_report_sales(cur, date_from, date_to, group_by, status, filter_by_status, order_id, page):
+def report_sales(cur, date_from, date_to, group_by, status, filter_by_status, order_id, page):
 
 	cur.execute("SELECT * FROM settings")
 	settings_rows = cur.fetchone()
@@ -198,7 +202,7 @@ def post_report_sales(cur, date_from, date_to, group_by, status, filter_by_statu
 
 	return data_to_return
 
-def get_crud_products(cur, sort_by, sort_order, price_min, price_max):
+def prepare_crud_products_data(cur, sort_by, sort_order, price_min, price_max):
 	base_query = """
 
                 SELECT 
@@ -233,7 +237,7 @@ def get_crud_products(cur, sort_by, sort_order, price_min, price_max):
 
 	return data_to_return
 
-def get_crud_add_product(cur):
+def prepare_crud_add_product_data(cur):
 
 	cur.execute("SELECT symbol, id FROM currencies")
 	all_currencies = cur.fetchall()
@@ -249,7 +253,7 @@ def get_crud_add_product(cur):
 
 	return data_to_return
 
-def post_crud_add_product(cur, form_data, files_data):
+def crud_add_product(cur, form_data, files_data):
 
 	data = helper.process_form('CRUD Products', 'create', form_data, files_data)
 
@@ -263,7 +267,7 @@ def post_crud_add_product(cur, form_data, files_data):
 
 	return data_to_return
 
-def get_edit_product(cur, product_id):
+def prepare_edit_product_data(cur, product_id):
 
 	cur.execute("SELECT symbol, id FROM currencies")
 	all_currencies = cur.fetchall()
@@ -280,7 +284,7 @@ def get_edit_product(cur, product_id):
 
 	return data_to_return
 
-def post_edit_product(cur, form_data, files_data, product_id):
+def edit_product(cur, form_data, files_data, product_id):
 
 	data = helper.process_form('CRUD Products', 'edit', form_data, files_data)
 
@@ -302,7 +306,7 @@ def delete_product(cur, product_id):
 
     return data_to_return
 
-def get_crud_staff(cur):
+def prepare_crud_staff_data(cur):
 
 	cur.execute("""
 
@@ -324,7 +328,7 @@ def get_crud_staff(cur):
 
 	return data_to_return
 
-def get_add_role_staff(cur):
+def prepare_add_role_staff_data(cur):
 
 	cur.execute("SELECT id, username FROM staff")
 	staff = cur.fetchall()
@@ -339,7 +343,7 @@ def get_add_role_staff(cur):
 
 	return data_to_return
 
-def post_add_role_staff(cur, form_data, files_data):
+def add_role_staff(cur, form_data, files_data):
 
 	data = helper.process_form('Staff roles', 'create_staff_roles', form_data, files_data)
 
@@ -359,7 +363,7 @@ def post_add_role_staff(cur, form_data, files_data):
 
 	return data_to_return
 
-def post_add_staff(cur, form_data, files_data):
+def add_staff(cur, form_data, files_data):
 
 	data = helper.process_form('Staff roles', 'create_staff', form_data, files_data)
 
@@ -385,7 +389,7 @@ def delete_crud_staff_role(cur, staff_id, role_id):
 
 	return data_to_return
 
-def get_crud_orders(cur, sort_by, sort_order, price_min, price_max, order_by_id, date_from, date_to, status, page, per_page, offset):
+def prepare_crud_orders_data(cur, sort_by, sort_order, price_min, price_max, order_by_id, date_from, date_to, status, page, per_page, offset):
 
 	cur.execute("SELECT DISTINCT status FROM orders")
 	statuses = cur.fetchall()
@@ -484,7 +488,7 @@ def get_crud_orders(cur, sort_by, sort_order, price_min, price_max, order_by_id,
 
 	return data_to_return
 
-def get_crud_orders_add_order(cur):
+def prepare_crud_orders_add_order_data(cur):
 
 	cur.execute("SELECT DISTINCT status FROM orders")
 	statuses = cur.fetchall()
@@ -495,7 +499,7 @@ def get_crud_orders_add_order(cur):
 
 	return data_to_return
 
-def post_crud_orders_add_order(cur, form_data, files_data):
+def crud_orders_add_order(cur, form_data, files_data):
 
 	data = helper.process_form('CRUD Orders', 'create', form_data, files_data)        
 
@@ -525,7 +529,7 @@ def post_crud_orders_add_order(cur, form_data, files_data):
 
 	return data_to_return
 
-def get_crud_orders_edit_order(cur, order_id):
+def prepare_crud_orders_edit_order_data(cur, order_id):
 
 	cur.execute("SELECT DISTINCT status FROM orders")
 	statuses = cur.fetchall()
@@ -575,7 +579,7 @@ def get_crud_orders_edit_order(cur, order_id):
 
 	return data_to_return
 
-def post_crud_orders_edit_order(cur, order_id, form_data, files_data):
+def crud_orders_edit_order(cur, order_id, form_data, files_data):
 
 	data = helper.process_form('CRUD Orders', 'edit', form_data, files_data)
 
@@ -603,7 +607,7 @@ def delete_crud_orders_edit_order(cur, order_id):
 
 	return data_to_return
 
-def get_crud_users(cur, email, user_by_id, status, sort_by, sort_order):
+def prepare_crud_users_data(cur, email, user_by_id, status, sort_by, sort_order):
 
 	cur.execute("SELECT DISTINCT verification_status FROM users")
 	statuses = cur.fetchall()
@@ -644,6 +648,287 @@ def get_crud_users(cur, email, user_by_id, status, sort_by, sort_order):
 	data_to_return = {
 	'users': users,
 	'statuses': statuses,
+	}
+
+	return data_to_return
+
+def prepare_crud_users_add_user_data(cur):
+
+	cur.execute("SELECT DISTINCT verification_status FROM users")
+	statuses = cur.fetchall()
+
+	data_to_return = {
+		'statuses': statuses,
+	}
+
+	return data_to_return
+
+def crud_users_add_user(cur, form_data, files_data):
+
+	data = helper.process_form('CRUD Users', 'create', form_data, files_data)
+
+	# hashed_password = utils.hash_password(password_)
+
+	sql_command = f"INSERT INTO users ({data['fields']}) VALUES ({data['placeholders']}) RETURNING id;"
+	cur.execute(sql_command, data['values'])
+
+	user_id = cur.fetchone()[0]
+
+	message = "You successfully added new user with id: " + str(user_id)
+
+	data_to_return = {
+		'message': message,
+	}
+
+	return data_to_return
+
+def prepare_crud_users_edit_user_data(cur, user_id):
+
+	cur.execute("SELECT first_name, last_name, email, verification_status FROM users WHERE id = %s", (user_id,))
+	user_row = cur.fetchall()[0]
+
+	data_to_return = {
+		'first_name': user_row['first_name'],
+		'last_name': user_row['last_name'],
+		'email': user_row['email'],
+		'verification_status': user_row['verification_status'],
+	}
+
+	return data_to_return
+
+def crud_users_edit_user(cur, form_data, files_data, user_id):
+
+	data = helper.process_form('CRUD Users', 'edit', form_data, files_data)
+
+	cur.execute("""
+
+				UPDATE users 
+				SET 
+					first_name = %s, 
+					last_name = %s, 
+					email = %s, 
+					verification_status = %s 
+				WHERE id = %s
+
+				""", (data['values'][0], data['values'][1], data['values'][2], data['values'][3], user_id))
+
+	message = "You successfully edited user with id: " + str(user_id)
+
+	data_to_return = {
+		'message': message,
+	}
+
+	return data_to_return
+
+def delete_crud_users_user(cur, user_id):
+
+	cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+	# cur.execute("UPDATE users SET verification_status = False WHERE id = %s", (user_id,))
+
+	message = "You successfully deleted user with id: " + str(user_id)
+
+	data_to_return = {
+		'message': message,
+	}
+
+	return data_to_return
+
+def prepare_template_email_data(cur):
+
+	cur.execute("SELECT * FROM email_template")
+	email_templates_rows = cur.fetchall()
+
+	cur.execute("SELECT * FROM settings")
+	settings_row = cur.fetchone()
+
+	for template in email_templates_rows:
+		if template['name'] == "Verification Email":
+			verification_email_values = [template['name'],template['subject'],template['body'], template['sender']]
+
+		elif template['name'] == "Purchase Email":
+			purchase_email_values = [template['name'],template['subject'],template['body'], template['sender']]
+
+		elif template['name'] == "Payment Email":
+			payment_email_values = [template['name'],template['subject'],template['body'], template['sender']]
+
+		else:
+			utils.AssertDev(False, "No information in db for email_template")
+
+	if verification_email_values and purchase_email_values and payment_email_values:
+		name, subject, body, sender = verification_email_values
+		name_purchase, subject_purchase, body_purchase, sender_purchase = purchase_email_values
+		name_payment, subject_payment, body_payment, sender_payment = payment_email_values
+
+	data_to_return = {
+		'subject': subject,
+		'body': body,
+		'subject_purchase': subject_purchase,
+		'body_purchase': body_purchase,
+		'subject_payment': subject_payment,
+		'body_payment': body_payment,
+		'background_color': settings_row['send_email_template_background_color'],
+		'text_align': settings_row['send_email_template_text_align'],
+		'border': settings_row['send_email_template_border'],
+		'border_collapse': settings_row['send_email_template_border_collapse'],
+	}
+
+	return data_to_return
+
+def edit_email_template(cur, template_name, form_data, files_data):
+
+	data = helper.process_form(template_name, 'edit', form_data, files_data)
+
+	cur.execute("""
+
+				UPDATE email_template 
+				SET 
+					subject = %s, 
+					body = %s
+				WHERE name = %s
+
+				""", (data['values'][0], data['values'][1], template_name))
+
+	message = "You successfully updated template for: " + str(template_name)
+
+	data_to_return = {
+		'message': message,
+	}
+
+	return data_to_return
+
+def prepare_role_permissions_data(cur, role, selected_role, interfaces):
+
+	cur.execute("SELECT role_id, role_name FROM roles")
+	roles = cur.fetchall()
+
+	cur.execute("SELECT role_id, role_name FROM roles WHERE role_id = %s", (selected_role,))
+	role_to_display = cur.fetchall()
+
+	role_permissions = {role[0]: {interface: {'create': False, 'read': False, 'update': False, 'delete': False} for interface in interfaces} for role in role_to_display}
+
+	cur.execute("""
+
+				SELECT 
+					role_permissions.role_id, 
+					permissions.interface, 
+					permissions.permission_name 
+				FROM role_permissions 
+					JOIN permissions ON role_permissions.permission_id=permissions.permission_id
+
+				""")
+	permissions = cur.fetchall()
+
+	for role_id, interface, permission_name in permissions:
+		if role_id in role_permissions and interface in role_permissions[role_id]:
+			role_permissions[role_id][interface][permission_name] = True
+
+	data_to_return = {
+		'roles': roles,
+		'interfaces': interfaces,
+		'role_permissions': role_permissions,
+	}
+
+	return data_to_return
+
+def role_permissions(cur, role_id, form_data, interfaces):
+
+	cur.execute("DELETE FROM role_permissions WHERE role_id = %s", (role_id,))
+
+	for interface in interfaces:
+		for action in ['create', 'read', 'update', 'delete']:
+			if f'{interface}_{action}' in form_data:
+
+				cur.execute("SELECT permission_id FROM permissions WHERE permission_name = %s AND interface = %s", (action, interface))
+
+				permission_id = cur.fetchone()[0]
+
+				cur.execute("INSERT INTO role_permissions (role_id, permission_id) VALUES (%s, %s)", (role_id, permission_id))
+
+	cur.execute("SELECT role_name FROM roles WHERE role_id = %s", (role_id,))
+	role_name = cur.fetchone()[0]
+
+	message = f'You successfully updated permissions for role: {role_name}'
+
+	data_to_return = {
+		'message': message,
+	}
+
+	return data_to_return
+
+def download_report(form_data):
+
+	if form_data['format'] == 'csv':
+		def generate():
+			conn = psycopg2.connect(dbname=config.database, user=config.user, password=config.password, host=config.host)
+
+			si = io.StringIO()
+			cw = csv.writer(si)
+			headers = ['Date', 'Order ID', 'Customer Name', 'Total Price', 'Status']
+			cw.writerow(headers)
+			si.seek(0)
+			yield si.getvalue()
+			si.truncate(0)
+			si.seek(0)
+
+			offset = 0
+
+			# while True:
+			# rows_fetched = False
+			batch = utils.fetch_batches(conn, form_data['date_from'], form_data['date_to'], offset)               
+
+			for row in batch:
+				rows_fetched = True
+
+				for innerRow in row:
+
+					utils.trace("innerRow")
+					utils.trace(innerRow)
+
+					cw.writerow(innerRow)
+					si.seek(0)
+					yield si.getvalue()
+					si.truncate(0)
+
+					# if not rows_fetched: 
+					#     break
+					offset += 10000
+
+			si.close()
+			conn.close()
+
+		return generate
+
+def edit_email_table(cur, background_color, text_align, border, border_collapse):
+
+	utils.AssertUser(int(border) <= 10 and int(border) >= 1, "Border can be between 1 and 10")
+
+	updates = []
+	params = []
+
+	if background_color:
+		updates.append("send_email_template_background_color = %s")
+		params.append(background_color)
+
+	if text_align:
+		updates.append("send_email_template_text_align = %s")
+		params.append(text_align)
+
+	if border:
+		updates.append("send_email_template_border = %s")
+		params.append(border)
+
+	if border_collapse:
+		updates.append("send_email_template_border_collapse = %s")
+		params.append(border_collapse)
+
+	if updates:
+		query = "UPDATE settings SET " + ", ".join(updates)
+		cur.execute(query, params)
+
+	message = "You changed the email template table look successfully"
+
+	data_to_return = {
+	'message': message,
 	}
 
 	return data_to_return

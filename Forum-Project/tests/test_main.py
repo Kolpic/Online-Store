@@ -1,62 +1,39 @@
 import pytest
 import bcrypt
-from project.main import app as flask_app
-from project.main import app
-from project import sessions
-<<<<<<< HEAD
-import os
-=======
+from unittest.mock import patch, MagicMock
+import psycopg2
 
 import os, io
+import re
 
->>>>>>> dev
 from decimal import Decimal
 from datetime import timedelta, datetime
 from project import utils
 import uuid
-<<<<<<< HEAD
-from project.front_office import prepare_get_registration_return_data, check_post_registration_fields_data, post_verify_method, post_login_method, \
-get_home_query_data, get_profile_data, post_update_profile, add_to_cart, get_cart_items_count, remove_from_cart, view_cart, merge_cart, \
-get_cart_method_data, post_cart_method
 
-# from project.main import add_to_cart_meth, add_to_cart, get_cart_items_count, get_cart_items_count, registration
-=======
+from project.front_office import prepare_registration_data, registration, verify, login, \
+prepare_home_data, prepare_profile_data, update_profile, add_to_cart, get_cart_items_count, remove_from_cart, view_cart, merge_cart, \
+prepare_cart_data, cart, prepare_finish_payment_data, payment_method
 
-from project.front_office import prepare_get_registration_return_data, check_post_registration_fields_data, post_verify_method, post_login_method, \
-get_home_query_data, get_profile_data, post_update_profile, add_to_cart, get_cart_items_count, remove_from_cart, view_cart, merge_cart, \
-get_cart_method_data, post_cart_method, get_finish_payment, post_payment_method
+from project.back_office import staff_login, prepare_error_logs_data, prepare_settings_data, captcha_settings, post_update_limitation_rows, vat_for_all_products, \
+report_sales, prepare_crud_products_data, prepare_crud_add_product_data, crud_add_product, prepare_edit_product_data, edit_product, delete_product, prepare_crud_staff_data, \
+prepare_add_role_staff_data, add_role_staff, add_staff, delete_crud_staff_role, prepare_crud_orders_data, prepare_crud_orders_add_order_data, crud_orders_add_order, \
+prepare_crud_orders_edit_order_data, crud_orders_edit_order, delete_crud_orders_edit_order, prepare_crud_users_data, prepare_crud_users_add_user_data, \
+crud_users_add_user, prepare_crud_users_edit_user_data, crud_users_edit_user, delete_crud_users_user, prepare_template_email_data, edit_email_template, \
+prepare_role_permissions_data, role_permissions, download_report, edit_email_table
 
-from project.back_office import post_staff_login, get_error_logs, get_settings, post_captcha_settings, post_update_limitation_rows, post_vat_for_all_products, \
-post_report_sales, get_crud_products, get_crud_add_product, post_crud_add_product, get_edit_product, post_edit_product, delete_product, get_crud_staff, \
-get_add_role_staff, post_add_role_staff, post_add_staff, delete_crud_staff_role, get_crud_orders, get_crud_orders_add_order, post_crud_orders_add_order, \
-post_crud_orders_add_order, get_crud_orders_edit_order, post_crud_orders_edit_order, delete_crud_orders_edit_order, get_crud_users,
+from project.utils import check_request_form_fields_post_method
 
 from project.exception import WrongUserInputException
-
->>>>>>> dev
-
 from project.sessions import create_session, get_current_user
-
-from werkzeug.datastructures import ImmutableMultiDict
-
-from flask import render_template, request
-from project.utils import hash_password
-from project.main import registration, send_verification_email, mail, send_recovey_password_email
-# from project.exception import CustomError
+from project import sessions
 from project import config
-from flask import session, url_for
-from unittest.mock import patch, MagicMock
-import psycopg2
 
 database = config.test_database
 user = config.user
 password = config.password
 host = config.host
 
-<<<<<<< HEAD
-
-=======
->>>>>>> dev
 def test_user_flow(setup_database):
     conn, cur = setup_database
 
@@ -73,7 +50,7 @@ def test_user_flow(setup_database):
     cur.execute("INSERT INTO country_codes (name, code) VALUES (%s, %s) RETURNING *", ("Bulgaria", "+359"))
     result_country_codes = cur.fetchall()
 
-    response_get = prepare_get_registration_return_data(cur, first_captcha_number, second_captcha_number)
+    response_get = prepare_registration_data(cur, first_captcha_number, second_captcha_number)
 
     assert response_get['first_captcha_number'] == first_captcha_number
     assert response_get['second_captcha_number'] == second_captcha_number
@@ -103,7 +80,7 @@ def test_user_flow(setup_database):
     verification_code = "test_verification_code"
 
 # todo
-    response_post = check_post_registration_fields_data(cur=cur, first_name=user['first_name'], last_name=user['last_name'], 
+    response_post = registration(cur=cur, first_name=user['first_name'], last_name=user['last_name'], 
                                                         email=user['email'], password_=user['password'], confirm_password_=user['confirm_password'], 
                                                         phone=user['phone'], gender=user['gender'], captcha_id=user['captcha_id'], captcha_=user['captcha_'],
                                                         user_ip=user['user_ip'],hashed_password=hashed_password, verification_code = verification_code, 
@@ -120,7 +97,7 @@ def test_user_flow(setup_database):
     cur.execute("SELECT verification_status FROM users WHERE email = %s", (user['email'],))
     assert cur.fetchone()['verification_status'] == False
 
-    responce_post_verify = post_verify_method(cur=cur, email=user['email'], verification_code=verification_code)
+    responce_post_verify = verify(cur=cur, email=user['email'], verification_code=verification_code)
 
     cur.execute("SELECT verification_status FROM users WHERE email = %s", (user['email'],))
     assert cur.fetchone()['verification_status'] == True
@@ -128,7 +105,7 @@ def test_user_flow(setup_database):
     # POST LOGIN
 
     with patch('project.utils.verify_password', return_value=True):
-        post_login_method(cur=cur, email=user['email'], password_=hashed_password)
+        login(cur=cur, email=user['email'], password_=hashed_password)
 
     # CREATE SESSION
 
@@ -203,7 +180,7 @@ def test_user_flow(setup_database):
 
     response_get_current_user = get_current_user(session_id=custom_session_user_row['session_id'], cur=cur, conn=conn)
 
-    assert response_get_current_user == user['email']
+    assert response_get_current_user['user_row']['data'] == user['email']
 
     # GET HOME PAGE
 
@@ -222,7 +199,7 @@ def test_user_flow(setup_database):
     }
 
     with patch('project.utils.check_request_arg_fields', return_value=fields):
-        response_get_home = get_home_query_data(cur=cur, sort_by=fields['sort_by'], sort_order=fields['sort_order'], products_per_page=fields['products_per_page'], 
+        response_get_home = prepare_home_data(cur=cur, sort_by=fields['sort_by'], sort_order=fields['sort_order'], products_per_page=fields['products_per_page'], 
                                             page=fields['page'], offset=fields['offset'], product_name=fields['product_name'], 
                                             product_category=fields['product_category'], price_min=fields['price_min'], price_max=fields['price_max'])
 
@@ -231,7 +208,7 @@ def test_user_flow(setup_database):
 
     # GET USER PROFILE
 
-    response_get_user_profile = get_profile_data(cur, user['email'])
+    response_get_user_profile = prepare_profile_data(cur, user['email'])
 
     assert response_get_user_profile['country_codes'] == result_country_codes
     assert response_get_user_profile['first_name'] == user['first_name']
@@ -239,33 +216,36 @@ def test_user_flow(setup_database):
 
     # POST UPDATE PROFILE 
 
-    response_post_profile = post_update_profile(cur=cur, first_name=user['first_name'], 
-                                                last_name=user['last_name'], email = "", 
-                                                password_= "", address=user['address'], 
-                                                phone="", country_code="", 
-                                                gender="", session_id=session_id, conn=conn)
+    response_post_profile = update_profile(
+        cur=cur, 
+        first_name=user['first_name'], 
+        last_name=user['last_name'], 
+        email = "", 
+        password_= "", 
+        address=user['address'], 
+        phone="", 
+        country_code="", 
+        gender="", 
+        authenticated_user=response_get_current_user['user_row']['data'], 
+        conn=conn)
 
     assert response_post_profile['updated_fields_message'] == 'first name, last name, address'
 
     # ADD ITEM IN CART (CART WILL BE CREATED)
 
-<<<<<<< HEAD
-        # Not created cart for this user
-=======
     # Not created cart for this user
->>>>>>> dev
     cur.execute("SELECT * FROM carts WHERE user_id = %s", (registered_user_row[0]['id'],))
 
     assert cur.fetchone() == None
 
-<<<<<<< HEAD
-        # Create cart and add item
-=======
     # Create cart and add item
->>>>>>> dev
-    response_add_to_cart = add_to_cart(conn=conn, cur=cur, user_id=registered_user_row[0]['id'], 
-                                        product_id=product_one_row['id'], quantity=2, 
-                                        session_cookie_id=session_id)
+    response_add_to_cart = add_to_cart(
+        conn=conn, 
+        cur=cur, 
+        user_id=registered_user_row[0]['id'], 
+        product_id=product_one_row['id'], 
+        quantity=2, 
+        authenticated_user=response_get_current_user)
 
         # Response message
     assert response_add_to_cart == "You successfully added item."
@@ -278,9 +258,13 @@ def test_user_flow(setup_database):
 
     # ADD SAME ITEM IN CART (CART IS CREATED, JUST INCREASE THE QUANTITY FOR THE SAME PRODUCT)
 
-    response_add_to_cart_same_item = add_to_cart(conn=conn, cur=cur, user_id=registered_user_row[0]['id'], 
-                                        product_id=product_one_row['id'], quantity=3, 
-                                        session_cookie_id=session_id)
+    response_add_to_cart_same_item = add_to_cart(
+        conn=conn, 
+        cur=cur, 
+        user_id=registered_user_row[0]['id'], 
+        product_id=product_one_row['id'], 
+        quantity=3, 
+        authenticated_user=response_get_current_user)
 
     assert response_add_to_cart_same_item == "You successfully added same item, quantity was increased."
 
@@ -293,9 +277,13 @@ def test_user_flow(setup_database):
     # REMOVE FROM CART
 
         # ADD SECOND PRODUCT TO THE CART
-    response_add_to_cart_second_item = add_to_cart(conn=conn, cur=cur, user_id=registered_user_row[0]['id'], 
-                                        product_id=product_two_row['id'], quantity=2, 
-                                        session_cookie_id=session_id)
+    response_add_to_cart_second_item = add_to_cart(
+        conn=conn, 
+        cur=cur, 
+        user_id=registered_user_row[0]['id'], 
+        product_id=product_two_row['id'], 
+        quantity=2, 
+        authenticated_user=response_get_current_user)
 
     response_get_cart_items_count = get_cart_items_count(cur=cur, conn=conn, user_id=registered_user_row[0]['id'])
 
@@ -319,7 +307,7 @@ def test_user_flow(setup_database):
 
     # GET CART INTERFACE
 
-    response_get_cart_interface = get_cart_method_data(cur=cur, conn=conn, authenticated_user=registered_user_row[0]['email'])
+    response_get_cart_interface = prepare_cart_data(cur=cur, conn=conn, authenticated_user=response_get_current_user)
 
         # ALGORITHM FOR TOTAL SUM AND TOTAL SUM WITH VAT
 
@@ -340,16 +328,10 @@ def test_user_flow(setup_database):
 
     # POST CART
 
-    response_post_cart = post_cart_method(cur=cur, email=user['email'], first_name=user['first_name'], 
+    response_post_cart = cart(cur=cur, email=user['email'], first_name=user['first_name'], 
                                         last_name=user['last_name'], town="Plovdiv", address=user['address'], 
-<<<<<<< HEAD
-                                        country_code=result_country_codes['code'], phone=user['phone'])
-
-    utils.trace("response_post_cart")
-    utils.trace(response_post_cart)
-=======
                                         country_code=result_country_codes[0]['code'], phone=user['phone'], 
-                                        authenticated_user = user['email'])
+                                        authenticated_user = response_get_current_user)
 
         # Check for decreasment in db quantity
     cur.execute("SELECT quantity FROM products WHERE id = %s", (product_one_row['id'],))
@@ -377,18 +359,33 @@ def test_user_flow(setup_database):
     utils.trace("order_items_row['id']")
     utils.trace(order_items_row['id'])
 
-    response_get_payment = get_finish_payment(cur=cur, authenticated_user=user['email'], order_id=order_items_row['id'])
+    response_get_payment = prepare_finish_payment_data(cur=cur, authenticated_user=response_get_current_user, order_id=order_items_row['id'])
 
     assert response_get_payment != None
 
     # POST PAYMENT
 
-    response_post_payment_method = post_payment_method(cur=cur, payment_amount=62.5, order_id=order_items_row['order_id'])
+    response_post_payment_method = payment_method(cur=cur, payment_amount=62.5, order_id=order_items_row['order_id'])
 
 def test_user_updates_profiles_all_fails(setup_database):
     conn, cur = setup_database
 
     # PEPARE DATA
+
+    cur.execute("""
+            INSERT INTO settings (
+                vat, 
+                report_limitation_rows, 
+                send_email_template_background_color, 
+                send_email_template_text_align, 
+                send_email_template_border, 
+                send_email_template_border_collapse) 
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING *
+            """, (25, 1000, '#19bcc8', 'right', 4, 'collapse'))
+
+    settings_row = cur.fetchone()
+
     cur.execute("""
 
                 INSERT INTO users (
@@ -411,10 +408,12 @@ def test_user_updates_profiles_all_fails(setup_database):
 
     assert session_id != None
 
+    response_get_current_user = get_current_user(session_id=session_id, cur=cur, conn=conn)
+
     # POST UPDATE PROFILE WITH INVALID FIELDS 
 
     with pytest.raises(WrongUserInputException, match=r"First name must be between 3 and 50 letters and contain no special characters or digits"):
-        post_update_profile(
+        update_profile(
             cur=cur,
             first_name="Pe",  # Invalid first name
             last_name="", 
@@ -424,12 +423,12 @@ def test_user_updates_profiles_all_fails(setup_database):
             phone="", 
             country_code="", 
             gender="", 
-            session_id=session_id, 
+            authenticated_user=response_get_current_user, 
             conn=conn
         )
 
     with pytest.raises(WrongUserInputException, match=r"Last name must be between 3 and 50 letters"):
-        post_update_profile(
+        update_profile(
             cur=cur,
             first_name="",  
             last_name="Pe", # Invalid last name
@@ -439,12 +438,12 @@ def test_user_updates_profiles_all_fails(setup_database):
             phone="", 
             country_code="", 
             gender="", 
-            session_id=session_id, 
+            authenticated_user=response_get_current_user, 
             conn=conn
         )
 
     with pytest.raises(WrongUserInputException, match=r"Invalid email"):
-        post_update_profile(
+        update_profile(
             cur=cur,
             first_name="",  
             last_name="", 
@@ -454,12 +453,12 @@ def test_user_updates_profiles_all_fails(setup_database):
             phone="", 
             country_code="", 
             gender="", 
-            session_id=session_id, 
+            authenticated_user=response_get_current_user, 
             conn=conn
         )
 
     with pytest.raises(WrongUserInputException, match=r"Password must be between 8 and 20 symbols"):
-        post_update_profile(
+        update_profile(
             cur=cur,
             first_name="",  
             last_name="", 
@@ -469,12 +468,12 @@ def test_user_updates_profiles_all_fails(setup_database):
             phone="", 
             country_code="", 
             gender="", 
-            session_id=session_id, 
+            authenticated_user=response_get_current_user, 
             conn=conn
         )
 
     with pytest.raises(WrongUserInputException, match=r"Address must be between 3 and 50 letters"):
-        post_update_profile(
+        update_profile(
             cur=cur,
             first_name="",  
             last_name="", 
@@ -484,12 +483,12 @@ def test_user_updates_profiles_all_fails(setup_database):
             phone="", 
             country_code="", 
             gender="", 
-            session_id=session_id, 
+            authenticated_user=response_get_current_user, 
             conn=conn
         )
 
     with pytest.raises(WrongUserInputException, match=r"Phone must be between 7 and 15 digits"):
-        post_update_profile(
+        update_profile(
             cur=cur,
             first_name="",  
             last_name="", 
@@ -499,12 +498,12 @@ def test_user_updates_profiles_all_fails(setup_database):
             phone="123456", # Invalid phone
             country_code="", 
             gender="", 
-            session_id=session_id, 
+            authenticated_user=response_get_current_user, 
             conn=conn
         )
 
     with pytest.raises(WrongUserInputException, match=r"Gender must be between male, female or other"):
-        post_update_profile(
+        update_profile(
             cur=cur,
             first_name="",  
             last_name="", 
@@ -514,7 +513,7 @@ def test_user_updates_profiles_all_fails(setup_database):
             phone="",
             country_code="", 
             gender="Bee",  # Invalid gender
-            session_id=session_id, 
+            authenticated_user=response_get_current_user, 
             conn=conn
         )
 
@@ -522,6 +521,20 @@ def test_user_updates_profiles_all_success(setup_database):
     conn, cur = setup_database
 
     # PEPARE DATA
+    cur.execute("""
+            INSERT INTO settings (
+                vat, 
+                report_limitation_rows, 
+                send_email_template_background_color, 
+                send_email_template_text_align, 
+                send_email_template_border, 
+                send_email_template_border_collapse) 
+            VALUES (%s, %s, %s, %s, %s, %s)
+            RETURNING *
+            """, (25, 1000, '#19bcc8', 'right', 4, 'collapse'))
+
+    settings_row = cur.fetchone()
+
     cur.execute("""
                 INSERT INTO users (
                     first_name,
@@ -545,13 +558,15 @@ def test_user_updates_profiles_all_success(setup_database):
 
     assert session_id != None
 
+    response_get_current_user = get_current_user(session_id=session_id, cur=cur, conn=conn)
+
     # POST UPDATE PROFILE WITH VALID FIELDS 
 
-    response_post_profile = post_update_profile(cur=cur, first_name="", 
+    response_post_profile = update_profile(cur=cur, first_name="", 
                                                 last_name="", email = "galin@gmail.com", 
                                                 password_= "12345678910", address="Georgi KIrkov 56", 
                                                 phone="8947039866", country_code="+44", 
-                                                gender="male", session_id=session_id, conn=conn)
+                                                gender="male", authenticated_user=response_get_current_user['user_row']['data'], conn=conn)
 
     assert response_post_profile['updated_fields_message'] == 'email, password, address, phone, country code, gender'
 
@@ -616,7 +631,7 @@ def test_unauthenticated_user_flow(setup_database):
         # Create cart and add item
     response_add_to_cart = add_to_cart(conn=conn, cur=cur, user_id="TEST_SESSION_ID_UNAUTH_USER", 
                                         product_id=product_one_row['id'], quantity=2, 
-                                        session_cookie_id="b5fg61bgf")
+                                        authenticated_user=None)
 
         # Response message
     assert response_add_to_cart == "You successfully added item."
@@ -629,7 +644,7 @@ def test_unauthenticated_user_flow(setup_database):
 
     response_add_to_cart_again = add_to_cart(conn=conn, cur=cur, user_id="TEST_SESSION_ID_UNAUTH_USER", 
                                         product_id=product_two_row['id'], quantity=1, 
-                                        session_cookie_id="b5fg61bgf")
+                                        authenticated_user=None)
 
     assert response_add_to_cart == "You successfully added item."
 
@@ -682,7 +697,7 @@ def test_registration_user_tries_too_many_times_to_register(setup_database):
     cur.execute("INSERT INTO country_codes (name, code) VALUES (%s, %s) RETURNING *", ("Bulgaria", "+359"))
     result_country_codes = cur.fetchall()
 
-    response_get = prepare_get_registration_return_data(cur, first_captcha_number, second_captcha_number)
+    response_get = prepare_registration_data(cur, first_captcha_number, second_captcha_number)
 
     assert response_get['first_captcha_number'] == first_captcha_number
     assert response_get['second_captcha_number'] == second_captcha_number
@@ -714,7 +729,7 @@ def test_registration_user_tries_too_many_times_to_register(setup_database):
     # FIRST ATTEMPTS FAILS
 
     with pytest.raises(WrongUserInputException, match=r"Invalid CAPTCHA. Please try again"):
-        check_post_registration_fields_data(
+        registration(
             cur=cur, 
             first_name=user['first_name'], 
             last_name=user['last_name'], 
@@ -734,7 +749,7 @@ def test_registration_user_tries_too_many_times_to_register(setup_database):
     # SECOND ATTEMPTS FAILS
 
     with pytest.raises(WrongUserInputException, match=r"Invalid CAPTCHA. Please try again"):
-        check_post_registration_fields_data(
+        registration(
             cur=cur, 
             first_name=user['first_name'], 
             last_name=user['last_name'], 
@@ -754,7 +769,7 @@ def test_registration_user_tries_too_many_times_to_register(setup_database):
     # THIRD ATTEMPT IS TIMEOUT
 
     with pytest.raises(WrongUserInputException, match=r"You typed wrong captcha several times, now you have timeout " + str(10) + " minutes"):
-        check_post_registration_fields_data(
+        registration(
             cur=cur, 
             first_name=user['first_name'], 
             last_name=user['last_name'], 
@@ -783,7 +798,7 @@ def test_back_office_staff_work_flow(setup_database):
 
         # Try to log with non existing account
     with pytest.raises(WrongUserInputException, match=r"There is no registration with this staff username and password"):
-        post_staff_login(
+        staff_login(
             cur=cur, 
             username="Galin", 
             password="123456789")
@@ -792,13 +807,13 @@ def test_back_office_staff_work_flow(setup_database):
     cur.execute("INSERT INTO staff (username, password) VALUES (%s, %s)", ("Galin", "123456789"))
 
         # Log with new account
-    response_get_staff_login = post_staff_login(cur=cur, username="Galin", password="123456789")
+    response_get_staff_login = staff_login(cur=cur, username="Galin", password="123456789")
 
     assert response_get_staff_login['username'] == "Galin"
 
     # GET EXCAPTION LOGS
 
-    response_get_excaption_logs = get_error_logs(cur=cur, sort_by="id", sort_order="desc")
+    response_get_excaption_logs = prepare_error_logs_data(cur=cur, sort_by="id", sort_order="desc")
 
     assert cur.rowcount == 0
 
@@ -813,7 +828,7 @@ def test_back_office_staff_work_flow(setup_database):
 
                 """, ("example@gmail.com", "WrongUserInputException", "Invalid CAPTCHA. Please try again"))
 
-    response_get_excaption_logs = get_error_logs(cur=cur, sort_by="id", sort_order="desc")
+    response_get_excaption_logs = prepare_error_logs_data(cur=cur, sort_by="id", sort_order="desc")
 
     assert cur.rowcount == 1
 
@@ -834,7 +849,7 @@ def test_back_office_staff_work_flow(setup_database):
                 """, (25, 100, '#19bcc8', 'right', 4, 'collapse'))
     settings_row = cur.fetchone()
 
-    response_get_settings = get_settings(cur)
+    response_get_settings = prepare_settings_data(cur)
 
     assert cur.rowcount == 1
     assert response_get_settings['limitation_rows'] == 100
@@ -852,7 +867,7 @@ def test_back_office_staff_work_flow(setup_database):
                         ('captcha_timeout_minutes', 10)
                     ])
 
-    response_post_captcha_attempts = post_captcha_settings(cur=cur, new_max_attempts=3, new_timeout_minutes=11)
+    response_post_captcha_attempts = captcha_settings(cur=cur, new_max_attempts=3, new_timeout_minutes=11)
 
     assert response_post_captcha_attempts['message'] == "You updated captcha attempts. You updated timeout minutes."
 
@@ -873,7 +888,7 @@ def test_back_office_staff_work_flow(setup_database):
 
     # POST VAT FOR ALL PRODUCTS
 
-    response_post_vat = post_vat_for_all_products(cur=cur, vat_for_all_products=20)
+    response_post_vat = vat_for_all_products(cur=cur, vat_for_all_products=20)
 
     assert response_post_vat['message'] == "You changed the VAT for all products successfully"
 
@@ -945,7 +960,7 @@ def test_back_office_staff_work_flow(setup_database):
                     (order_row[0], products_rows[1]['id'], 10, products_rows[1]['price'], settings_row['vat'])
                 ])
 
-    response_post_report = post_report_sales(
+    response_post_report = report_sales(
         cur=cur, 
         date_from="2024-01-01", 
         date_to="2024-10-01", 
@@ -957,7 +972,7 @@ def test_back_office_staff_work_flow(setup_database):
 
     assert response_post_report != None
 
-    response_post_report_two = post_report_sales(
+    response_post_report_two = report_sales(
         cur=cur, 
         date_from="2024-01-01", 
         date_to="2025-10-01", 
@@ -971,7 +986,7 @@ def test_back_office_staff_work_flow(setup_database):
 
     # GET CRUD PRODUCTS
 
-    response_get_crud_products = get_crud_products(
+    response_get_crud_products = prepare_crud_products_data(
         cur=cur, 
         sort_by="id", 
         sort_order="desc", 
@@ -982,7 +997,7 @@ def test_back_office_staff_work_flow(setup_database):
 
     # GET ADD PRODUCT
 
-    response_get_add_product = get_crud_add_product(cur)
+    response_get_add_product = prepare_crud_add_product_data(cur)
 
     assert response_get_add_product['all_currencies'] != None
     assert response_get_add_product['categories'] == ['Tools']
@@ -1003,7 +1018,7 @@ def test_back_office_staff_work_flow(setup_database):
         'image' : image_file,
     }
 
-    response_post_add_product = post_crud_add_product(cur=cur, form_data=form_data, files_data=files_data)
+    response_post_add_product = crud_add_product(cur=cur, form_data=form_data, files_data=files_data)
 
     assert response_post_add_product['message'] == "Item was added successfully"
     assert response_post_add_product['new_item_row'] != None
@@ -1014,7 +1029,7 @@ def test_back_office_staff_work_flow(setup_database):
 
     # GET EDIT PRODUCT
 
-    response_get_edit_product = get_edit_product(cur=cur, product_id=products_rows[0]['id'])
+    response_get_edit_product = prepare_edit_product_data(cur=cur, product_id=products_rows[0]['id'])
 
     cur.execute("SELECT * FROM products WHERE id = %s", (products_rows[0]['id'],))
     product_one_row = cur.fetchone()
@@ -1031,7 +1046,7 @@ def test_back_office_staff_work_flow(setup_database):
         'category': 'Tools',
     }
 
-    response_post_edit_product = post_edit_product(cur=cur, form_data=form_data, files_data="", product_id=products_rows[0]['id'])
+    response_post_edit_product = edit_product(cur=cur, form_data=form_data, files_data="", product_id=products_rows[0]['id'])
 
     cur.execute("SELECT * FROM products WHERE id = %s", (products_rows[0]['id'],))
     modified_product_one = cur.fetchone()
@@ -1054,7 +1069,7 @@ def test_back_office_staff_work_flow(setup_database):
 
     # GET CRUD STAFF
 
-    response_get_crud_staff = get_crud_staff(cur)
+    response_get_crud_staff = prepare_crud_staff_data(cur)
 
     assert response_get_crud_staff['relations'] == []
 
@@ -1109,13 +1124,13 @@ def test_back_office_staff_work_flow(setup_database):
 
             """, (staff_row[0], roles_row[0][0]))
 
-    response_get_crud_staff = get_crud_staff(cur)
+    response_get_crud_staff = prepare_crud_staff_data(cur)
 
     assert response_get_crud_staff['relations'] != []
 
     # GET ADD ROLE STAFF 
 
-    response_get_add_role_staff = get_add_role_staff(cur=cur)
+    response_get_add_role_staff = prepare_add_role_staff_data(cur=cur)
 
     assert response_get_add_role_staff['staff'] != []
     assert response_get_add_role_staff['roles'] != []
@@ -1129,7 +1144,7 @@ def test_back_office_staff_work_flow(setup_database):
         'role_id': roles_row[1][1],
     }
 
-    response_post_add_staff_role = post_add_role_staff(cur=cur, form_data=form_data, files_data="")
+    response_post_add_staff_role = add_role_staff(cur=cur, form_data=form_data, files_data="")
 
     assert response_post_add_staff_role['message'] == "You successful gave a role: " + 'Editor' + " to user: " + 'Galin'
 
@@ -1140,7 +1155,7 @@ def test_back_office_staff_work_flow(setup_database):
         'password': "123456789",
     }
 
-    response_post_add_staff = post_add_staff(cur=cur, form_data=form_data, files_data="")
+    response_post_add_staff = add_staff(cur=cur, form_data=form_data, files_data="")
 
     assert response_post_add_staff['message'] == "You successful made new user with name: " + "TEST_STAFF"
 
@@ -1167,7 +1182,7 @@ def test_back_office_staff_work_flow(setup_database):
 
     # GET CRUD ORDERS 
 
-    response_get_crud_orders = get_crud_orders(
+    response_get_crud_orders = prepare_crud_orders_data(
         cur=cur, 
         sort_by="id", 
         sort_order="asc", 
@@ -1188,7 +1203,7 @@ def test_back_office_staff_work_flow(setup_database):
 
     # GET CRUD ORDERS ADD
 
-    response_get_crud_orders_add = get_crud_orders_add_order(cur)
+    response_get_crud_orders_add = prepare_crud_orders_add_order_data(cur)
 
     assert response_get_crud_orders_add['statuses'] == [['Ready for Paying']]
 
@@ -1204,7 +1219,7 @@ def test_back_office_staff_work_flow(setup_database):
         'vat': 20,
     }
 
-    response_post_crud_add_order = post_crud_orders_add_order(cur=cur, form_data=form_data, files_data="")
+    response_post_crud_add_order = crud_orders_add_order(cur=cur, form_data=form_data, files_data="")
 
     cur.execute("SELECT * FROM orders")
     all_orders = cur.fetchall()
@@ -1245,7 +1260,7 @@ def test_back_office_staff_work_flow(setup_database):
 
     order_items_row = cur.fetchall()
 
-    response_get_edit_order = get_crud_orders_edit_order(cur=cur, order_id=all_orders[0][0])
+    response_get_edit_order = prepare_crud_orders_edit_order_data(cur=cur, order_id=all_orders[0][0])
 
     assert response_get_edit_order['products_from_order'] == order_items_row
 
@@ -1256,7 +1271,7 @@ def test_back_office_staff_work_flow(setup_database):
         'order_date': datetime.now(),
     }
 
-    response_post_edit_order = post_crud_orders_edit_order(cur=cur, order_id=all_orders[0][0], form_data=form_data, files_data="")
+    response_post_edit_order = crud_orders_edit_order(cur=cur, order_id=all_orders[0][0], form_data=form_data, files_data="")
 
     assert response_post_edit_order['message'] == "Order was updated successfully with id = " + str(all_orders[0][0])
 
@@ -1278,402 +1293,435 @@ def test_back_office_staff_work_flow(setup_database):
 
     # GET CRUD USERS
 
-    response_get_crud_users = get_crud_users(cur=cur, email="", user_by_id="", status="", sort_by="id", sort_order="asc")
-
-    utils.trace("response_get_crud_users")
-    utils.trace(response_get_crud_users)
+    response_get_crud_users = prepare_crud_users_data(cur=cur, email="", user_by_id="", status="", sort_by="id", sort_order="asc")
 
     assert response_get_crud_users != None
 
->>>>>>> dev
+    # GET CRUD USERS ADD USER
 
-# def test_registartion_success(client, setup_database):
-#     # Ако не мокна изпращането на мейл се изпраща реален имейл от тест кейса
-#     with patch('project.main.send_verification_email') as mock_send_email, \
-#     patch('project.main.captcha.validate', return_value=True) as mock_validate:
-#         response=client.post('/registration', data={
-#         'first_name': 'Test',
-#         'last_name': 'User',
-#         'email': 'testuseerqq@example.com',
-#         'password': 'password123',
-#         'captcha': 'valid_captcha'
-#     })
-#         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-#         cur = conn.cursor()
-#         cur.execute("SELECT * FROM users WHERE email = %s", ('testuseerqq@example.com',))
+    response_get_crud_users_add_user = prepare_crud_users_add_user_data(cur=cur)
 
-#         row = cur.fetchone()
+    assert response_get_crud_users_add_user['statuses'] != None
 
-#         assert row is not None, "No record found for the user"
-#         assert cur.fetchone() is None, "More than one record found for the user" 
-#         assert response.status_code == 302
-#         assert url_for('verify') in response.location
+    # POST CRUD USERS ADD USER
 
-#         cur.close()
-#         conn.close()
+    form_data = {
+        'first_name': 'Galin',
+        'last_name': 'Petrov',
+        'email': 'galin@gmail.com',
+        'password': '123456789',
+        'verification_code': 'daefff4r58ea4gferg',
+        'verification_status': True,
+    }
 
-# def test_invalid_email_registration(client):
-#     with patch('project.main.captcha.validate', return_value=True) as mock_validate:
-#         response = client.post('/registration', data={
-#             'first_name': 'Test',
-#             'last_name': 'User',
-#             'email': 'notAValidEmail',
-#             'password': 'password123',
-#             'captcha': 'valid_captcha'
-#         })
-#     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-#     cur = conn.cursor()
-#     cur.execute("SELECT * FROM users WHERE email = %s", ('notAValidEmail',))
+    response_post_crud_add_user = crud_users_add_user(cur=cur, form_data=form_data, files_data="")
 
-#     row = cur.fetchone()
-#     assert row is None, "No record found for the user"
-#     assert response.status_code == 200
-#     response_data = response.data.decode('utf-8') # decode response data from bytes to str
-#     assert 'Email is not valid' in response_data
+    cur.execute("SELECT * FROM  users")
+    users_row = cur.fetchall()
+    created_user_id = users_row[1]['id']
 
-# def test_invalid_first_name_registration(client):
-#     with patch('project.main.captcha.validate', return_value=True) as mock_validate:
-#         response=client.post('/registration', data={
-#             'first_name': 'A',
-#             'last_name': 'User',
-#             'email': 'gfhdughfduhgjdf@example.com',
-#             'password': 'password123',
-#             'captcha': 'valid_captcha'
-#     })
-        
-#     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-#     cur = conn.cursor()
-#     cur.execute("SELECT * FROM users WHERE email = %s", ('gfhdughfduhgjdf@example.com',))
+    assert cur.rowcount == 2
 
-#     row = cur.fetchone()
-#     assert row is None, "No record found for the user"
-#     assert response.status_code == 200
-#     response_data = response.data.decode('utf-8') # decode response data from bytes to str
-#     assert 'First name is must be between 3 and 50 symbols' in response_data
+    assert response_post_crud_add_user['message'] == "You successfully added new user with id: " + str(created_user_id)
 
-# def test_invalid_last_name_registration(client):
-#     with patch('project.main.hash_password', return_value='hashed_password') as mock_hash_password, \
-#     patch('project.main.captcha.validate', return_value=True) as mock_validate:
-#         response = client.post('/registration', data={
-#             'first_name': 'Amber',
-#             'last_name': 'U',
-#             'email': 'gfhdughfduhgjdf@example.com',
-#             'password': 'password123',
-#             'captcha': 'valid_captcha'
-#     })
-        
-#     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-#     cur = conn.cursor()
-#     cur.execute("SELECT * FROM users WHERE email = %s", ('gfhdughfduhgjdf@example.com',))
+    # GET CRUD USERS EDIT USER
 
-#     row = cur.fetchone()
-#     assert row is None, "No record found for the user"
-#     assert response.status_code == 200
-#     response_data = response.data.decode('utf-8') # decode response data from bytes to str
-#     assert 'Last name must be between 3 and 50 symbols' in response_data
-        
-# def test_verification_email_sends_enail_successful(client):
-#     user_email = 'user@example.com'
-#     verification_code = 'dsafdsfsafasgagjyt[;h]df'
+    response_get_crud_users_edit_user = prepare_crud_users_edit_user_data(cur=cur, user_id=created_user_id)
 
-#     with app.app_context():
-#         with patch.object(mail, 'send') as mock_send:
-#             send_verification_email(user_email, verification_code)
+    assert response_get_crud_users_edit_user['first_name'] == form_data['first_name']
+    assert response_get_crud_users_edit_user['last_name'] == form_data['last_name']
+    assert response_get_crud_users_edit_user['email'] == form_data['email']
 
-#             mock_send.assert_called_once()
+    # POST CRUD USERS EDIT USER
 
-#             args, kwargs = mock_send.call_args
-#             message = args[0]
+    form_data = {
+        'first_name': 'Galinn',
+        'last_name': 'Petrovv',
+        'email': 'galinCHooo@gmail.com',
+        'verification_status': True,
+    }
 
-#             assert message.subject == 'Email Verification'
-#             assert message.recipients == [user_email]
-#             assert 'Please insert the verification code in the form: ' + verification_code
+    response_post_crud_users_edit_user = crud_users_edit_user(cur=cur, form_data=form_data, files_data="", user_id=created_user_id)
 
-# def test_hash_password_successful(client):
-#     password = '123456789'
+    cur.execute("SELECT * FROM users WHERE id = %s", (created_user_id,))
+    current_user = cur.fetchone()
 
-#     hashed_password = hash_password(password)
+    assert current_user['first_name'] == form_data['first_name']
+    assert current_user['last_name'] == form_data['last_name']
+    assert current_user['email'] == form_data['email']
 
-#     assert password != hashed_password
-#     assert bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+    assert response_post_crud_users_edit_user['message'] == "You successfully edited user with id: " + str(created_user_id)
 
-# def test_verify_get(client):
-#     response = client.get('/verify')
+    # DELETE CRUD USERS USER
 
-#     assert response.status_code == 200  
-#     assert b"Verify" in response.data  
-#     assert render_template('verify.html')
+    response_delete_crud_users = delete_crud_users_user(cur=cur, user_id=created_user_id)
 
-# def test_verify_post_successful(client, setup_database):
-#     with patch('project.main.send_verification_email') as mock_send_email, \
-#     patch('project.main.captcha.validate', return_value=True) as mock_validate:
-#         verification_code = '56156565454565644'
-#         client.post('/registration', data={
-#         'first_name': 'Test',
-#         'last_name': 'User',
-#         'email': 'alooooooo@example.com',
-#         'password': 'password123',
-#         'captcha': 'valid_captcha'
-#     })
-#         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-#         cur = conn.cursor(cursor_factory = psycopg2.extras.RealDictCursor)
+    assert response_delete_crud_users['message'] == "You successfully deleted user with id: " + str(created_user_id)
 
-#         cur.execute("UPDATE users SET verification_code = '56156565454565644' WHERE email = %s", ('alooooooo@example.com',))
-#         conn.commit()
-        
-#         responce = client.post('/verify', data = {
-#             'email': 'alooooooo@example.com',
-#             'verification_code': verification_code
-#         })
+    cur.execute("SELECT * FROM users")
+    users_row = cur.fetchall()
 
-#         cur.execute("SELECT verification_status FROM users WHERE email = %s", ('alooooooo@example.com',))
-#         conn.commit()
+    assert cur.rowcount == 1
 
-#         verification_status = cur.fetchone()['verification_status']
+    # GET TEMPLATE TABLES
 
-#         assert verification_status
-#         assert responce.status_code == 302
-#         assert url_for('login') in responce.headers['Location']
-#         cur.close()
+    cur.executemany("""
 
-# def test_login_get_successful(client, setup_database):
-#     responce = client.get('/login')
+            INSERT INTO email_template (
+                name,
+                subject,
+                body,
+                sender
+                )
+            VALUES (%s, %s, %s, %s)
 
-#     assert responce.status_code == 200
-#     assert b"Login" in responce.data
-#     assert render_template('login.html')
+            """, [
+                ("Payment Email", "Completed Payment Email", "Hello {first_name} {last_name}, you just bought: {products} and the information about the order is : {shipping_details}", "galincho112@gmail.com"),
+                ("Verification Email", "Email Verification", "Hello {first_name} {last_name} ! Please insert the verification code in the form: {verification_code}", " galincho112@gmail.com"),
+                ("Purchase Email", "Completed Purchase Email", "Hi again {first_name}  {last_name}. You just purchased: {cart} and the details you provided for shipment are: {shipping_details}","galincho112@gmail.com")
+            ])
 
-# def test_login_post_successful(client, setup_database):
-#     with patch('project.main.send_verification_email') as mock_send_email, \
-#     patch('project.main.captcha.validate', return_value=True) as mock_validate, \
-#     patch('project.main.verify_password', return_value='hashed_password') as mock_verify_password :
-#         verification_code = '561565644'
-#         client.post('/registration', data={
-#         'first_name': 'Test',
-#         'last_name': 'User',
-#         'email': 'alooo@example.com',
-#         'password': 'password123',
-#         'captcha': 'valid_captcha'
-#     })
-#         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-#         cur = conn.cursor()
+    response_get_template_tables = prepare_template_email_data(cur)
 
-#         cur.execute("UPDATE users SET verification_code = '561565644' WHERE email = %s", ('alooooooo@example.com',))
-#         conn.commit()
+    assert response_get_template_tables != None
 
-#         client.post('/verify', data = {
-#             'email': 'alooo@example.com',
-#             'verification_code': '561565644'
-#         })
+    # POST TEMPLATE TABLES
 
-#         cur.execute("UPDATE users SET verification_status = true WHERE email = %s", ('alooo@example.com',))
-#         conn.commit()
+    form_data = {
+        'subject': 'Email Verification',
+        'body': 'Hello {first_name} {last_name} ! Please insert the verification code in the form: {verification_code} FHSUOFVUHOSVHSDOIVJHSDI',
+    }
 
-#         responce = client.post('/login', data = {
-#            'email': 'alooo@example.com',
-#            'password': 'password123'
-#         })
-        
-#         assert responce.status_code == 302
-#         assert session.get('user_email') == 'alooo@example.com'
-#         assert url_for('home') in responce.location
-#         cur.close()
+    response_post_email_template = edit_email_template(cur=cur, template_name='Verification Email', form_data=form_data, files_data="")
 
-# def test_logout_get_successful(client, setup_database):
-#     with patch('project.main.verify_password', return_value='hashed_password') as mock_verify_password :
-#         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-#         cur = conn.cursor()
-#         cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", ('Mozambik', 'Mizake', 'aloooooo@example.com', '123456789', '12588523'))
-#         cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", ('12588523',))
+    cur.execute("SELECT * FROM email_template WHERE name = %s", ("Verification Email",))
+    email_template_row_verification_email = cur.fetchone()
 
-#         conn.commit()
+    assert email_template_row_verification_email['body'] == form_data['body']
 
-#         cur.close()
-#         conn.close()
+    # GET ROLE PERMISSIONS
 
-#         client.post('/login', data = {
-#             'email': 'aloooooo@example.com',
-#             'password': '123456789'
-#         })
+    # utils.trace("roles_row")
+    # utils.trace(roles_row)
+    # utils.trace("staff_row")
+    # utils.trace(staff_row)
 
-#         responce = client.get('/logout')
+    cur.executemany("""
 
-#         assert session.get('user_email') != 'aloooooo@example.com'
-#         assert url_for('home') in responce.location
-# def test_settings_get_successful(client, setup_database):
-#     with patch('project.main.verify_password', return_value=True) as mock_verify_password :
-#         prepare_settings()
+            INSERT INTO permissions (
+                permission_name,
+                interface
+                )
+            VALUES (%s, %s)
 
-#         client.post('/login', data = {
-#             'email': 'aloooo@example.com',
-#             'password': '123456789'
-#         })
+            """, [
+                ("create", "CRUD Products"),
+                ("update", "CRUD Products"),
+                ("delete", "CRUD Products"),
+                ("read", "CRUD Products"),
+                ("create", "Logs"),
+                ("update", "Logs"),
+                ("delete", "Logs"),
+                ("read", "Logs")
+            ])
 
-#         responce = client.get('/profile')
+    cur.execute("SELECT * FROM permissions")
+    permissions_row = cur.fetchall()
 
-#         assert responce.status_code == 200
-#         assert session.get('user_email') == 'aloooo@example.com'
-#         assert b'Settings' in responce.data
+    # utils.trace("permissions_row")
+    # utils.trace(permissions_row)
 
-# def test_delete_account_successful(client):
-#     responce = client.post('/delete_account')
+    cur.executemany("""
 
-#     conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-#     cur = conn.cursor()
+            INSERT INTO role_permissions (
+                role_id,
+                permission_id
+                )
+            VALUES (%s, %s)
 
-#     is_deleted = cur.execute("SELECT verification_status FROM users WHERE email = %s", ('alooooooo@example.com',))
+            """, [
+                (roles_row[0][0], permissions_row[0][0]),
+                (roles_row[0][0], permissions_row[1][0])
+            ])
 
-#     conn.commit()
+    cur.execute("SELECT * FROM role_permissions")
+    role_permissions_row = cur.fetchall()
+
+    # utils.trace("role_permissions_row")
+    # utils.trace(role_permissions_row)
+
+    cur.execute("SELECT * FROM staff_roles")
+    staff_roles_row = cur.fetchall()
+
+    # utils.trace("staff_roles_row")
+    # utils.trace(staff_roles_row)
+
+    cur.execute("SELECT DISTINCT interface FROM permissions ORDER BY interface ASC")
+    interfaces = []
+    for interface in cur.fetchall():
+        interfaces.append(interface[0])
+
+    response_get_role_permissions = prepare_role_permissions_data(cur=cur, role="role_permissions", selected_role=roles_row[0][0], interfaces=interfaces)
+
+    assert response_get_role_permissions != None
+
+    # POST ROLE PERMISSIONS
+
+    form_data = {
+        'role': '1',
+        'Logs_read': 'on',
+        'Logs_update': 'on',
+        'CRUD Products_read': 'on',
+        'CRUD Products_update': 'on',
+    }
+
+    response_post_role_permissions = role_permissions(cur=cur, role_id=roles_row[0][0], form_data=form_data, interfaces=interfaces)
+
+    assert response_post_role_permissions['message'] == f'You successfully updated permissions for role: {roles_row[0][1]}'
+
+    # POST EDIT EMAIL TABLE
+    # '#19bcc8', 'right', 4, 'collapse'
+
+    cur.execute("SELECT * FROM settings")
+    settings_row = cur.fetchall()
+
+    response_post_edit_email_table = edit_email_table(
+        cur = cur, 
+        background_color = "#19bcc7", 
+        text_align = "left", 
+        border = 5, 
+        border_collapse = "collapse")
+
+    cur.execute("SELECT * FROM settings")
+    settings_row_after_edit = cur.fetchall()
+
+    assert settings_row[0][3] != settings_row_after_edit[0][3]
+    assert settings_row[0][4] != settings_row_after_edit[0][4]
+    assert settings_row[0][5] != settings_row_after_edit[0][5]
+
+    # DOWNLOAD REPORT WITHOUT GENERATED GSON
+
+    cur.execute("SELECT * FROM orders")
+    orders_row = cur.fetchall()
+
+    form_data = {
+        'date_from': '',
+        'date_to': '',
+        'format': 'csv',
+    }
+
+    with patch('project.back_office.psycopg2.connect', return_value = conn):
+        generator = download_report(form_data=form_data)()
+
+        result = ''.join(generator)
+
+    expected_output = (
+        'Date,Order ID,Customer Name,Total Price,Status\r\n'                       # Header
+        f'{datetime.now().strftime("%Y-%m-%d")},{orders_row[0][0]},Ready for Paying,Galin,44.44\r\n'    # First row
+    )
+
+def test_custom_request_form_fields_validator():
+
+    form_data = {
+        'first_name': 'J',
+        'last_name': 'Petrov',
+        'email': 'galin@example.com',
+        'password': 'validPass123',
+        'confirm_password': 'validPass123',
+        'country_code': '+359',
+        'phone': '1234567890',
+        'gender': 'male'
+    }
+
+    path = '/registration'
+
+    url_fields_mapper = {
+        '/registration': {
+            'first_name': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 50 and re.match(r'^[A-Za-z]+$', x)), "First name must be between 3 and 50 letters and contain no special characters or digits")]},
+            'last_name': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 50 and re.match(r'^[A-Za-z]+$', x)), "Last name must be between 3 and 50 letters and contain no special characters or digits")]},
+            'email': {'type': str, 'required': True, 'conditions': [((lambda x: re.fullmatch(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b', x)), "Email is not valid")]},
+            'password': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 8 and len(x) <= 20), "Password must be between 8 and 20 symbols")]},
+            'confirm_password': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 8 and len(x) <= 20), "Password and Confirm Password fields are different")]},
+            'country_code': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 1 and len(x) <= 4), "Invalid country code")]},
+            'phone': {'type': str, 'required': True, 'conditions': [((lambda x: re.fullmatch(r'^\d{7,15}$', x)), "Phone number format is not valid. The number should be between 7 and 15 digits")]},
+            'gender': {'type': str, 'required': True, 'conditions': [((lambda x: x in ['male', 'female', 'other']), "Gender must be Male, Female, or Other")]},
+        },
+        r'/verify':{
+            'email': {'type': str, 'required': True, 'conditions': [((lambda x: re.fullmatch(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b', x)), "Email is not valid")]},
+            'verification_code': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) == 24), "Verification code is not valid")]},
+        },
+        r'/login': {
+            'email': {'type': str, 'required': True, 'conditions': [((lambda x: re.fullmatch(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b', x)), "Email is not valid")]},
+            'password': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 8 and len(x) <= 20), "Password must be between 8 and 20 symbols")]},
+        },
+        r'/update_profile': {
+            'first_name': {'type': str, 'required': False, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 50 and re.match(r'^[A-Za-z]+$', x)), "First name must be between 3 and 50 symbols")]},
+            'last_name': {'type': str, 'required': False, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 50 and re.match(r'^[A-Za-z]+$', x)), "Last name must be between 3 and 50 symbols")]},
+            'email': {'type': str, 'required': False, 'conditions': [((lambda x: re.fullmatch(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b', x)), "Email is not valid")]},
+            'password': {'type': str, 'required': False, 'conditions': [((lambda x: len(x) >= 8 and len(x) <= 20), "Password must be between 8 and 20 symbols")]},
+            'address': {'type': str, 'required': False, 'conditions': [((lambda x: len(x) >= 5 and len(x) <= 50), "Address must be between 5 and 50 symbols")]},
+            'phone': {'type': str, 'required': False, 'conditions': [((lambda x: re.fullmatch(r'^\d{7,15}$', x)), "Phone number format is not valid. The number should be between 7 and 15 digits")]},
+            'country_code': {'type': str, 'required': False, 'conditions': [((lambda x: len(x) >= 1 and len(x) <= 4), "Invalid country code")]},
+            'gender': {'type': str, 'required': False, 'conditions': [((lambda x: x == 'male' or x == 'female' or x == 'other'), "Gender must be Male of Female or Prefere not to say")]},
+        },
+        r'/cart': {
+            'email': {'type': str, 'required': True, 'conditions': [((lambda x: re.fullmatch(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b', x)), "Email is not valid")]},
+            'first_name': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 50 and re.match(r'^[A-Za-z]+$', x)), "First name must be between 3 and 50 symbols")]},
+            'last_name': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 50 and re.match(r'^[A-Za-z]+$', x)), "Last name must be between 3 and 50 symbols")]},
+            'town': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 3 and len(x) <= 20), "Town must be between 3 and 20 symbols")]},
+            'address': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 5 and len(x) <= 50), "Address must be between 5 and 50 symbols")]},
+            'country_code': {'type': str, 'required': True, 'conditions': [((lambda x: len(x) >= 1 and len(x) <= 4), "Invalid country code")]},
+            'phone': {'type': str, 'required': True, 'conditions': [((lambda x: re.fullmatch(r'^\d{7,15}$', x)), "Phone number format is not valid. The number should be between 7 and 15 digits")]},
+        }
+    }
+
+    with pytest.raises(WrongUserInputException, match=r"First name must be between 3 and 50 letters and contain no special characters or digits"):
+        check_request_form_fields_post_method(path, url_fields_mapper, form_data)
+
+    form_data = {
+        'first_name': 'Galin',
+        'last_name': 'P',
+        'email': 'galin@example.com',
+        'password': 'validPass123',
+        'confirm_password': 'validPass123',
+        'country_code': '+359',
+        'phone': '1234567890',
+        'gender': 'male'
+    }
+
+    with pytest.raises(WrongUserInputException, match=r"Last name must be between 3 and 50 letters and contain no special characters or digits"):
+        check_request_form_fields_post_method(path, url_fields_mapper, form_data)
+
+    form_data = {
+        'first_name': 'Galin',
+        'last_name': 'Petrov',
+        'email': 'galinexample.com',
+        'password': 'validPass123',
+        'confirm_password': 'validPass123',
+        'country_code': '+359',
+        'phone': '1234567890',
+        'gender': 'male'
+    }
+
+    with pytest.raises(WrongUserInputException, match=r"Email is not valid"):
+        check_request_form_fields_post_method(path, url_fields_mapper, form_data)
+
+    form_data = {
+        'first_name': 'Galin',
+        'last_name': 'Petrov',
+        'email': 'galin@example.com',
+        'password': 'www',
+        'confirm_password': 'validPass123',
+        'country_code': '+359',
+        'phone': '1234567890',
+        'gender': 'male'
+    }
+
+    with pytest.raises(WrongUserInputException, match=r"Password must be between 8 and 20 symbols"):
+        check_request_form_fields_post_method(path, url_fields_mapper, form_data)
+
+    form_data = {
+        'first_name': 'Galin',
+        'last_name': 'Petrov',
+        'email': 'galin@example.com',
+        'password': 'wwwwwwww',
+        'confirm_password': 'vali',
+        'country_code': '+359',
+        'phone': '1234567890',
+        'gender': 'male'
+    }
+
+    with pytest.raises(WrongUserInputException, match=r"Password and Confirm Password fields are different"):
+        check_request_form_fields_post_method(path, url_fields_mapper, form_data)
+
+    form_data = {
+        'first_name': 'Galin',
+        'last_name': 'Petrov',
+        'email': 'galin@example.com',
+        'password': 'ds1dsds41d5s',
+        'confirm_password': 'ds1dsds41d5s',
+        'country_code': '+359894',
+        'phone': '1234567890',
+        'gender': 'male'
+    }
+
+    with pytest.raises(WrongUserInputException, match=r"Invalid country code"):
+        check_request_form_fields_post_method(path, url_fields_mapper, form_data)
+
+    form_data = {
+        'first_name': 'Galin',
+        'last_name': 'Petrov',
+        'email': 'galin@example.com',
+        'password': 'ds1dsds41d5s',
+        'confirm_password': 'ds1dsds41d5s',
+        'country_code': '+359',
+        'phone': '123456789012345678901234567890',
+        'gender': 'male'
+    }
+
+    with pytest.raises(WrongUserInputException, match=r"Phone number format is not valid. The number should be between 7 and 15 digits"):
+        check_request_form_fields_post_method(path, url_fields_mapper, form_data)
+
+    form_data = {
+        'first_name': 'Galin',
+        'last_name': 'Petrov',
+        'email': 'galin@example.com',
+        'password': 'ds1dsds41d5s',
+        'confirm_password': 'ds1dsds41d5s',
+        'country_code': '+359',
+        'phone': '1234567890',
+        'gender': 'bee'
+    }
+
+    with pytest.raises(WrongUserInputException, match=r"Gender must be Male, Female, or Other"):
+        check_request_form_fields_post_method(path, url_fields_mapper, form_data)
+
+    form_data = {
+        'first_name': "",
+        'last_name': 'Petrov',
+        'email': 'galin@example.com',
+        'password': 'ds1dsds41d5s',
+        'confirm_password': 'ds1dsds41d5s',
+        'country_code': '+359',
+        'phone': '1234567890',
+        'gender': 'bee'
+    }
+
+    with pytest.raises(WrongUserInputException, match=r"first_name is required"):
+        check_request_form_fields_post_method(path, url_fields_mapper, form_data)
+
+    path = '/verify'
+
+    form_data = {
+        'email': 'galinexample.com',
+        'verification_code': '123456789ghjklazerty123',
+    }
+
+    with pytest.raises(WrongUserInputException, match=r"Email is not valid"):
+        check_request_form_fields_post_method(path, url_fields_mapper, form_data)
+
+    form_data = {
+        'email': 'galin@example.com',
+        'verification_code': '123456789ghjklazerty',
+    }
+
+    with pytest.raises(WrongUserInputException, match=r"Verification code is not valid"):
+        check_request_form_fields_post_method(path, url_fields_mapper, form_data)
+
+    path = '/login'
+
+    form_data = {
+        'email': 'galinexample.com',
+        'password': '123456789',
+    }
+
+    with pytest.raises(WrongUserInputException, match=r"Email is not valid"):
+        check_request_form_fields_post_method(path, url_fields_mapper, form_data)
     
-#     assert is_deleted == None
-#     assert session.get('user_email') != 'alooooooo@example.com'
-#     url_for('login') in responce.location
+    form_data = {
+        'email': 'galin@example.com',
+        'password': '1234567',
+    }
 
-#     cur.close()
-#     conn.close()
-
-# def test_delete_account_not_successful(client):
-#     client.get('/logout')
-#     responce = client.post('/delete_account')
-
-#     assert responce.status_code == 200
-#     # assert 'method_not_allowed' in responce.headers['Location'] 
-
-# def test_settings_get_not_successful(client):
-#     client.get('/logout')
-#     responce = client.get('/profile')   
-
-#     assert responce.status_code == 302
-#     assert '/login' in responce.headers['Location']
-
-# def prepare_settings():
-#         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-#         cur = conn.cursor()
-#         cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code) VALUES (%s, %s, %s, %s, %s)", ('Mozambik', 'Mizake', 'aloooo@example.com', '123456789', '12588523'))
-#         cur.execute("UPDATE users SET verification_status = true WHERE verification_code = %s", ('12588523',))
-
-#         conn.commit()
-
-#         cur.close()
-#         conn.close()
-
-# def test_update_settings_successful(client):
-#     with patch('project.main.verify_password') as mock_verify_password:
-#         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-#         cur = conn.cursor()
-#         cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code, verification_status) VALUES (%s, %s, %s, %s, %s, %s)", ('Jonni', 'Sins', 'keleme@abv.bg', '123456789', '12588523', 'true'))
-#         conn.commit()
-
-#         client.post('/login', data={
-#            'email': 'keleme@abv.bg',
-#             'password': '123456789'
-#         })
-
-#         assert session.get('user_email') == 'keleme@abv.bg'
-
-#         cur.execute("SELECT first_name FROM users WHERE email = %s", ('keleme@abv.bg',))
-#         first_name = cur.fetchone()[0]
-#         cur.execute("SELECT last_name FROM users WHERE email = %s", ('keleme@abv.bg',))
-#         last_name = cur.fetchone()[0]
-#         cur.execute("SELECT password FROM users WHERE email = %s", ('keleme@abv.bg',))
-#         password_ = cur.fetchone()[0]
-
-#         responce = client.post('/update_profile', data = {
-#             'first-name': 'UPDATE',
-#             'last-name': 'SETTINGS',
-#             'email': 'UPDATEEMAIL@GMAIL.COM',
-#             'password': '123456'
-#         })   
-
-#         cur.execute("SELECT first_name FROM users WHERE email = %s", ('UPDATEEMAIL@GMAIL.COM',))
-#         changed_first_name = cur.fetchone()[0]
-#         cur.execute("SELECT last_name FROM users WHERE email = %s", ('UPDATEEMAIL@GMAIL.COM',))
-#         changed_last_name = cur.fetchone()[0]
-#         cur.execute("SELECT password FROM users WHERE email = %s", ('UPDATEEMAIL@GMAIL.COM',))
-#         changed_password = cur.fetchone()[0]
-
-#         assert session.get('user_email') == 'UPDATEEMAIL@GMAIL.COM'  
-#         assert first_name != changed_first_name
-#         assert last_name != changed_last_name
-#         assert password_ != changed_password
-#         assert '/home' in responce.headers['Location']
-
-# def test_home_authenticated(client):
-#     with client.session_transaction() as sess:
-#         sess['user_email'] = 'test@example.com'
-    
-#     response = client.get('/home')
-
-#     assert response.status_code == 200
-#     assert b'Home Page' in response.data
-
-# def test_home_not_authenticated(client):
-#     response = client.get('/home', follow_redirects=True)
-
-#     assert response.status_code == 200
-#     # assert response.location == 'http://localhost/login'
-
-# def test_recover_password_successful(client):
-#     with patch('project.main.send_recovey_password_email') as mock_send_recovery_password:
-#         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-#         cur = conn.cursor()
-#         cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code, verification_status) VALUES (%s, %s, %s, %s, %s, %s)", ('Jonni', 'Sins', 'illbe@abv.bg', '123456789', '12588523', 'true'))
-#         conn.commit()
-
-#         cur.execute("SELECT password FROM users WHERE email = %s", ('illbe@abv.bg',))
-#         initial_password = cur.fetchone()[0]
-#         conn.commit()
-
-#         responce = client.post('/recover_password', data = {
-#             'recovery_email': 'illbe@abv.bg'
-#         })
-        
-#         cur.execute("SELECT password FROM users WHERE email = %s", ('illbe@abv.bg',))
-#         changed_password = cur.fetchone()[0]
-
-#         assert responce.status_code == 302
-#         assert initial_password!= changed_password
-#         assert '/login' in responce.headers['Location']
-
-# def test_recover_password_sends_new_password_successful(client):
-#     user_email = 'user@example.com'
-#     new_passowrd = 'dsafdsfsafasgagjyt[;h]df'
-
-#     with app.app_context():
-#         with patch.object(mail, 'send') as mock_send:
-#             send_recovey_password_email(user_email, new_passowrd)
-
-#             mock_send.assert_called_once()
-
-#             args, kwargs = mock_send.call_args
-#             message = args[0]
-
-#             assert message.subject == 'Recovery password'
-#             assert message.recipients == [user_email]
-#             assert 'Your recovery password: ' + new_passowrd
-
-# def test_resend_verf_code_successful(client):
-#     with patch('project.main.send_verification_email') as mock_send_email:
-#         conn = psycopg2.connect(dbname=database, user=user, password=password, host=host)
-#         cur = conn.cursor()
-#         cur.execute("INSERT INTO users (first_name, last_name, email, password, verification_code, verification_status) VALUES (%s, %s, %s, %s, %s, %s)", ('Pedel', 'Sinsssss', 'ifabe@abv.bg', '123456789', '12588523', 'true'))
-#         conn.commit()
-
-#         cur.execute("SELECT verification_code FROM users WHERE email = %s", ('ifabe@abv.bg',))
-#         initial_verification_code = cur.fetchone()[0]
-#         conn.commit()
-
-#         responce = client.post('/resend_verf_code', data = {
-#             'resend_verf_code': 'ifabe@abv.bg'
-#         })
-
-#         cur.execute("SELECT verification_code FROM users WHERE email = %s", ('ifabe@abv.bg',))
-#         changed_verification_code = cur.fetchone()[0]
-
-#         assert responce.status_code == 302
-#         assert initial_verification_code != changed_verification_code
-<<<<<<< HEAD
-#         assert '/verify' in responce.headers['Location']
-=======
-#         assert '/verify' in responce.headers['Location']
->>>>>>> dev
+    with pytest.raises(WrongUserInputException, match=r"Password must be between 8 and 20 symbols"):
+        check_request_form_fields_post_method(path, url_fields_mapper, form_data)
