@@ -922,29 +922,8 @@ def user_orders_handler(conn, cur, authenticated_user):
 
         query += f" ORDER BY o.order_{sort_by} {sort_order}  LIMIT 100; "
 
-        cur_name = "order_cursor"
-        cur.execute(f"DECLARE {cur_name} SCROLL CURSOR FOR {query}", params)
-
-        cur.execute("FETCH FORWARD 50 FROM order_cursor")
-
-        fetch_size = 50
-
-        def fetch_orders():
-            while True:
-                cur.execute(f"FETCH FORWARD {fetch_size} FROM {cur_name}")
-                batch = cur.fetchall()
-
-                if not batch:
-                    break
-
-                for row in batch:
-                    yield row
-
-            cur.execute(f"CLOSE {cur_name}") 
-
-        orders_generator = fetch_orders()
-
-        orders = list(orders_generator)
+        cur.execute(query, params)
+        orders = cur.fetchall()
 
         cur.execute("SELECT first_name, last_name FROM users WHERE email = %s", (authenticated_user['user_row']['data'],))
         user_details = cur.fetchone()

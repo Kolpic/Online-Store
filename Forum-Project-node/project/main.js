@@ -1,31 +1,30 @@
+const crypto = require('crypto');
 const pool = require('./db');
 const express = require('express');
 const utils = require('./utils');
-// const { AssertDev, AssertUser, AsserPeer } = require('./utils');
-// const { WrongUserInputException, DevException, PeerException } = require('./exceptions');
 const front_office = require('./front_office')
+const { WrongUserInputException } = require('./exceptions')
 
 const router = express.Router();
 
 console.log("Pool imported in main.js:");  
 
 const urlToFunctionMapFrontOffice = {
-    '/registration': registrationHandler,
-    // '/refresh_captcha': refreshCaptchaHandler,
-    // '/verify': verifyHandler,
-    // '/login': loginHandler,
-    // '/home': homeHandler,
-    // '/logout': logoutHandler,
+    GET: {
+        '/registration': getRegistrationHandler,
+    },
+    POST: {
+        '/registration': postRegistrationHandler,
+    }
 };
 
-function mapFunction(url, isBackOffice = false) {
-	const map = isBackOffice ? urlToFunctionMapBackOffice : urlToFunctionMapFrontOffice;
-    return map[url];
-}
-
-
 function mapUrlToFunction(req) {
-    return urlToFunctionMapFrontOffice[req.path];
+    const methodMap = urlToFunctionMapFrontOffice[req.method];
+    if (methodMap) {
+        return methodMap[req.path];
+    } else {
+        utils.AssertUser(false, "Invalid url")
+    };
 }
 
 router.use(async (req, res, next) => {
@@ -34,61 +33,63 @@ router.use(async (req, res, next) => {
 	let client;
 	try {
 		client = await pool.connect();
-
-		console.log("ENTERED IN TRY CATCH");
-
 		await client.query('BEGIN');
-
-		// const sessionID = req.cookies['session_id'];
-        // let authenticatedUser = await getCurrentUser(sessionID);
-        
-        // let isBackOffice = false;
-        // const handler = mapFunction(req.path, isBackOffice);
-
         let handler = mapUrlToFunction(req);
-
-        utils.AssertUser(handler, "Invalid url");
-
         await handler(req, res, next, client);
-
         await client.query('COMMIT');
-
 	} catch (error) {
-
-		console.error(`Error processing request for ${req.path}:`, error);
-		res.status(500).send('Internal Server Error');
-
 		await client.query('ROLLBACK');
+        if (error instanceof WrongUserInputException) {
+            return res.status(400).json({error: error.message});
+        } else {
+            return res.status(500).json({error: 'Internal Server Error'});
+        }
 
 	} finally {
-        client.release();
+        if (client) {
+            client.release();
+        }
     }
 });
 
-async function registrationHandler(req, res, next, client) {
+async function getRegistrationHandler(req, res, next, client) {
 	let user_ip = req.ip;
 
-	if (req.method == 'GET') {
-		let firstCaptchaNumber = Math.floor(Math.random() * 101);
-        let secondCaptchaNumber = Math.floor(Math.random() * 101);
+	let firstCaptchaNumber = Math.floor(Math.random() * 101);
+    let secondCaptchaNumber = Math.floor(Math.random() * 101);
 
-        let preparedData = await front_office.prepareRegistrationData(client=client, firstCaptchaNumber=firstCaptchaNumber, secondCaptchaNumber=secondCaptchaNumber);
-
-        return res.render('registration', {
-            country_codes: preparedData.country_codes,
-            // recovery_data: "",
-            captcha: {
-                first: preparedData.first_captcha_number,
-                second: preparedData.second_captcha_number
-            },
-            captcha_id: preparedData.captcha_id
-        });
-
-	} else if (req.method == 'POST') {
-
-	} else {
-		utils.AssertUser(false, "Invalid method");
-	}
+    let preparedData = await front_office.prepareRegistrationData(client=client, firstCaptchaNumber=firstCaptchaNumber, secondCaptchaNumber=secondCaptchaNumber);
+    return res.json({
+        country_codes: preparedData.country_codes,
+        captcha: {
+            first: preparedData.first_captcha_number,
+            second: preparedData.second_captcha_number
+        },
+        captcha_id: preparedData.captcha_id
+    });
 };
 
-module.exports = router;
+async function postRegistrationHandler(req, res, next, client) {
+    const user_ip = req.ip;
+    const { first_name, last_name, email, password, confirm_password, address, country_code, phone, gender, captcha, captcha_id } = req.body;
+
+    const hashed_password = await utils.hashPassword(password);
+    const verification_code = crypto.randomBytes(24).toString('hex');
+
+    await front_office.registration(client, {
+            first_name, last_name, email, password, confirm_password, 
+            phone, gender, captcha_id, captcha, user_ip, 
+            hashed_password, verification_code, country_code, address
+        });
+
+    return res.status(201).json({ 
+        message: "User registered successfully. Please verify your email to complete the registration.", 
+        redirect_url: '/verify.html'
+    });
+}
+
+module.exports = {
+    router,
+    getRegistrationHandler,
+    postRegistrationHandler,
+};

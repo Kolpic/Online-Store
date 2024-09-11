@@ -1,3 +1,5 @@
+const bcrypt = require('bcrypt');
+
 const { DevException, WrongUserInputException, PeerException } = require('./exceptions');
 
 function AssertDev(condition, message) {
@@ -18,8 +20,14 @@ function AssertPeer(condition, message) {
     }
 }
 
+async function hashPassword(password) {
+    const saltRounds = 10;
+    return await bcrypt.hash(password, saltRounds);
+}
+
 module.exports = {
     AssertDev,
     AssertUser,
     AssertPeer,
+    hashPassword,
 }

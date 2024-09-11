@@ -129,6 +129,14 @@ def prepare_home_data(cur, sort_by, sort_order, products_per_page, page, offset,
         query_params.append(f"%{product_category}%")
 
     if price_min and price_max:
+        price_min = price_min - (price_min * float(20 / 100))
+        price_max = price_max - (price_max * float(20 / 100))
+
+        utils.trace("price_min")
+        utils.trace(price_min)
+        utils.trace("price_max")
+        utils.trace(price_max)
+
         price_filter = " AND price BETWEEN %s AND %s"
         query_params.extend([price_min, price_max])
 

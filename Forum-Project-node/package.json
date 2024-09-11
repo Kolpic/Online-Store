@@ -4,15 +4,24 @@
   "description": "",
   "main": "server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test:unit": "jest --testPathPattern=unit/",
+    "test:api": "jest --testPathPattern=api/",
+    "test:all": "jest --testPathPattern=unit/ --testPathPattern=api/",
+    "coverage": "jest --coverage",
+    "test:coverage": "npm run test:all && npm run coverage"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "bcrypt": "^5.1.1",
     "ejs": "^3.1.10",
     "express": "^4.19.2",
     "nodemailer": "^6.9.14",
     "pg": "^8.12.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0",
+    "supertest": "^7.0.0"
   }
 }

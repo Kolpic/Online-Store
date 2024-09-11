@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Register</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet"/>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+</head>
+<style>
+/* Custom styling for Select2 container */
+.select2-container--default .select2-selection--single {
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    height: calc(2.25rem + 2px);
+    padding: 0.375rem 0.75rem;
+}
+
+/* Style for the dropdown arrow */
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: calc(2.25rem + 2px);
+    right: 1.25rem;
+}
+
+/* Customize the search input field inside the dropdown */
+.select2-container--default .select2-search--dropdown .select2-search__field {
+    border: none;
+}
+
+/* Customizing the dropdown items */
+.select2-container--default .select2-results>.select2-results__options {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* Styles for highlighting selected and hovered items */
+.select2-container--default .select2-results__option[aria-selected=true],
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #007bff;
+    color: white;
+}
+
+/* Style adjustments for focus state */
+.select2-container--default .select2-selection--single:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+
+/* Style for red asterisk */
+.required-field::after {
+    content: " *";
+    color: red;
+}
+</style>
+<body>
+    <div class="container">
+        <h2>Register</h2>
+
+        <div id="error-message" class="alert alert-danger d-none"></div>
+
+        <form id="myForm" method="POST" action="/registration">
+
+            <div class="form-group">
+                <label for="first_name" class="required-field">First Name</label>
+                <input type="text" class="form-control" id="first_name" name="first_name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="last_name" class="required-field">Last Name</label>
+                <input type="text" class="form-control" id="last_name" name="last_name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="email" class="required-field">Email</label>
+                <input type="email" class="form-control" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password" class="required-field">Password</label>
+                <input type="password" class="form-control" id="password" name="password" required>
+            </div>
+
+            <div class="form-group">
+                <label for="confirm_password" class="required-field">Confirm Password</label>
+                <input type="password" class="form-control" id="confirm_password" name="confirm_password" required>
+            </div>
+
+            <div class="form-group">
+                <label for="address">Address</label>
+                <input type="text" class="form-control" id="address" name="address">
+            </div>
+
+            <div class="form-group">
+                <label for="phone" class="required-field">Phone Number: select country code e.g(+359), type phone number in format 894703986</label>
+                <div class="input-group">
+                    <select class="custom-select" id="country_code" name="country_code" required>
+                        <option value="">Select a country</option>
+                    </select>
+                    <input type="tel" class="form-control" id="phone" name="phone" placeholder="Enter phone number without the country code" required>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="gender" class="required-field">Gender:</label>
+                <select name="gender" id="gender">
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Prefer not to say</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="captcha" class="required-field">Captcha</label>
+
+                <p>Solve the following: <span id="first_number"></span> + <span id="second_number"></span> = ?</p>
+
+                <button type="button" id="refresh_captcha" class="btn btn-info">Refresh Captcha</button>
+                <input type="hidden" name="captcha_id" id="captcha_id">
+
+                <br>
+                <br>
+
+                <input type="text" class="form-control" id="captcha" name="captcha" placeholder="Enter the sum" required>
+
+            </div>
+            <button type="submit" class="btn btn-primary">Register</button>
+        </form>
+
+    </div>
+    <script>
+    $(document).ready(function() {
+        // Fetch the data from the backend on page load
+        $.getJSON('/registration', function(data) {
+            console.log(data)
+
+            // Populate the country_code select element with the country data
+            data.country_codes.forEach(function(country) {
+                $('#country_code').append(new Option(country.name + " (" + country.code + ")", country.code));
+            });
+
+            // Initialize Select2 on the country_code select element
+            $('#country_code').select2({
+                placeholder: "Select a country",
+                allowClear: true
+            });
+
+            // Set the captcha fields with the data from the backend
+            $('#first_number').text(data.captcha.first);
+            $('#second_number').text(data.captcha.second);
+            $('#captcha_id').val(data.captcha_id);
+
+        }).fail(function() {
+            displayErrorMessage('Error: Unable to fetch initial data.');
+        });
+
+        // Handle captcha refresh
+        $('#refresh_captcha').click(function() {
+            $.getJSON('/refresh_captcha', function(data) {
+                $('#first_number').text(data.captcha.first);
+                $('#second_number').text(data.captcha.second);
+                $('#captcha_id').val(data.captcha_id);
+            }).fail(function() {
+                displayErrorMessage('Error: Unable to fetch new captcha.');
+            });
+        });
+
+        // Handle form submission
+         $('#myForm').submit(function(event) {
+            event.preventDefault();
+
+            // Clear any existing error message
+            clearErrorMessage();
+
+            $.post('/registration', $(this).serialize(), function(response) {
+                if (response.message === "User registered successfully. Please verify your email to complete the registration." && response.redirect_url) {
+                    sessionStorage.setItem('registrationMessage', response.message);
+                    window.location.href = response.redirect_url;
+                } else {
+                    displayErrorMessage('Registration failed. Please try again.');
+                }
+            }).fail(function(xhr) {
+                // Display error message returned from the backend
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    displayErrorMessage(xhr.responseJSON.error);
+                } else {
+                    displayErrorMessage('Error: Unable to register.');
+                }
+            });
+        });
+
+        // Function to display error message dynamically
+        function displayErrorMessage(message) {
+            $('#error-message').removeClass('d-none').text(message);
+        }
+
+        // Function to clear error message
+        function clearErrorMessage() {
+            $('#error-message').addClass('d-none').text('');
+        }
+    });
+    </script>
+</body>
+</html>
