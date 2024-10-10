@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "description": "describes properties required to register a user",
+  "type": "object",
+  "properties": {
+    "first_name": { 
+      "type": "string", 
+      "minLength": 3, 
+      "maxLength": 50,
+      "errorMessage": { 
+        "minLength": "First name must be at least 3 symbols long", 
+        "maxLength": "First name must be under 50 symbols long" 
+      }
+    },
+    "last_name": { 
+      "type": "string", 
+      "minLength": 3, 
+      "maxLength": 50,
+      "errorMessage": { 
+        "minLength": "Last name must be at least 3 symbols long",
+        "maxLength": "Last name must be under 50 symbols long"
+      }
+    },
+    "email": { 
+      "type": "string", 
+      "pattern": "^\\S+@\\S+\\.\\S+$", 
+      "errorMessage": { 
+        "pattern": "Invalid email format" 
+      } 
+    },
+    "password": { 
+      "type": "string", 
+      "minLength": 7, 
+      "maxLength": 20,
+      "errorMessage": { 
+        "minLength": "Password must be at least 7 symbols long",
+        "maxLength": "Password must be under 20 symbols long"
+      }
+    },
+    "confirm_password": { 
+      "type": "string", 
+      "minLength": 7, 
+      "maxLength": 20,
+      "errorMessage": { 
+        "minLength": "Confirm Password must be at least 7 symbols long",
+        "maxLength": "Confirm password must be from 7 to 20 symbols long" 
+      }
+    },
+    "address": { 
+      "type": "string", 
+      "nullable": true 
+    },
+    "country_code": { 
+      "type": "string", 
+      "minLength": 1 ,
+      "errorMessage": { 
+        "minLength": "Invalid country code"
+      }
+    },
+    "phone": { 
+      "type": "string", 
+      "pattern": "^\\d{7,15}$", 
+      "errorMessage": { 
+        "pattern": "Phone number should have 7 to 15 digits" 
+      } 
+    },
+    "gender": { 
+      "type": "string", 
+      "enum": ["","male", "female", "other"], 
+      "errorMessage": { 
+        "enum": "Gender must be Empty, Male, Female, or Prefer not to say" 
+      } 
+    },
+    "captcha": { 
+      "type": "string", 
+      "minLength": 1,
+      "errorMessage": { 
+        "minLength": "Captcha must be at least 1 symbol long" 
+      } 
+    },
+    "captcha_id": { 
+      "type": "string", 
+      "minLength": 1 
+    }
+  },
+  "required": ["first_name", "last_name", "email", "password", "confirm_password", "phone", "captcha", "captcha_id", "country_code"],
+  "additionalProperties": false
+}

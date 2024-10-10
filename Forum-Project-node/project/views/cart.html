@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Your Cart</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet"/>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+</head>
+<style>
+/* Custom styling for Select2 container */
+.select2-container--default .select2-selection--single {
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    height: calc(2.25rem + 2px); /* Align height with Bootstrap's form controls */
+    padding: 0.375rem 0.75rem;
+}
+
+/* Style for the dropdown arrow */
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: calc(2.25rem + 2px);
+    right: 1.25rem; /* Adjust to fit the design better */
+}
+
+/* Customize the search input field inside the dropdown */
+.select2-container--default .select2-search--dropdown .select2-search__field {
+    border: none;
+}
+
+/* Customizing the dropdown items */
+.select2-container--default .select2-results>.select2-results__options {
+    max-height: 200px; /* Control the max height of dropdown */
+    overflow-y: auto;
+}
+
+/* Styles for highlighting selected and hovered items */
+.select2-container--default .select2-results__option[aria-selected=true],
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #007bff; /* Bootstrap primary color */
+    color: white;
+}
+
+/* Style adjustments for focus state */
+.select2-container--default .select2-selection--single:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+</style>
+<body>
+
+    <div class="container mt-5">
+
+        <div id="header"></div>
+
+        <div id="error-message" class="alert alert-danger d-none"></div>
+
+        <h2>Your Cart</h2>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Product Id</th>
+                    <th>Product Name</th>
+                    <th>Quantity</th>
+                    <th class="text-right">Price (Per Item with VAT)</th>
+                    <th class="text-right">Total Price With VAT</th>
+                    <th>Remove</th>
+                </tr>
+            </thead>
+            <tbody id="cart-items">
+                <!-- Items will be dynamically loaded here -->
+            </tbody>
+        </table>
+
+        <h2>Shipping Details</h2>
+        <form id="shipping-form">
+            <div class="form-group">
+                <label for="email">Email Address:</label>
+                <input type="email" id="email" name="email" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="first_name">First Name:</label>
+                <input type="text" id="first_name" name="first_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="last_name">Last Name:</label>
+                <input type="text" id="last_name" name="last_name" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="town">Town:</label>
+                <input type="text" id="town" name="town" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="address">Address for Shipping:</label>
+                <input type="text" id="address" name="address" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label for="phone">Phone Number:</label>
+                <div class="input-group">
+                    <select class="custom-select" id="country_code" name="country_code" required></select>
+                    <input type="tel" class="form-control" id="phone" name="phone" placeholder="Enter phone number" required>
+                </div>
+            </div>
+            <button type="submit" class="btn btn-primary">Proceed to Payment</button>
+        </form>
+    </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+    fetchHeaderData();
+    fetch('/cart')
+        .then(response => response.json())
+        .then(data => {
+            console.log(data);
+            if (data.cartData && data.cartData.cartItems && data.cartData.cartItems.length > 0) {
+                populateCart(data.cartData);
+                populateShippingDetails(data.cartData);
+            } else {
+                displayEmptyCartMessage();
+            }
+        })
+        .catch(error => console.error('Error fetching cart data:', error));
+    });
+
+    function displayEmptyCartMessage() {
+        const cartItemsTable = document.getElementById('cart-items');
+        cartItemsTable.innerHTML = `<tr>
+            <td colspan="6" class="text-center">There are no items in your cart.</td>
+        </tr>`;
+    }
+
+    function populateCart(cartData) {
+        const cartItems = cartData.cartItems;
+        let totalSum = cartData.totalSum;
+        let totalSumWithVat = cartData.totalSumWithVat;
+        let symbol = cartData.cartItems[0].symbol;
+
+        const cartItemsTable = document.getElementById('cart-items');
+
+        cartItems.forEach(item => {
+            const itemTotalWithVAT = (parseFloat(item.price) + (parseFloat(item.price) * parseFloat(item.vat) / 100)) * item.quantity;
+            
+            cartItemsTable.innerHTML += `
+                <tr>
+                    <td>${item.id}</td>
+                    <td>${item.name}</td>
+                    <td>
+                        <input type="number" min="1" class="form-control quantity" data-item-id="${item.id}" value="${item.quantity}">
+                    </td>
+                    <td class="text-right">${(parseFloat(item.price) + (parseFloat(item.price) * parseFloat(item.vat) / 100)).toFixed(2)} ${item.symbol}</td>
+                    <td class="text-right">${itemTotalWithVAT.toFixed(2)} ${item.symbol}</td>
+                    <td>
+                        <button class="btn btn-danger btn-sm" data-item-id="${item.id}">Remove</button>
+                    </td>
+                </tr>
+            `;
+        });
+
+        cartItemsTable.innerHTML += `
+            <tr>
+                <td colspan="4" class="text-right"><strong>Total Sum Without VAT:</strong></td>
+                <td class="text-right">${totalSum.toFixed(2)} ${symbol}</td>
+            </tr>
+            <tr>
+                <td colspan="4" class="text-right"><strong>Total Sum With VAT:</strong></td>
+                <td class="text-right">${totalSumWithVat.toFixed(2)} ${symbol}</td>
+            </tr>
+        `;
+    }
+
+    function populateShippingDetails(cartData) {
+        const countryCodes = cartData.countryCodes;
+        const countryCodeSelect = document.getElementById('country_code');
+        
+        countryCodes.forEach(code => {
+            const option = document.createElement('option');
+            option.value = code.code;
+            option.textContent = `${code.name} (${code.code})`;
+            countryCodeSelect.appendChild(option);
+        });
+    }
+
+    $(document).on('click', '.btn-danger', function() {
+    const itemId = $(this).data('item-id');  // Fetch the product id from data attribute
+    if (!itemId) {
+        console.error('Item ID is not defined.');
+        return;  // Exit if itemId is not defined
+    }
+
+    fetch('/removeFromCart', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ itemId: itemId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(data.message);
+            location.reload();  // Reload the page to refresh the cart
+        } else {
+            alert('Failed to remove item.');
+        }
+    })
+    .catch(error => {
+        console.error('Error removing item:', error); // Log any errors
+    });
+});
+
+$(document).on('change', '.quantity', function() {
+    const itemId = $(this).data('item-id');
+    const newQuantity = parseFloat($(this).val());
+    const oldQuantity = parseFloat($(this).data('old-quantity') || 0);
+
+    if (newQuantity !== oldQuantity) {
+        $.ajax({
+            url: '/updateCartQuantity',
+            method: 'POST',
+            data: {
+                itemId: itemId,
+                quantity: newQuantity
+            },
+            success: function(response) {
+                if (response.success) {
+                    console.log(response);
+                    // Update line total and VAT
+                    const pricePerItem = response.price_per_item;
+                    const newLineTotal = pricePerItem * newQuantity;
+                    
+                    $(`#total-${itemId}`).text(newLineTotal.toFixed(2));
+                    $(`#price-without-vat-${itemId}`).text(pricePerItem.toFixed(2));
+
+                    // Recalculate totals for the entire cart
+                    let totalSumWithVAT = 0;
+                    $('span[id^="total-"]').each(function() {
+                        totalSumWithVAT += parseFloat($(this).text());
+                    });
+
+                    let totalSumWithoutVAT = 0;
+                    $('[id^="price-without-vat"]').each(function() {
+                        totalSumWithoutVAT += parseFloat($(this).text());
+                    });
+
+                    // Update total sums
+                    $('#total-sum').text(totalSumWithoutVAT.toFixed(2) + ' лв.');
+                    $('#total-sum-vat').text(totalSumWithVAT.toFixed(2) + ' лв.');
+                    $('#vat').text((totalSumWithVAT - totalSumWithoutVAT).toFixed(2) + ' лв.');
+
+                    // Store the new quantity
+                    $(`.quantity[data-item-id=${itemId}]`).data('old-quantity', newQuantity);
+                    location.reload();
+                } else {
+                    alert('Failed to update cart. Please try again!');
+                }
+            }
+        });
+    }
+});
+
+    async function handleLogout() {
+        try {
+            const response = await fetch('/logout', {
+                method: 'GET',
+                credentials: 'include'
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                sessionStorage.setItem('verifyMessage', "Successfully logged out");
+                window.location.href = result.redirectUrl;
+            } else {
+                alert('Error logging out: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+
+    async function fetchHeaderData() {
+            const response = await fetch('/header');
+            const responseData = await response.json();
+            const data = responseData.userInformation;
+
+            console.log(data);
+
+            const headerHtml = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <p class="mb-0">${data.email || ''}</p>
+                    <div class="d-flex align-items-center">
+                        <a href="/home.html" class="btn btn-primary mr-3">Home</a>
+                        ${data.email ? `
+                            <a id="logoutButton" href="/logout" class="btn btn-danger mr-3">Logout</a>
+                            <a href="/profile.html" class="mr-3"><i class="bi bi-gear" style="font-size: 2rem; color: black;"></i></a>
+                            <a href="/user_orders" class="mr-3" style="font-size: 2rem; color: black;"><i class="bi bi-clipboard-check"></i></a>
+                        ` : `
+                            <a href="/login.html" class="btn btn-primary mr-3">Login</a>
+                        `}
+                    </div>
+                </div>`;
+            document.getElementById('header').innerHTML = headerHtml;
+
+            // Bind the event listener after the content is loaded
+            const logoutButton = document.querySelector('#logoutButton');
+            if (logoutButton) {
+                logoutButton.addEventListener('click', handleLogout);
+            }
+        }
+
+</script>
+</body>
+</html>

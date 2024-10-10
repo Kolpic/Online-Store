@@ -60,7 +60,7 @@
 
         <div id="error-message" class="alert alert-danger d-none"></div>
 
-        <form id="myForm" method="POST" action="/registration">
+        <form id="myForm">
 
             <div class="form-group">
                 <label for="first_name" class="required-field">First Name</label>
@@ -103,8 +103,9 @@
             </div>
 
             <div class="form-group">
-                <label for="gender" class="required-field">Gender:</label>
+                <label for="gender">Gender:</label>
                 <select name="gender" id="gender">
+                    <option value=""></option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                     <option value="other">Prefer not to say</option>
@@ -128,11 +129,24 @@
         </form>
 
     </div>
+    <script  defer src="/ajv.js" type="module"></script>
+
     <script>
+    let validate;
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        const Ajv = window.Ajv;
+        const ajv = new Ajv({ allErrors: true, strict: false });
+        window.ajvErrors(ajv);
+
+        let userSchemaResponse = await fetch('/registration.json');
+        let userSchema = await userSchemaResponse.json();
+        validate = ajv.compile(userSchema);
+    });
+
     $(document).ready(function() {
         // Fetch the data from the backend on page load
         $.getJSON('/registration', function(data) {
-            console.log(data)
 
             // Populate the country_code select element with the country data
             data.country_codes.forEach(function(country) {
@@ -157,8 +171,8 @@
         // Handle captcha refresh
         $('#refresh_captcha').click(function() {
             $.getJSON('/refresh_captcha', function(data) {
-                $('#first_number').text(data.captcha.first);
-                $('#second_number').text(data.captcha.second);
+                $('#first_number').text(data.first);
+                $('#second_number').text(data.second);
                 $('#captcha_id').val(data.captcha_id);
             }).fail(function() {
                 displayErrorMessage('Error: Unable to fetch new captcha.');
@@ -172,20 +186,55 @@
             // Clear any existing error message
             clearErrorMessage();
 
-            $.post('/registration', $(this).serialize(), function(response) {
-                if (response.message === "User registered successfully. Please verify your email to complete the registration." && response.redirect_url) {
+            // Serialize form data into a JSON object
+            const formData = {
+                first_name: $('#first_name').val(),
+                last_name: $('#last_name').val(),
+                email: $('#email').val(),
+                password: $('#password').val(),
+                confirm_password: $('#confirm_password').val(),
+                address: $('#address').val(),
+                country_code: $('#country_code').val(),
+                phone: $('#phone').val(),
+                gender: $('#gender').val(),
+                captcha: $('#captcha').val(),
+                captcha_id: $('#captcha_id').val()
+            };
+
+            const isValidData = validate(formData);
+
+            if (!isValidData) {
+                alert(validate.errors[0].message);
+                return;
+            }
+
+            fetch('/registration', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(response => {
+                if (response.success === true) {
                     sessionStorage.setItem('registrationMessage', response.message);
-                    window.location.href = response.redirect_url;
+                    sessionStorage.setItem('registrationEmail', response.email);
+                    window.location.href = '/verify.html';
                 } else {
-                    displayErrorMessage('Registration failed. Please try again.');
+                    console.log(response)
+                    let message = response.error_message
+                    let code = response.error_code
+                    if (code === undefined) {
+                        displayErrorMessage(response.error_message);
+                    } else {
+                        displayErrorMessage(response.error_message + " code: " + response.error_code);
+                    }
                 }
-            }).fail(function(xhr) {
-                // Display error message returned from the backend
-                if (xhr.responseJSON && xhr.responseJSON.error) {
-                    displayErrorMessage(xhr.responseJSON.error);
-                } else {
-                    displayErrorMessage('Error: Unable to register.');
-                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                displayErrorMessage('Error: Unable to register.');
             });
         });
 

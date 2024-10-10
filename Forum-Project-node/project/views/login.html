@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Login</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
+</head>
+<body>
+    <div class="container">
+
+        <h2>Login</h2>
+
+        <div id="message-box" class="alert alert-info d-none"></div>
+
+        <div id="error-message" class="alert alert-danger d-none"></div>
+
+        <form id="myForm">
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" class="form-control" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" class="form-control" id="password" name="password" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Log In</button>
+
+        </form>
+
+        <div style="margin-top:20px">
+            <h4>If you forgot your password fill the form:</h4>
+            <form method="POST" action="/recover_password">
+
+                <div class="form-group">
+                    <label for="recovery_email">Email</label>
+                    <input type="email" class="form-control" id="recovery_email" name="recovery_email" required>
+                </div>
+
+                <button type="submit" class="btn btn-secondary">Recover Password</button>
+
+            </form>
+        </div>
+    </div>
+</body>
+<script>
+    document.addEventListener("DOMContentLoaded", function() {
+        const verifyMessage = sessionStorage.getItem('verifyMessage');
+        const registrationEmail = sessionStorage.getItem('registrationEmail');
+        
+        if (verifyMessage) {
+            const messageBox = document.getElementById("message-box");
+            messageBox.textContent = verifyMessage;
+            messageBox.classList.remove("d-none");
+            
+            sessionStorage.removeItem('verifyMessage');
+        }
+
+        if (registrationEmail) {
+            const emailField = document.getElementById("email");
+            emailField.value = registrationEmail;
+
+            sessionStorage.removeItem('registrationEmail');
+        }
+    });
+
+    $(document).ready(function() {
+        // Handle form submission
+         $('#myForm').submit(function(event) {
+            event.preventDefault();
+
+            // Clear any existing error message
+            clearErrorMessage();
+
+            // Serialize form data into a JSON object
+            const formData = {
+                email: $('#email').val(),
+                password: $('#password').val(),
+            };
+
+            fetch('/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(response => response.json())
+            .then(response => {
+                if (response.success === true) {
+                    sessionStorage.setItem('loginMessage', response.message);
+                    window.location.href = response.redirectUrl;
+                } else {
+                    console.log(response)
+                    let message = response.error_message
+                    let code = response.error_code
+                    if (code === undefined) {
+                        displayErrorMessage(response.error_message);
+                    } else {
+                        displayErrorMessage(response.error_message + " code: " + response.error_code);
+                    }
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                displayErrorMessage('Error: Unable to login.');
+            });
+        });
+
+        // Function to display error message dynamically
+        function displayErrorMessage(message) {
+            $('#error-message').removeClass('d-none').text(message);
+        }
+
+        // Function to clear error message
+        function clearErrorMessage() {
+            $('#error-message').addClass('d-none').text('');
+        }
+    });
+</script>
+</html>
+

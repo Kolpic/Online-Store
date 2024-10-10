@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Home Page</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.4.0/font/bootstrap-icons.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+    <style>
+        .cart-badge {
+            font-size: 0.75rem;
+            padding: 0.25em 0.4em;
+            transform: translate(-20%, -20%) scale(0.8);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        
+        <div id="header"></div>
+
+        <div id="error-message" class="alert alert-danger d-none"></div>
+
+        <h1>Product Catalog</h1>
+        <form id="filtersForm">
+
+            <div class="form-group">
+                <label for="price_min">Price from:</label>
+                <input type="text" id="price_min" name="price_min" placeholder="Min Price">
+            </div>
+
+            <div class="form-group">
+                <label for="price_max">Price to:</label>
+                <input type="text" id="price_max" name="price_max" placeholder="Max Price">
+            </div>
+
+            <div class="form-group">
+                <label for="product_name">Product Name:</label>
+                <input type="text" id="product_name" name="product_name" placeholder="E.g. LED Bulb">
+            </div>
+
+            <div class="form-group">
+                <label for="products_per_page">Products per page:</label>
+                <input type="number" id="products_per_page" name="products_per_page" min="1" value="10">
+            </div>
+
+            <div class="form-group">
+                <label for="sort">Sort by:</label>
+                <select name="sort" id="sort">
+                    <option value="price">Price</option>
+                    <option value="name">Name</option>
+                    <option value="category">Category</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="order">Order:</label>
+                <select name="order" id="order">
+                    <option value="asc">Ascending</option>
+                    <option value="desc">Descending</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label for="category">Category:</label>
+                <select name="category" id="category">
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Filter Products</button>
+        </form>
+
+        <!-- Products List -->
+        <div class="row" id="productList"></div>
+
+        <!-- Pagination -->
+        <nav id="paginationNav"></nav>
+    </div>
+
+    <script>
+        async function fetchHeaderData() {
+            const response = await fetch('/header');
+            const responseData = await response.json();
+            const data = responseData.userInformation;
+
+            console.log(data);
+
+            const headerHtml = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <p class="mb-0">${data.email || ''}</p>
+                    <div class="d-flex align-items-center">
+                        <a href="/home.html" class="btn btn-primary mr-3">Home</a>
+                        ${data.email ? `
+                            <a id="logoutButton" href="/logout" class="btn btn-danger mr-3">Logout</a>
+                            <a href="/profile.html" class="mr-3"><i class="bi bi-gear" style="font-size: 2rem; color: black;"></i></a>
+                            <a href="/user_orders" class="mr-3" style="font-size: 2rem; color: black;"><i class="bi bi-clipboard-check"></i></a>
+                        ` : `
+                            <a href="/login.html" class="btn btn-primary mr-3">Login</a>
+                        `}
+                        <a href="/cart.html" class="position-relative" style="font-size: 2rem; color: black;">
+                            <i class="bi bi-cart3"></i>
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success cart-badge">${data.cartCount}</span>
+                        </a>
+                    </div>
+                </div>`;
+            document.getElementById('header').innerHTML = headerHtml;
+
+            // Populate the category dropdown
+            const categorySelect = document.getElementById('category');
+            categorySelect.innerHTML = '<option value=""></option>';
+
+            data.categories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                categorySelect.appendChild(option);
+            });
+
+            // Bind the event listener after the content is loaded
+            const logoutButton = document.querySelector('#logoutButton');
+            if (logoutButton) {
+                logoutButton.addEventListener('click', handleLogout);
+            }
+        }
+
+        document.getElementById('filtersForm').addEventListener('submit', function(event) {
+            event.preventDefault();
+            fetchProducts();
+        });
+
+        async function fetchProducts(page = 1) {
+            const formData = new FormData(document.getElementById('filtersForm'));
+            const queryParams = new URLSearchParams(formData).toString();
+
+            console.log(queryParams)
+
+            const response = await fetch(`/home/${page}?${queryParams}`);
+
+            console.log(response)
+
+            const data = await response.json();
+
+            console.log(response)
+            console.log(data)
+
+            renderProducts(data.products);
+            renderPagination(data.page, data.totalPages);
+        }
+        // <img class="card-img-top" src="/image/${product.id}" alt="${product.name}">
+        function renderProducts(products) {
+            const productList = document.getElementById('productList');
+            productList.innerHTML = '';
+            products.forEach(product => {
+
+                // Determine if the product is available based on quantity
+                const availability = product.quantity > 0 ? 'Available' : 'Out of stock';
+                const disabled = product.quantity > 0 ? '' : 'disabled';  // Disable "Add to Cart" if out of stock
+
+                const productCard = `
+                    <div class="col-md-4">
+                        <div class="card mb-4">
+                            <img class="card-img-top" src="${product.image_path}" alt="${product.name}">
+                            <div class="card-body">
+                                <h5 class="card-title">${product.name}</h5>
+                                <p class="card-text">Price: ${product.price} ${product.symbol}</p>
+                                <p class="card-text">Category: ${product.category}</p>
+                                 <p class="card-text">Availability: <span class="${availability === 'Available' ? 'text-success' : 'text-danger'}">${availability}</span></p>
+
+                                <form onsubmit="addToCart(event, ${product.id})">
+                                    <div class="form-group">
+                                        <label for="quantity-${product.id}">Quantity:</label>
+                                        <input type="number" id="quantity-${product.id}" name="quantity" value="1" min="1" max="${product.quantity}" ${disabled}>
+                                    </div>
+                                    <button type="submit" class="btn btn-primary" ${disabled}>Add to Cart</button>
+                                </form>
+
+                            </div>
+                        </div>
+                    </div>`;
+                productList.innerHTML += productCard;
+            });
+        }
+
+    function renderPagination(currentPage, totalPages) {
+        const paginationNav = document.getElementById('paginationNav');
+        let paginationHTML = '<ul class="pagination justify-content-center">';
+
+        // Add "Previous" button
+        if (currentPage > 1) {
+            paginationHTML += `<li class="page-item">
+                <a class="page-link" onclick="event.preventDefault(); fetchProducts(${currentPage - 1})">&laquo; Previous</a>
+            </li>`;
+        } else {
+            paginationHTML += `<li class="page-item disabled">
+                <span class="page-link">&laquo; Previous</span>
+            </li>`;
+        }
+
+        // Define how many pages to show at a time (e.g., 3)
+        const maxPagesToShow = 3;
+        const startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+        const endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+
+        // If startPage gets pushed below 1, adjust endPage to compensate
+        if (endPage - startPage < maxPagesToShow - 1) {
+            const extraPages = maxPagesToShow - (endPage - startPage + 1);
+            if (startPage - extraPages >= 1) {
+                startPage -= extraPages;
+            }
+        }
+
+        // Create page numbers
+        for (let i = startPage; i <= endPage; i++) {
+            paginationHTML += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+                <a class="page-link" onclick="event.preventDefault(); fetchProducts(${i})">${i}</a>
+            </li>`;
+        }
+
+        // Add "Next" button
+        if (currentPage < totalPages) {
+            paginationHTML += `<li class="page-item">
+                <a class="page-link" onclick="event.preventDefault(); fetchProducts(${currentPage + 1})">Next &raquo;</a>
+            </li>`;
+        } else {
+            paginationHTML += `<li class="page-item disabled">
+                <span class="page-link">Next &raquo;</span>
+            </li>`;
+        }
+
+        paginationHTML += '</ul>';
+        paginationNav.innerHTML = paginationHTML;
+    }
+
+    async function fetchProducts(page = 1) {
+        const formData = new FormData(document.getElementById('filtersForm'));
+        const queryParams = new URLSearchParams(formData).toString();
+
+        const response = await fetch(`/home/${page}?${queryParams}`);
+
+        if (!response.ok) {
+            const errorData = await response.json();
+            console.log(errorData);
+            let message = errorData.error_message;
+            let code = errorData.error_code;
+
+            console.log(message);
+            console.log(code);
+
+            if (code === undefined) {
+                displayErrorMessage(message);
+            } else {
+                displayErrorMessage(message + " code: " + code);
+            }
+
+            let delayInMilliseconds = 5000;
+
+            setTimeout(function() {
+                clearErrorMessage();
+            }, delayInMilliseconds);
+            return;
+        } else {
+            const data = await response.json();
+
+            renderProducts(data.products);
+            renderPagination(data.page, data.totalPages);
+        }
+    }
+
+    async function addToCart(event, productId) {
+        event.preventDefault();
+
+        // Find the quantity input field for this product
+        const quantityInput = document.getElementById(`quantity-${productId}`);
+        const quantity = quantityInput.value;
+
+        const formData = {
+            productId: productId,
+            quantity: quantity
+        };
+
+        // Send a POST request to add the product to the cart
+        try {
+            const response = await fetch('/addToCart', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(formData),
+                credentials: 'include',
+            });
+            
+            const result = await response.json();
+            console.log(result);
+
+            // Show a success message or handle any errors
+            if (result.success == true) {
+                alert(result.message);
+                location.reload();
+                //updateCartCount(result.newCartCount);  // Update the cart badge count
+            } else {
+                alert('Error adding product to cart: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+
+    async function handleLogout() {
+        try {
+            const response = await fetch('/logout', {
+                method: 'GET',
+                credentials: 'include'  // Ensure cookies are sent
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                sessionStorage.setItem('verifyMessage', result.message);
+                window.location.href = result.redirectUrl;
+            } else {
+                alert('Error logging out: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+
+    function displayErrorMessage(message) {
+        $('#error-message').removeClass('d-none').text(message);
+    }
+
+    function clearErrorMessage() {
+        $('#error-message').addClass('d-none').text('');
+    }
+
+    async function addToCart(event, productId) {
+        event.preventDefault();  // Prevent the form from submitting the usual way
+
+        // Find the quantity input field for this product
+        const quantityInput = document.getElementById(`quantity-${productId}`);
+        const quantity = quantityInput.value;
+
+        // Create a FormData object for the POST request
+        const formData = new FormData();
+        formData.append('product_id', productId);
+        formData.append('quantity', quantity);
+
+        // Send a POST request to add the product to the cart
+        try {
+            const response = await fetch('/add_to_cart', {
+                method: 'POST',
+                body: formData,
+                credentials: 'include',  // Send cookies along with the request
+            });
+            
+            const result = await response.json();
+
+            // Show a success message or handle any errors
+            if (result.success) {
+                alert('Product added to cart!');
+                fetchHeaderData();
+                //updateCartCount(result.newCartCount);  // Update the cart badge count
+            } else {
+                alert('Error adding product to cart: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+
+        // Initial fetch on page load
+        fetchHeaderData();
+        fetchProducts();
+    </script>
+</body>
+</html>

@@ -3,11 +3,10 @@ const request = require('supertest'); // for making HTTP requests to the express
 const crypto = require('crypto');
 const { router } = require('../../main');
 const front_office = require('../../front_office');
-const utils = require('../../utils');
 const { WrongUserInputException } = require('../../exceptions');
+const errors = require('../../error_codes');
 
 jest.mock('../../front_office');
-jest.mock('../../utils');
 
 describe('GET /registration test', () => {
     let app;
@@ -71,7 +70,6 @@ describe('POST /registration test', () => {
 
         // Mock functions
         front_office.registration = jest.fn().mockResolvedValue();
-        utils.hashPassword = jest.fn().mockReturnValue(mockHashPassword);
 
         const requestData = {
             first_name: 'Galin',
@@ -94,14 +92,14 @@ describe('POST /registration test', () => {
         .expect(201);
 
         expect(response.body).toEqual({
+            success: true,
             message: "User registered successfully. Please verify your email to complete the registration.",
-            redirect_url: '/verify.html'
         });
 
         // Verify that registration was called with the expected arguments
         expect(front_office.registration).toHaveBeenCalledWith(expect.anything(), {
             ...requestData,
-            hashed_password: mockHashPassword,
+            hashed_password: expect.any(String),
             verification_code: expect.any(String),
             user_ip: expect.any(String)
         });
@@ -122,9 +120,8 @@ describe('POST /registration test should return error', () => {
         const mockHashPassword = 'hashed_password';
         
         // Mock the registration function to throw an error
-        front_office.registration = jest.fn().mockRejectedValue(new WrongUserInputException("First name must be between 3 and 50 characters"));
-        utils.hashPassword = jest.fn().mockReturnValue(mockHashPassword);
-
+        front_office.registration = jest.fn().mockRejectedValue(new WrongUserInputException("First name must be between 3 and 50 characters",  errors.NAME_LENGTH_ERROR_CODE));
+        
         const requestData = {
             first_name: 'Ga', // Invalid first name with less than 3 characters
             last_name: 'Petrov',
@@ -147,13 +144,14 @@ describe('POST /registration test should return error', () => {
 
         // Check if the error message returned is the same as the one thrown by registration
         expect(response.body).toEqual({
-            error: "First name must be between 3 and 50 characters"
+            error_message: "First name must be between 3 and 50 characters",
+            error_code: errors.NAME_LENGTH_ERROR_CODE,
         });
 
         // Verify that the registration function was called with the expected arguments
         expect(front_office.registration).toHaveBeenCalledWith(expect.anything(), {
             ...requestData,
-            hashed_password: mockHashPassword,
+            hashed_password: expect.any(String),
             verification_code: expect.any(String),
             user_ip: expect.any(String)
         });

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <title>Email Verification</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.3.1.min.js"></script>
 </head>
 <body>
     <div class="container">
@@ -11,21 +12,11 @@
 
         <div id="message-box" class="alert alert-info d-none"></div>
 
-        <form id="myForm" method="POST" action="/verify">
+        <div id="error-message" class="alert alert-danger d-none"></div>
 
-            <div class="form-group">
-                <label for="email">Email</label>
-                <input type="email" class="form-control" id="email" name="email" required>
-            </div>
-
-            <div class="form-group">
-                <label for="verification_code">Verification Code</label>
-                <input type="text" class="form-control" id="verification_code" name="verification_code" required>
-            </div>
-
-            <button type="submit" class="btn btn-primary">Verify Email</button>
-
-        </form>
+        <div id="login-button" class="d-none mt-3">
+            <a href="login.html" class="btn btn-primary">Go to Login</a>
+        </div>
 
         <div style="margin-top:20px">
             <h3>If you want to send you again verification link fill this:</h3>
@@ -47,6 +38,7 @@
 <script>
     document.addEventListener("DOMContentLoaded", function() {
         const registrationMessage = sessionStorage.getItem('registrationMessage');
+        const registrationEmail = sessionStorage.getItem('registrationEmail');
         
         if (registrationMessage) {
             const messageBox = document.getElementById("message-box");
@@ -55,7 +47,48 @@
             
             sessionStorage.removeItem('registrationMessage');
         }
+
+        const urlParams = new URLSearchParams(window.location.search);
+        const token = urlParams.get('token');
+
+        if (token) {
+            // Make a request to the server to verify the token
+            fetch(`/verify?token=${token}`)
+                .then(response => response.json())
+                .then(data => {
+                    const messageBox = document.getElementById("message-box");
+                    messageBox.classList.remove("d-none");
+
+                    if (data.success) {
+                        messageBox.classList.add("alert-success");
+                        messageBox.textContent = data.message;
+
+                        document.getElementById("login-button").classList.remove("d-none");
+                    } else {
+                        messageBox.classList.add("alert-danger");
+                        messageBox.textContent = data.message;
+                    }
+                })
+                .catch(error => {
+                    const messageBox = document.getElementById("message-box");
+                    messageBox.classList.remove("d-none");
+                    messageBox.classList.add("alert-danger");
+                    messageBox.textContent = "An error occurred while verifying your email.";
+                });
+        } 
     });
+
+        // Function to display error message dynamically
+        function displayErrorMessage(message) {
+            $('#error-message').removeClass('d-none').text(message);
+        }
+
+        // Function to clear error message
+        function displayErrorMessage(message) {
+            const errorMessage = document.getElementById("error-message");
+            errorMessage.textContent = message;
+            errorMessage.classList.remove("d-none");
+        }
 </script>
 </body>
 </html>

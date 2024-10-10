@@ -1,7 +1,8 @@
 class WrongUserInputException extends Error {
-	constructor(message) {
+	constructor(message, errorCode) {
 		super(message);
 		this.name = 'WrongUserInputException';
+		this.errorCode = errorCode
 	}
 }
 
@@ -19,8 +20,29 @@ class PeerException extends Error {
 	}
 }
 
+function AssertDev(condition, message) {
+    if (!condition) {
+        throw new DevException(message);
+    }
+}
+
+function AssertUser(condition, message, errorCode) {
+    if (!condition) {
+        throw new WrongUserInputException(message, errorCode);
+    }
+}
+
+function AssertPeer(condition, message) {
+    if (!condition) {
+        throw new PeerException(message);
+    }
+}
+
 module.exports = {
 	WrongUserInputException,
 	DevException,
 	PeerException,
+	AssertDev,
+    AssertUser,
+    AssertPeer,
 };

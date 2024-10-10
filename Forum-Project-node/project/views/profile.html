@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Settings</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.4.0/font/bootstrap-icons.min.css">
+    <style>
+        .cart-badge {
+            font-size: 0.75rem;
+            padding: 0.25em 0.4em;
+            transform: translate(-20%, -20%) scale(0.8);
+        }
+    </style>
+</head>
+<style>
+/* Custom styling for Select2 container */
+.select2-container--default .select2-selection--single {
+    border: 1px solid #ced4da;
+    border-radius: 0.25rem;
+    height: calc(2.25rem + 2px); /* Align height with Bootstrap's form controls */
+    padding: 0.375rem 0.75rem;
+}
+
+/* Style for the dropdown arrow */
+.select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: calc(2.25rem + 2px);
+    right: 1.25rem; /* Adjust to fit the design better */
+}
+
+/* Customize the search input field inside the dropdown */
+.select2-container--default .select2-search--dropdown .select2-search__field {
+    border: none;
+}
+
+/* Customizing the dropdown items */
+.select2-container--default .select2-results>.select2-results__options {
+    max-height: 200px; /* Control the max height of dropdown */
+    overflow-y: auto;
+}
+
+/* Styles for highlighting selected and hovered items */
+.select2-container--default .select2-results__option[aria-selected=true],
+.select2-container--default .select2-results__option--highlighted[aria-selected] {
+    background-color: #007bff; /* Bootstrap primary color */
+    color: white;
+}
+
+/* Style adjustments for focus state */
+.select2-container--default .select2-selection--single:focus {
+    outline: none;
+    border-color: #80bdff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+}
+</style>
+<body>
+    <div class="container">
+
+        <div id="header"></div>
+
+        <div id="error-message" class="alert alert-danger d-none"></div>
+
+        <h1>Settings</h1>
+        <form id="updateProfileForm">
+
+            <div class="form-group">
+                <label for="first-name">Change first name</label>
+                <input type="text" class="form-control" id="first-name" name="first_name">
+            </div>
+
+            <div class="form-group">
+                <label for="last-name">Change last name</label>
+                <input type="text" class="form-control" id="last-name" name="last_name">
+            </div>
+
+            <div class="form-group">
+                <label for="email">Change email address</label>
+                <input type="email" class="form-control" id="email" name="email">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Change password</label>
+                <input type="password" class="form-control" id="password" name="password">
+            </div>
+
+            <div class="form-group">
+                <label for="address">Change address</label>
+                <input type="text" class="form-control" id="address" name="address">
+            </div>
+
+
+            <div class="form-group">
+                <label for="phone" class="required-field">Change phone</label>
+                <div class="input-group">
+
+                    <select class="custom-select" id="country_code" name="country_code" required>
+                        <option value="">Select a country</option>
+                    </select>
+
+                    <input type="tel" class="form-control" id="phone" name="phone" placeholder="Enter phone number without the country code" required>
+
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="gender">Change gender</label>
+                <select name="gender" id="gender">
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Prefer not to say</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn btn-primary">Submit</button>
+        </form>
+    </div>
+
+    <div class="col-12">
+        <div class="mt-5">
+
+        <h2>Delete Account</h2>
+        <p>If you delete your account, you will lose all your data and this action cannot be undone.</p>
+
+        <form id="deleteAccountForm">
+            <button type="submit" class="btn btn-danger">Delete Account</button>
+        </form>
+        </div>
+    </div>
+    </div>
+    </div>
+</body>
+<script>
+    async function fetchHeaderData() {
+        const response = await fetch('/header');
+        const responseData = await response.json();
+        const data = responseData.userInformation;
+
+        const headerHtml = `
+            <div class="d-flex justify-content-between align-items-center">
+                <p class="mb-0">${data.email || ''}</p>
+                <div class="d-flex align-items-center">
+                    <a href="/home.html" class="btn btn-primary mr-3">Home</a>
+                    ${data.email ? `
+                        <a id="logoutButton" href="/logout" class="btn btn-danger mr-3">Logout</a>
+                        <a href="/profile.html" class="mr-3"><i class="bi bi-gear" style="font-size: 2rem; color: black;"></i></a>
+                        <a href="/user_orders" class="mr-3" style="font-size: 2rem; color: black;"><i class="bi bi-clipboard-check"></i></a>
+                    ` : `
+                        <a href="/login.html" class="btn btn-primary mr-3">Login</a>
+                    `}
+                    <a href="/cart" class="position-relative" style="font-size: 2rem; color: black;">
+                        <i class="bi bi-cart3"></i>
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success cart-badge">${data.cartCount}</span>
+                    </a>
+                </div>
+            </div>`;
+        document.getElementById('header').innerHTML = headerHtml;
+
+        // Bind the event listener after the content is loaded
+        const logoutButton = document.querySelector('#logoutButton');
+        if (logoutButton) {
+            logoutButton.addEventListener('click', handleLogout);
+        }
+    }
+
+    async function populateForm() {
+        let userData;
+
+        try {
+            const response = await fetch('/profile', {
+                method: 'GET',
+                credentials: 'include',  // Send cookies along with the request
+            });
+            
+            userData = await response.json();
+        } catch (error) {
+            console.error('Error:', error);
+        }
+
+        console.log(userData);
+
+        document.getElementById('first-name').value = userData.profileData.userDataResult[0].first_name;
+        document.getElementById('last-name').value = userData.profileData.userDataResult[0].last_name;
+        document.getElementById('email').value = userData.profileData.userDataResult[0].email;
+        document.getElementById('address').value = userData.profileData.userDataResult[0].address;
+        document.getElementById('phone').value = userData.profileData.userDataResult[0].phone;
+        document.getElementById('gender').value = userData.profileData.userDataResult[0].gender;
+
+        const countryCodeSelect = document.getElementById('country_code');
+        userData.profileData.countryCodesData.forEach(code => {
+            const option = document.createElement('option');
+            option.value = code.code;
+            option.text = `${code.name} (${code.code})`;
+            if (code.code === userData.profileData.userDataResult[0].country_code) {
+                option.selected = true;
+            }
+        countryCodeSelect.appendChild(option);
+        });
+    }
+
+    // Call function to populate the form with user data
+    populateForm();
+
+    async function handleLogout() {
+        try {
+            const response = await fetch('/logout', {
+                method: 'GET',
+                credentials: 'include'
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                sessionStorage.setItem('verifyMessage', result.message);
+                window.location.href = result.redirectUrl;
+            } else {
+                alert('Error logging out: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+
+    fetchHeaderData();
+
+    document.getElementById('updateProfileForm').addEventListener('submit', async function(event) {
+    event.preventDefault(); 
+
+    const formData = {
+        first_name: document.getElementById('first-name').value,
+        last_name: document.getElementById('last-name').value,
+        email: document.getElementById('email').value,
+        address: document.getElementById('address').value,
+        phone: document.getElementById('phone').value,
+        country_code: document.getElementById('country_code').value
+    };
+
+    fetch('/profile', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formData)
+    })
+    .then(response => response.json())
+    .then(response => {
+        if (response.success === true) {
+            sessionStorage.setItem('registrationMessage', response.message);
+            sessionStorage.setItem('registrationEmail', response.email);
+        } else {
+            console.log(response)
+            let message = response.error_message
+            let code = response.error_code
+            if (code === undefined) {
+                displayErrorMessage(response.error_message);
+            } else {
+                displayErrorMessage(response.error_message + " code: " + response.error_code);
+            }
+        }
+    })
+    .catch(error => {
+        console.error('Error:', error);
+        displayErrorMessage('Error: Unable to register.');
+    });
+
+    function displayErrorMessage(message) {
+        $('#error-message').removeClass('d-none').text(message);
+    }
+
+    function clearErrorMessage() {
+        $('#error-message').addClass('d-none').text('');
+    }
+    });
+</script>
+</html>
