@@ -3,6 +3,11 @@ const errors = require('./error_codes');
 const pool = require('./db');
 const bcrypt = require('bcrypt');
 
+const Ajv = require('ajv');
+const ajv = new Ajv();
+// require('ajv-formats')(ajv); 
+const userDetailsSchema = require('./schemas/profile.json');
+
 async function prepareRegistrationData(client, firstCaptchaNumber, secondCaptchaNumber) {
 
     AssertDev(firstCaptchaNumber !== "", "First captcha number is empty")
@@ -233,6 +238,8 @@ async function prepareHomeData(client, filters) {
         LIMIT $${paramaterCounter} OFFSET $${paramaterCounter + 1};
     `;
 
+    // queryParams.push(productsPerPage, offset);
+
     queryParams.push(productsPerPage, offset);
     
     let productsResult = await client.query(productQuery, queryParams);
@@ -299,13 +306,52 @@ async function prepareCartData(authenticatedUser, client) {
     let lastName = "";
 
     if (typeof authenticatedUser === 'string') {
-        cartItems = await getCart(authenticatedUser, client);
+        query = `
+            SELECT 
+                products.name, 
+                products.price, 
+                cart_items.quantity, 
+                products.id,
+                currencies.symbol,
+                settings.vat
+            FROM carts 
+                JOIN cart_items  ON carts.cart_id         = cart_items.cart_id 
+                JOIN products    ON cart_items.product_id = products.id
+                JOIN currencies  ON products.currency_id  = currencies.id
+                JOIN settings    ON products.vat_id       = settings.id
+            WHERE carts.session_id = $1
+    `
+    let items = await client.query(query, [authenticatedUser]);
+
+    cartItems = items.rows;
+
+    AssertDev(cartItems.length <= 1000, "Fetched too many rows in viewCart function");
     } else {
+        console.log("prepareCartData IN NORMAL SESSION");
         let userData = await client.query(`SELECT * FROM users WHERE email = $1`, [authenticatedUser['userRow']['data']]);
 
         let userId = userData.rows[0]['id'];
 
-        cartItems = await getCart(userId, client);
+        query = `
+            SELECT 
+                products.name, 
+                products.price, 
+                cart_items.quantity, 
+                products.id,
+                currencies.symbol,
+                settings.vat
+            FROM carts 
+                JOIN cart_items  ON carts.cart_id         = cart_items.cart_id 
+                JOIN products    ON cart_items.product_id = products.id
+                JOIN currencies  ON products.currency_id  = currencies.id
+                JOIN settings    ON products.vat_id       = settings.id
+            WHERE carts.user_id = $1
+        `
+        let items = await client.query(query, [userId]);
+
+        cartItems = items.rows;
+
+        AssertDev(cartItems.length <= 1000, "Fetched too many rows in viewCart function");
 
         firstName = userData.rows['first_name'];
         lastName = userData.rows['last_name'];
@@ -330,37 +376,6 @@ async function prepareCartData(authenticatedUser, client) {
     }
 
     return dataToReturn;
-}
-
-async function getCart(userId, client) {
-    query = `
-            SELECT 
-                products.name, 
-                products.price, 
-                cart_items.quantity, 
-                products.id,
-                currencies.symbol,
-                settings.vat
-            FROM carts 
-                JOIN cart_items  ON carts.cart_id         = cart_items.cart_id 
-                JOIN products    ON cart_items.product_id = products.id
-                JOIN currencies  ON products.currency_id  = currencies.id
-                JOIN settings    ON products.vat_id       = settings.id
-            WHERE
-    `
-    if (typeof userId === 'string') {
-        query += 'carts.session_id = $1';
-    } else {
-        query += 'carts.user_id = $1';
-    }
-
-    let items = await client.query(query, [userId]);
-
-    let itemsData = items.rows;
-
-    AssertDev(itemsData.length <= 1000, "Fetched too many rows in viewCart function");
-
-    return itemsData;
 }
 
 async function updateCartQuantity (itemId, quantity, client) {
@@ -405,6 +420,11 @@ async function addToCart(userId, productId, quantity, authenticatedUser, client)
         let cart = await client.query(`SELECT * FROM carts WHERE session_id = $1`, [userId]);
         let cartRow = cart.rows;
 
+        console.log("cartRow");
+        console.log(cartRow);
+
+        AssertDev(cartRow.length <= 1, "Bug, can't have more than one cart");
+
         // let userId = null;
         // Check if we have cart with anonymn session
         if (cartRow.length == 0) {
@@ -425,11 +445,17 @@ async function addToCart(userId, productId, quantity, authenticatedUser, client)
         let cart = await client.query(`SELECT * FROM carts WHERE user_id = $1`, [userId]);
         let cartRow = cart.rows;
 
+        console.log("cartRow");
+        console.log(cartRow);
+
+        AssertDev(cartRow.length <= 1, "Bug, can't have more than one cart");
+
         // Not present cart, we have to make one
         if (cartRow.length == 0) {
             console.log("ENTERED CREATING CART FOR AUTH USER");
 
-            cartId = await client.query(`INSERT INTO carts(user_id) VALUES ($1) RETURNING cart_id`, [userId]);
+            let result = await client.query(`INSERT INTO carts(user_id) VALUES ($1) RETURNING cart_id`, [userId]);
+            cartId = result.rows[0].cart_id;
 
         // Present cart, we insert in it 
         } else {
@@ -439,31 +465,14 @@ async function addToCart(userId, productId, quantity, authenticatedUser, client)
         }
     }
 
-    let cartItems = await client.query(`SELECT * FROM cart_items WHERE cart_id = $1 AND product_id = $2`, [cartId, productId]);
-    let cartItemsRow = cartItems.rows;
+    await client.query(`
+        INSERT INTO cart_items (cart_id, product_id, quantity, vat)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (cart_id, product_id)
+        DO UPDATE SET quantity = cart_items.quantity + EXCLUDED.quantity
+        `, [cartId, productId, quantity, vat]);
 
-    let cartItemsId = null;
-    if (cartItemsRow.length > 0) {
-        cartItemsId = cartItemsRow[0].id
-    }
-
-    // Check if we have same items in the cart
-    // When we don't have we make, we insert
-    if (cartItemsRow.length == 0) {
-        console.log("ENTERED cart_items to INSERT the item");
-
-        await client.query(`INSERT INTO cart_items (cart_id, product_id, quantity, vat) VALUES ($1, $2, $3, $4)`, [cartId, productId, quantity, vat]);
-
-        return "You successfully added item."
-
-    // When we have the same item, we update cart_items
-    } else {
-        console.log("ENTERED cart_items to UPDATE the itemS");
-
-        await client.query(`UPDATE cart_items SET quantity = quantity + $1 WHERE id = $2`, [quantity, cartItemsId]);
-
-        return "You successfully added same item, quantity was increased.";
-    }
+    return "You successfully added item.";
 }
 
 async function removeFromCart(productId, client){
@@ -472,12 +481,391 @@ async function removeFromCart(productId, client){
 }
 
 async function mergeCart(userId, sessionIdUnauthenticatedUser, client) {
-    let cart = await client.query(`SELECT * FROM carts WHERE session_id = $1`, [sessionIdUnauthenticatedUser]);
+    AssertDev(sessionIdUnauthenticatedUser !== undefined, "There is not anonymn cart");
+    AssertDev(userId !== undefined, "There is not logged user");
 
-    let cartRow = cart.rows;
-    let cartId = cartRow[0].cart_id;
+    let anonymnCart = await client.query(`SELECT * FROM carts WHERE session_id = $1`, [sessionIdUnauthenticatedUser]);
 
-    await client.query(`UPDATE carts SET user_id = $1, session_id = null WHERE cart_id = $2 and session_id = $3`, [userId, cartId, sessionIdUnauthenticatedUser]);
+    let cartIdAnonymnCart = anonymnCart.rows[0].cart_id;
+    let userCart = await client.query(`SELECT * FROM carts WHERE user_id = $1`, [userId]);
+
+    if (userCart.rows.length > 0) {
+        // The user already has a cart -> to merge the session cart into the existing cart
+        let existingCartId = userCart.rows[0].cart_id;
+
+        let anonymnCartItems = await client.query(`SELECT * FROM cart_items WHERE cart_id = $1`, [cartIdAnonymnCart]);
+
+        for (let item of anonymnCartItems.rows) {
+            // Check if the item already exists in the user’s cart
+            let existingItem = await client.query(
+                `SELECT * FROM cart_items WHERE cart_id = $1 AND product_id = $2`, 
+                [existingCartId, item.product_id]
+            );
+
+            if (existingItem.rows.length > 0) {
+                // If the product exists in the user's cart, update the quantity
+                await client.query(
+                    `UPDATE cart_items 
+                     SET quantity = quantity + $1 
+                     WHERE cart_id = $2 AND product_id = $3`,
+                    [item.quantity, existingCartId, item.product_id]
+                );
+            } else {
+                // Otherwise, move the item from the anonymous cart to the user's cart
+                await client.query(
+                    `INSERT INTO cart_items (cart_id, product_id, quantity, added_at, vat) 
+                     VALUES ($1, $2, $3, $4, $5)`,
+                    [existingCartId, item.product_id, item.quantity, item.added_at, item.vat]
+                );
+            }
+        }
+
+        await client.query(`DELETE FROM cart_items WHERE cart_id = $1`, [cartIdAnonymnCart]);
+        await client.query(`DELETE FROM carts WHERE cart_id = $1`, [cartIdAnonymnCart]);
+    } else {
+        // If the user does not have a cart, update the session cart to belong to the user
+        await client.query(`
+            UPDATE carts 
+            SET user_id = $1, session_id = null 
+            WHERE cart_id = $2
+        `, [userId, cartIdAnonymnCart]);
+    }
+}
+
+async function cart(deliveryInformation, authenticatedUser, client) {
+    let { first_name: firstName, last_name: lastName, email: email, address: address, country_code: countryCode, phone: phone, town: town } = deliveryInformation;
+
+    const regexPhone = /^\d{7,15}$/;
+    const regexEmail = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b/;
+
+    AssertUser(firstName.length >= 3 && firstName.length <= 50, "First name must be between 3 and 50 symbols", errors.NAME_LENGTH_ERROR_CODE);
+    AssertUser(lastName.length >= 3 && lastName.length <= 50, "Last name must be between 3 and 50 symbols", errors.NAME_LENGTH_ERROR_CODE);
+    AssertUser(regexEmail.test(email), "Email is not valid", errors.INVALID_EMAIL_ERROR_CODE);
+    AssertUser(regexPhone.test(phone), "Phone number format is not valid. The number should be between 7 and 15 digits", errors.PHONE_FORMAT_ERROR_CODE);
+    AssertUser(phone[0] !== '0', "Phone number format is not valid.", errors.PHONE_FORMAT_ERROR_CODE);
+
+    // Retrieve cart items for the user
+    let cartItemsResult = await client.query(`
+        SELECT
+            users.id               AS user_id,
+            users.first_name       AS user_first_name,
+            users.last_name        AS user_last_name,
+            carts.cart_id,
+            cart_items.product_id,
+            products.name,
+            cart_items.quantity    AS cart_quantity,
+            products.price,
+            currencies.symbol,
+            cart_items.vat,
+            products.quantity      AS db_quantity
+        FROM users
+            JOIN carts      ON carts.user_id         = users.id
+            JOIN cart_items ON cart_items.cart_id    = carts.cart_id
+            JOIN products   ON cart_items.product_id = products.id
+            JOIN currencies ON products.currency_id  = currencies.id
+        WHERE users.email = $1
+    `, [authenticatedUser.userRow.data]);
+
+    let cartItems = cartItemsResult.rows;
+    let userId = cartItems[0].user_id;
+    let cartId = cartItems[0].cart_id;
+    let userFirstName = cartItems[0].user_first_name;
+    let userLastName = cartItems[0].user_last_name;
+
+    let productIds = cartItems.map(item => item.product_id);
+    let cartPrices = {};
+    let cartQuantities = {};
+    let dbQuantities = {};
+
+    cartItems.forEach(item => {
+        cartPrices[item.product_id] = item.price;
+        cartQuantities[item.product_id] = item.cart_quantity;
+        dbQuantities[item.product_id] = item.db_quantity;
+    });
+
+    console.log("productIds");
+    console.log(productIds);
+    console.log("cartPrices");
+    console.log(cartPrices);
+    console.log("cartQuantities");
+    console.log(cartQuantities);
+    console.log("dbQuantities");
+    console.log(dbQuantities);
+
+    for (let [productId, cartQuantity] of Object.entries(cartQuantities)) {
+        AssertUser(cartQuantity < dbQuantities[productId], 
+            `We don't have ${cartQuantity} of product: ${cartItems[0].name} in our store. You can purchase less or remove the product from your cart.`,
+            errors.NOT_ENOUGHT_QUANTITY);
+    }
+
+    let updateCases = productIds.map(productId => `WHEN ${productId} THEN quantity - ${cartQuantities[productId]}`).join(' ');
+    let query = `
+        UPDATE products
+        SET quantity = CASE id ${updateCases}
+        END
+        WHERE id = ANY($1::int[])
+    `;
+
+    console.log("query");
+    console.log(query);
+
+    await client.query(query, [productIds]);
+
+    // Insert into orders
+    let orderResult = await client.query(`
+        INSERT INTO orders (user_id, status, order_date)
+        VALUES ($1, $2, CURRENT_TIMESTAMP)
+        RETURNING order_id
+    `, [userId, 'Ready for Paying']);
+
+    let orderId = orderResult.rows[0].order_id;
+
+    const orderItemsData = cartItems.map(item => [
+        orderId,
+        item.product_id,
+        item.cart_quantity,
+        item.price,
+        item.vat
+    ]);
+
+    console.log("orderItemsData");
+    console.log(orderItemsData);
+
+    // Prepare a single query to insert all order items at once
+    let orderItemsQuery = `
+        INSERT INTO order_items (order_id, product_id, quantity, price, vat)
+        VALUES ${orderItemsData.map((_, index) => `($1, $${index * 4 + 2}, $${index * 4 + 3}, $${index * 4 + 4}, $${index * 4 + 5})`).join(', ')}
+    `;
+
+    console.log("orderItemsQuery");
+    console.log(orderItemsQuery);
+
+    // Flatten the orderItemsData into a single array
+    let orderItemsValues = orderItemsData.reduce((acc, item) => acc.concat([item[1], item[2], item[3], item[4]]), []);
+
+    console.log("orderItemsValues");
+    console.log(orderItemsValues);
+
+    // Execute the batch insert
+    await client.query(orderItemsQuery, [orderId, ...orderItemsValues]);
+
+    let countryCodeResult = await client.query('SELECT id FROM country_codes WHERE code = $1', [countryCode]);
+    let countryCodeId = countryCodeResult.rows[0].id;
+
+    await client.query(`
+        INSERT INTO shipping_details (order_id, email, first_name, last_name, town, address, phone, country_code_id)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    `, [orderId, email, firstName, lastName, town, address, phone, countryCodeId]);
+
+    let totalSum = cartItems.reduce((sum, item) => sum + (parseFloat(item.price) * parseFloat(item.cart_quantity)), 0);
+    let totalSumWithVat = cartItems.reduce((sum, item) => sum + (parseFloat(item.price) * parseFloat(item.cart_quantity) * (1 + parseFloat(item.vat) / 100)), 0);
+
+    await client.query('DELETE FROM cart_items WHERE cart_id = $1', [cartId]);
+
+    let shippingDetailsResult = await client.query(`
+        SELECT 
+            shipping_details.*, 
+            country_codes.code 
+        FROM shipping_details
+            JOIN country_codes ON shipping_details.country_code_id = country_codes.id 
+        WHERE shipping_details.order_id = $1
+    `, [orderId]);
+
+    let shippingDetails = shippingDetailsResult.rows;
+    let settingsResult = await client.query('SELECT * FROM settings');
+    let settingsRow = settingsResult.rows[0];
+
+    return {
+        order_id: orderId,
+        cart_items: cartItems,
+        shipping_details: shippingDetails,
+        total_sum_with_vat: totalSumWithVat,
+        total_sum: totalSum,
+        user_first_name: userFirstName,
+        user_last_name: userLastName,
+        vat_in_persent: settingsRow.vat
+    };
+}
+
+async function getOrder(orderId, client) {
+    AssertDev(orderId, "orderId is missing");
+
+    let query = `
+                SELECT 
+                    orders.*,
+                    order_items.*,
+                    shipping_details.*,
+                    products.name       AS product_name,
+                    currencies.symbol   AS product_currency
+                FROM orders 
+                JOIN order_items      ON orders.order_id      = order_items.order_id 
+                JOIN shipping_details ON orders.order_id      = shipping_details.order_id
+                JOIN products         ON products.id          = order_items.product_id
+                JOIN currencies       ON products.currency_id = currencies.id
+                WHERE orders.order_id = $1
+                `;
+
+    let resultQuery = await client.query(query, [orderId]);
+
+    AssertDev(resultQuery.rows.length != 0, "There is not items in the purchase");
+
+    let cartItems = [];
+    let totalSum = 0;
+    let totalSumWithVat = 0;
+    let shippingDetails = null;
+
+    resultQuery.rows.forEach(row => {
+        // Extract each cart item from the row
+        cartItems.push({
+            product_id: row.product_id,
+            name: row.product_name,
+            quantity: row.quantity,
+            price: parseFloat(row.price),
+            vat: row.vat,
+            symbol: row.product_currency
+        });
+
+        // Calculate total sum without VAT and with VAT
+        totalSum += row.quantity * parseFloat(row.price);  // Total without VAT
+        totalSumWithVat += row.quantity * parseFloat(row.price) * (1 + parseFloat(row.vat) / 100);  // Total with VAT
+
+        // Extract shipping details (same across all rows, so just assign once)
+        if (!shippingDetails) {
+            shippingDetails = {
+                email: row.email,
+                first_name: row.first_name,
+                last_name: row.last_name,
+                town: row.town,
+                address: row.address,
+                phone: row.phone,
+                country_code_id: row.country_code_id
+            };
+        }
+    });
+
+    return {
+        order_id: orderId,
+        cart_items: cartItems,
+        shipping_details: shippingDetails,
+        total_sum_with_vat: totalSumWithVat,
+        total_sum: totalSum,
+        user_first_name: shippingDetails.first_name,
+        user_last_name: shippingDetails.last_name,
+        vat_in_persent: 20,
+    };
+}
+
+async function payOrder(orderId, paymentAmount, client) {
+    console.log(orderId);
+    console.log(paymentAmount);
+
+    AssertDev(orderId != undefined, "orderId is undefined");
+    AssertDev(paymentAmount != undefined, "paymentAmount is undefined");
+
+    let floatPaymentAmount = parseFloat(paymentAmount);
+    let roundedPaymentAmount = Math.round((floatPaymentAmount + Number.EPSILON) * 100) / 100;
+
+    let order = await client.query(`SELECT * FROM orders WHERE order_id = $1`, [orderId]);
+    let orderRow = order.rows;
+
+    AssertDev(orderRow.length == 1, "There can't be more than one row with same order id");
+
+    let orderItems = await client.query(`SELECT * FROM order_items WHERE order_id = $1`, [orderId]);
+    let orderItemsRows = orderItems.rows;
+
+    AssertUser(orderRow[0].status == 'Ready for Paying', "This order can't be payed, due to it's status");
+
+    let total = 0;
+    let totalWithVat = 0;
+
+    orderItemsRows.forEach(row => {
+        console.log("row");
+        console.log(row);
+        total += parseInt(row.quantity) * parseFloat(row.price);
+        totalWithVat += parseInt(row.quantity) * parseFloat(row.price) + (parseFloat((row.vat / 100)) * (parseInt(row.quantity) * parseFloat(row.price)));
+    })
+
+    let totalWithVatToFixed = totalWithVat.toFixed(2)
+
+    AssertUser(!(roundedPaymentAmount < totalWithVatToFixed), "You entered amout, which is less than the order you have");
+    AssertUser(!(roundedPaymentAmount > totalWithVatToFixed), "You entered amout, which is bigger than the order you have");
+
+    await client.query(`UPDATE orders SET status = 'Paid' WHERE order_id = $1`, [orderId]);
+
+    return "You paid the order successful";
+}
+
+async function postProfile(userDetails, authenticatedUser, client) {
+    const { firstName, lastName, email, oldPassword, newPassword, address, phone, countryCode } = userDetails;
+
+    const validate = ajv.compile(userDetailsSchema);
+    const valid = validate(userDetails);
+
+    if (!valid) {
+        const errorMessages = validate.errors ? validate.errors.map(error => `${error.instancePath} ${error.message}`).join(', ') : "Unknown validation error";
+        AssertUser(false, `Validation Error: ${errorMessages}`, errors.INVALID_FIELD_FROM_PROFILE_SCHEMA);
+    }
+
+    // Query construction logic
+    let queryString = "UPDATE users SET ";
+    let fieldsList = [];
+    let updatedFields = [];
+
+    const updates = {
+        first_name: firstName,
+        last_name: lastName,
+        email: email,
+        address: address,
+        phone: phone,
+    };
+
+    if (oldPassword && newPassword) {
+        const userQuery = `SELECT password FROM users WHERE id = $1`;
+        const userResult = await client.query(userQuery, [authenticatedUser['userRow']['user_id']]);
+
+        AssertDev(userResult.length !== 0, "No such user registered")
+
+        const currentHashedPassword = userResult.rows[0].password;
+
+        const isMatch = await bcrypt.compare(oldPassword, currentHashedPassword);
+    
+        AssertUser(isMatch, "Old password is incorrect.")
+
+        const saltRounds = 10;
+        const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
+
+        updates.password = hashedPassword;
+    }
+
+    if (countryCode) {
+        const countryQuery = `SELECT id FROM country_codes WHERE code = $1`;
+        const countryResult = await client.query(countryQuery, [countryCode]);
+
+        AssertUser(countryResult.rows.length !== 0, "Invalid country code.");
+
+        updates.country_code_id = countryResult.rows[0].id;
+    }
+
+    for (const [key, value] of Object.entries(updates)) {
+        if (value !== undefined) {
+            queryString += `${key} = $${fieldsList.length + 1}, `;
+            fieldsList.push(value);
+            updatedFields.push(key);
+        }
+    }
+
+    AssertUser(updatedFields.length !== 0, "No fields to update. At least one field must be provided.");
+
+    queryString = queryString.slice(0, -2) + ` WHERE id = $${updatedFields.length + 1}`;
+    fieldsList.push(authenticatedUser['userRow']['user_id']);
+
+    await client.query(queryString, fieldsList);
+    let updatedFieldsMessage = updatedFields.join(', ');
+    
+    return {
+        success: true,
+        message: `Updated fields: ${updatedFieldsMessage}`
+    };
 }
 
 module.exports = {
@@ -490,10 +878,13 @@ module.exports = {
     getCartItemsCount,
     getProfileData,
     prepareCartData,
-    getCart,
     updateCartQuantity,
     uuidv4,
     addToCart,
     removeFromCart,
     mergeCart,
+    cart,
+    getOrder,
+    payOrder,
+    postProfile
 }

@@ -5,6 +5,7 @@
     <title>Settings</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-icons/1.4.0/font/bootstrap-icons.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <style>
         .cart-badge {
             font-size: 0.75rem;
@@ -79,8 +80,13 @@
             </div>
 
             <div class="form-group">
-                <label for="password">Change password</label>
-                <input type="password" class="form-control" id="password" name="password">
+                <label for="password">Old password</label>
+                <input type="password" class="form-control" id="old_password" name="old_password">
+            </div>
+
+            <div class="form-group">
+                <label for="password">New password</label>
+                <input type="password" class="form-control" id="new_password" name="new_password">
             </div>
 
             <div class="form-group">
@@ -93,11 +99,11 @@
                 <label for="phone" class="required-field">Change phone</label>
                 <div class="input-group">
 
-                    <select class="custom-select" id="country_code" name="country_code" required>
+                    <select class="custom-select" id="country_code" name="country_code">
                         <option value="">Select a country</option>
                     </select>
 
-                    <input type="tel" class="form-control" id="phone" name="phone" placeholder="Enter phone number without the country code" required>
+                    <input type="tel" class="form-control" id="phone" name="phone" placeholder="Enter phone number without the country code">
 
                 </div>
             </div>
@@ -105,6 +111,7 @@
             <div class="form-group">
                 <label for="gender">Change gender</label>
                 <select name="gender" id="gender">
+                    <option value=""></option>
                     <option value="male">Male</option>
                     <option value="female">Female</option>
                     <option value="other">Prefer not to say</option>
@@ -228,6 +235,8 @@
         first_name: document.getElementById('first-name').value,
         last_name: document.getElementById('last-name').value,
         email: document.getElementById('email').value,
+        old_password: sanitizeField(document.getElementById('old_password').value),
+        new_password: sanitizeField(document.getElementById('new_password').value),
         address: document.getElementById('address').value,
         phone: document.getElementById('phone').value,
         country_code: document.getElementById('country_code').value
@@ -243,13 +252,11 @@
     .then(response => response.json())
     .then(response => {
         if (response.success === true) {
-            sessionStorage.setItem('registrationMessage', response.message);
-            sessionStorage.setItem('registrationEmail', response.email);
+            alert("Profile updated successful");
+            location.reload();
         } else {
-            console.log(response)
-            let message = response.error_message
-            let code = response.error_code
-            if (code === undefined) {
+            console.log(response);
+            if (response.error_message === undefined) {
                 displayErrorMessage(response.error_message);
             } else {
                 displayErrorMessage(response.error_message + " code: " + response.error_code);
@@ -269,5 +276,9 @@
         $('#error-message').addClass('d-none').text('');
     }
     });
+
+    function sanitizeField(value) {
+        return value === "" ? undefined : value;
+    }
 </script>
 </html>

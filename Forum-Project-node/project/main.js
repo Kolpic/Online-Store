@@ -21,6 +21,7 @@ const urlToFunctionMapFrontOffice = {
         '/profile': getProfileHandler,
         '/verify': getVerificationHandler,
         '/cart': getCartHandler,
+        '/order': getOrderHandler,
     },
     POST: {
         '/registration': postRegistrationHandler,
@@ -28,6 +29,9 @@ const urlToFunctionMapFrontOffice = {
         '/updateCartQuantity': postUpdateCarQuantityHandler,
         '/addToCart': postAddToCart,
         '/removeFromCart': postRemoveFromCart,
+        '/cart': postCartHandler,
+        '/finish_payment': postPaymentHandler,
+        '/profile': postProfileHandler,
     }
 };
 
@@ -227,8 +231,8 @@ async function postLoginHandler(req, res, next, client) {
 }
 
 async function getHeaderHandler(req, res, next, client) {
-    sessionId = req.cookies['session_id']
-    authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+    let sessionId = req.cookies['session_id']
+    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     let userInformation = {
         firstName: "",
@@ -262,9 +266,6 @@ async function getHeaderHandler(req, res, next, client) {
         userInformation.cartCount = await front_office.getCartItemsCount(client, userId);
 
     }
-
-    console.log("userInformation");
-    console.log(userInformation);
 
     res.json({userInformation});
 }
@@ -333,29 +334,20 @@ async function getProfileHandler(req, res, next, client) {
 async function getCartHandler(req, res, next, client) {
     let sessionId = req.cookies['session_id'] || null;
     let sessionIdUnauthenticatedUser = req.cookies['session_id_unauthenticated_user'] || null;
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
-    console.log("sessionId");
-    console.log(sessionId);
-
-    console.log("authenticatedUser");
-    console.log(authenticatedUser);
-
-    console.log("sessionIdUnauthenticatedUser");
-    console.log(sessionIdUnauthenticatedUser);
+    AssertDev(sessionId != null && sessionIdUnauthenticatedUser == null || sessionId == null && sessionIdUnauthenticatedUser != null || sessionId == null && sessionIdUnauthenticatedUser == null, "We can't have two of the sessions");
 
     let cartData = null;
-    if (sessionId === null && authenticatedUser === null) {
+    if (sessionId != null) {
+        console.log("Entered in normal session cart.html");
+        let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+        cartData = await front_office.prepareCartData(authenticatedUser, client);
+    } else {
         console.log("Entered in anonymn session cart.html");
         cartData = await front_office.prepareCartData(sessionIdUnauthenticatedUser, client);
-    } else {
-        console.log("Entered in normal session cart.html");
-        cartData = await front_office.prepareCartData(authenticatedUser, client);
     }
 
-    console.log(cartData);
-
-    res.json({
+    return res.json({
         cartData,
     })
 }
@@ -380,11 +372,11 @@ async function postAddToCart(req, res, next, client) {
     let sessionId = req.cookies['session_id'];
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
-    console.log("authenticatedUser");
-    console.log(authenticatedUser);
-
     let productId = req.body.productId;
     let quantity = req.body.quantity;
+
+    let responseMessage = null;
+    let newCartCount = null;
 
     // We don't have logged user
     if (authenticatedUser === null) {
@@ -400,44 +392,33 @@ async function postAddToCart(req, res, next, client) {
             console.log("sessionId IN Make anonymn session");
             console.log(sessionId);
 
-            let responseMessage = await front_office.addToCart(sessionId, productId, quantity, authenticatedUser, client);
-            let newCartCount = await front_office.getCartItemsCount(client, sessionId);
+            responseMessage = await front_office.addToCart(sessionId, productId, quantity, authenticatedUser, client);
+            newCartCount = await front_office.getCartItemsCount(client, sessionId);
 
             res.cookie('session_id_unauthenticated_user', sessionId, {
               httpOnly: true,
               sameSite: 'Lax',
             });
 
-            res.json({
-              success: true,
-              message: responseMessage,
-              newCartCount: newCartCount,
-            });
         // We already have anonymn session
         } else {
             console.log("sessionId IN already made anonymn session");
-            let responseMessage = await front_office.addToCart(sessionIdUnauthenticatedUser, productId, quantity, authenticatedUser, client);
-            let newCartCount = await front_office.getCartItemsCount(client, sessionIdUnauthenticatedUser);
-
-            res.json({
-              success: true,
-              message: responseMessage,
-              newCartCount: newCartCount,
-            });
+            responseMessage = await front_office.addToCart(sessionIdUnauthenticatedUser, productId, quantity, authenticatedUser, client);
+            newCartCount = await front_office.getCartItemsCount(client, sessionIdUnauthenticatedUser);
         }
     // We have logged user
     } else {
         let userId = authenticatedUser['userRow']['user_id'];
 
-        let responseMessage = await front_office.addToCart(userId, productId, quantity, authenticatedUser, client);
-        let newCartCount = await front_office.getCartItemsCount(client, userId);
-
-        res.json({
-          success: true,
-          message: responseMessage,
-          newCartCount: newCartCount,
-        });
+        responseMessage = await front_office.addToCart(userId, productId, quantity, authenticatedUser, client);
+        newCartCount = await front_office.getCartItemsCount(client, userId);
     }
+
+    res.json({
+      success: true,
+      message: responseMessage,
+      newCartCount: newCartCount,
+    });
 
     return res;
 }
@@ -450,6 +431,90 @@ async function postRemoveFromCart(req, res, next, client) {
     return res.json({
         success: true,
         message: result,
+    });
+}
+
+async function postCartHandler(req, res, next, client) {
+    let sessionId = req.cookies['session_id'];
+    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+    AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_ORDER)
+
+    let { first_name, last_name, email, address, country_code, phone, town } = req.body;
+
+    const deliveryInformation = {
+        first_name,
+        last_name,
+        email,
+        phone,
+        country_code,
+        address,
+        town,
+    };
+
+    let responsePostCart = await front_office.cart(deliveryInformation, authenticatedUser, client);
+
+    return res.json({
+        success: true,
+        responsePostCart,
+    });
+}
+
+async function getOrderHandler(req, res, next, client) {
+    let sessionId = req.cookies['session_id'];
+    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+    AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
+
+    let order_id = req.query.order_id;
+
+    let responseGetOrder = await front_office.getOrder(order_id, client);
+
+    return res.json({
+        success: true,
+        responseGetOrder,
+    });
+}
+
+async function postPaymentHandler(req, res, next, client) {
+    let sessionId = req.cookies['session_id'];
+    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+    AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
+
+    let orderId = req.body.order_id;
+    let paymentAmount = req.body.payment_amount;
+
+    let response = await front_office.payOrder(orderId, paymentAmount, client);
+
+    return res.json({
+        success: true,
+        message: response,
+    });
+}
+
+async function postProfileHandler(req, res, next, client) {
+    let sessionId = req.cookies['session_id'];
+    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+    AssertUser(authenticatedUser != null, "You have to be logged in to edit your profile", errors.NOT_LOGGED_USER_FOR_MAKEING_PROFILE_CHANGES);
+
+    const userDetails = {
+        firstName: req.body.first_name,
+        lastName: req.body.last_name,
+        email: req.body.email,
+        oldPassword: req.body.old_password,
+        newPassword: req.body.new_password,
+        address: req.body.address,
+        phone: req.body.phone,
+        countryCode: req.body.country_code
+    };
+
+    let result = await front_office.postProfile(userDetails, authenticatedUser, client);
+
+    return res.json({
+        success: true,
+        message: result.message,
     });
 }
 

@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Payment</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+</head>
+<body>
+    <div id="alert-container"></div>
+    <div class="container mt-3">
+
+        <header id="header-container"></header>
+
+        <div id="error-message" class="alert alert-danger d-none"></div>
+
+        <br>
+        <h2>Order Summary</h2>
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Product Name</th>
+                    <th>Quantity</th>
+                    <th class="text-right">Price (Per Item with VAT)</th>
+                    <th class="text-right">Total Price With VAT</th>
+                </tr>
+            </thead>
+            <tbody id="order-products"></tbody>
+            <tr>
+                <td colspan="3" class="text-right"><strong>VAT:</strong></td>
+                <td class="text-right" id="vat"></td>
+            </tr>
+            <tr>
+                <td colspan="3" class="text-right"><strong>VAT in %:</strong></td>
+                <td class="text-right" id="vat-percent"></td>
+            </tr>
+            <tr>
+                <td colspan="3" class="text-right"><strong>Total Sum Without VAT:</strong></td>
+                <td class="text-right" id="total-sum"></td>
+            </tr>
+            <tr>
+                <td colspan="3" class="text-right"><strong>Total :</strong></td>
+                <td class="text-right" id="total-sum-vat"></td>
+            </tr>
+        </table>
+        <div>
+            <h4>Shipping Details</h4>
+            <p id="shipping-details"></p>
+        </div>
+        <h2>Payment Details</h2>
+        <form id="payment-form">
+            <input type="hidden" name="order_id" id="order-id">
+            <div class="form-group">
+                <label for="payment_amount">Enter Payment Amount:</label>
+                <input type="number" id="payment_amount" name="payment_amount" class="form-control" step="0.01" required>
+            </div>
+            <button type="submit" class="btn btn-primary">Submit Payment</button>
+        </form>
+    </div>
+
+    <script>
+        // Function to extract query parameters from the URL
+    function getOrderIdFromUrl() {
+        const params = new URLSearchParams(window.location.search);
+        return params.get('order_id');
+    }
+
+    // Function to populate the payment page with order details
+    function populatePaymentPage(orderData) {
+        const order = orderData.responseGetOrder;
+
+        document.getElementById('order-id').value = order.order_id;
+
+        const orderProductsBody = document.getElementById('order-products');
+        order.cart_items.forEach(item => {
+
+        let priceWithVatPerItem = (item.price + (item.price * (item.vat / 100))).toFixed(2);
+        let totalPriceWithVatForAllItemsSameType = ((item.price * item.quantity) +  ((item.price * item.quantity) * (item.vat / 100))).toFixed(2);
+
+        orderProductsBody.innerHTML += `
+                <tr>
+                    <td>${item.name}</td>
+                    <td>${item.quantity}</td>
+                    <td class="text-right">${priceWithVatPerItem} ${item.symbol || ''}</td>
+                    <td class="text-right">${totalPriceWithVatForAllItemsSameType} ${item.symbol || ''}</td>
+                </tr>
+            `;
+        });
+
+        document.getElementById('vat').innerText = (order.total_sum_with_vat - order.total_sum).toFixed(2) + ' ' + (order.cart_items[0].symbol || '');
+        document.getElementById('vat-percent').innerText = `${order.vat_in_persent}%`;
+        document.getElementById('total-sum').innerText = (order.total_sum).toFixed(2) + ' ' + (order.cart_items[0].symbol || '');
+        document.getElementById('total-sum-vat').innerText = (order.total_sum_with_vat).toFixed(2) + ' ' + (order.cart_items[0].symbol || '');
+
+        // Populate shipping details
+        const shippingDetails = order.shipping_details;
+        document.getElementById('shipping-details').innerText = `
+            Name: ${shippingDetails.first_name} ${shippingDetails.last_name},
+            Address: ${shippingDetails.address}, 
+            Phone: ${shippingDetails.phone}, 
+            Email: ${shippingDetails.email}
+        `;
+
+        const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+        window.history.replaceState({ path: newUrl }, '', newUrl);
+    }
+
+    // Fetch order details from the backend using the order ID
+    function fetchOrderDetails(orderId) {
+        const url = `/order?order_id=${orderId}`;
+
+        fetch(url, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        })
+        .then(response => response.json())
+        .then(orderData => {
+            populatePaymentPage(orderData);
+        })
+        .catch(error => {
+            console.error('Error fetching order details:', error);
+            alert('Failed to load order details. Please try again.');
+        });
+    }
+
+    // On document load, get the order ID and fetch order details
+    window.onload = function() {
+        const orderIdFromUrl = getOrderIdFromUrl();
+        let orderId = orderIdFromUrl;
+
+        if (!orderId) {
+            const hiddenOrderIdField = document.getElementById('order-id');
+            orderId = hiddenOrderIdField ? hiddenOrderIdField.value : null;
+        }
+
+        console.log(orderId);
+        if (orderId) {
+            fetchOrderDetails(orderId);
+        } else {
+            alert('Order ID is missing. Unable to load order details.');
+        }
+    };
+
+
+        // Display alerts
+        const displayAlert = (type, message) => {
+            const alertContainer = document.getElementById('alert-container');
+            const alert = document.createElement('div');
+            alert.classList.add('alert', `alert-${type}`);
+            alert.innerText = message;
+            alertContainer.appendChild(alert);
+
+            // Automatically hide the alert after 5 seconds
+            setTimeout(() => {
+                alertContainer.innerHTML = '';
+            }, 5000);
+        };
+
+        // Handle form submission for payment
+        document.getElementById('payment-form').addEventListener('submit', function(event) {
+            event.preventDefault();
+            const paymentAmount = document.getElementById('payment_amount').value;
+
+            fetch('/finish_payment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    order_id: document.getElementById('order-id').value,
+                    payment_amount: paymentAmount
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log("data");
+                console.log(data);
+                if (data.success) {
+                    alert(data.message);
+                    window.location.href = '/home.html';
+                } else {
+                    if (data.code === undefined) {
+                        displayErrorMessage(data.error_message);
+                    } else {
+                        displayErrorMessage(data.error_message + " code: " + data.error_code);
+                    }
+                }
+            })
+        });
+
+    // Function to display error message dynamically
+    function displayErrorMessage(message) {
+        $('#error-message').removeClass('d-none').text(message);
+    }
+    </script>
+</body>
+</html>

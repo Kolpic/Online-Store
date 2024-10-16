@@ -93,7 +93,7 @@
                         ${data.email ? `
                             <a id="logoutButton" href="/logout" class="btn btn-danger mr-3">Logout</a>
                             <a href="/profile.html" class="mr-3"><i class="bi bi-gear" style="font-size: 2rem; color: black;"></i></a>
-                            <a href="/user_orders" class="mr-3" style="font-size: 2rem; color: black;"><i class="bi bi-clipboard-check"></i></a>
+                            <a href="/user_orders.html" class="mr-3" style="font-size: 2rem; color: black;"><i class="bi bi-clipboard-check"></i></a>
                         ` : `
                             <a href="/login.html" class="btn btn-primary mr-3">Login</a>
                         `}
@@ -330,41 +330,6 @@
 
     function clearErrorMessage() {
         $('#error-message').addClass('d-none').text('');
-    }
-
-    async function addToCart(event, productId) {
-        event.preventDefault();  // Prevent the form from submitting the usual way
-
-        // Find the quantity input field for this product
-        const quantityInput = document.getElementById(`quantity-${productId}`);
-        const quantity = quantityInput.value;
-
-        // Create a FormData object for the POST request
-        const formData = new FormData();
-        formData.append('product_id', productId);
-        formData.append('quantity', quantity);
-
-        // Send a POST request to add the product to the cart
-        try {
-            const response = await fetch('/add_to_cart', {
-                method: 'POST',
-                body: formData,
-                credentials: 'include',  // Send cookies along with the request
-            });
-            
-            const result = await response.json();
-
-            // Show a success message or handle any errors
-            if (result.success) {
-                alert('Product added to cart!');
-                fetchHeaderData();
-                //updateCartCount(result.newCartCount);  // Update the cart badge count
-            } else {
-                alert('Error adding product to cart: ' + result.message);
-            }
-        } catch (error) {
-            console.error('Error:', error);
-        }
     }
 
         // Initial fetch on page load
