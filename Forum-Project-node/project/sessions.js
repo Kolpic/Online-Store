@@ -19,7 +19,7 @@ async function createSession(email, isFrontOffice, client) {
         	(session_id, expires_at, is_active, staff_id)
          VALUES 
          	($1, $2, $3, (SELECT id FROM staff WHERE username = $4))`,
-        [sessionId, expiresAt, true, sessionData]
+        [sessionId, expiresAt, true, email]
       );
   	}
 

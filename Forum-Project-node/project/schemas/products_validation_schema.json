@@ -1,0 +1,112 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "products",
+  "description": "Schema for a product entity",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Unique identifier for the product",
+      "readOnly": true
+    },
+    "name": {
+      "type": "string",
+      "description": "Name of the product",
+      "minLength": 5,
+      "maxLength": 255
+    },
+    "price": {
+      "type": "number",
+      "fieldType": "range",
+      "description": "Price of the product",
+      "minimum": 1,
+      "maximum": 10000
+    },
+    "quantity": {
+      "type": "integer",
+      "description": "Available stock quantity",
+      "minimum": 1,
+      "maximum": 1000
+    },
+    "categories": {
+      "type": "array",
+      "description": "Categories associated with the product",
+      "items": {
+        "type": "string"
+      },
+      "manyToMany": {
+        "joinTable": "products_categories",
+        "joinColumnOnePK": "product_id",
+        "joinColumnTwoPK": "category_id",
+        "targetTable": "categories",
+        "targetColumn": "name",
+        "targetColumnFilter": "id"
+      }
+    },
+    "currency_id": {
+      "type": "string",
+      "description": "Currency symbol",
+      "foreignKey": {
+        "table": "currencies",
+        "value": "id",
+        "column": "symbol"
+      }
+    },
+    "vat_id": {
+      "type": "integer",
+      "description": "VAT rate",
+      "minimum": 1,
+      "maximum": 100,
+      "foreignKey": {
+        "table": "settings",
+        "value": "id",
+        "column": "vat"
+      }
+    },
+    "images": {
+      "type": "array",
+      "description": "Array of image files",
+      "foreignKey": {
+        "currentTableToJoin": "products.id",
+        "table": "images",
+        "value": "product_id",
+        "column": "path"
+      },
+      "items": {
+        "type": "object",
+         "properties": {
+         "name": { "type": "string" },
+         "filepath": { "type": "string" },
+         "filename": { "type": "string" }
+         }
+      },
+      "minItems": 3,
+      "fileConstraints": {
+        "validExtensions": [".jpg", ".jpeg", ".png"],
+        "maxSize": 5242880
+      }
+    }
+  },
+  "filters": ["name", "categories", "price"],
+  "required": ["name", "price", "quantity", "categories", "currency_id", "images"],
+  "errorMessage": {
+    "required": {
+        "name": "Name if the product is required",
+        "price": "Price of the product is required",
+        "quantity": "Quantity of the product is required",
+        "categories": "At least one category is required",
+        "currency_id": "Currency is required",
+        "images": "At least three images are required"
+      },
+  "properties": {
+        "name": "Name of the product should be between 5 and 255 characters",
+        "price": "Price of the product should be between 1 and 10 000",
+        "quantity": "Quantity of the product should be between 1 and 1000",
+        "address": "Address cannot exceed 255 characters",
+        "categories": "Category should be of the given options",
+        "currency_id": "Currency should be of the given options",
+        "images": "Images for the product should be at least 3"
+      }
+  },
+  "additionalProperties": false
+}

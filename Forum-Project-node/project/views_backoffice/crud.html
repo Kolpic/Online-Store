@@ -1,0 +1,846 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Dynamic CRUD</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1 id="crud-title"></h1>
+        <button id="create-product-btn" class="btn btn-success mt-3">Create</button>
+        <div id="error-messages"></div>
+
+        <!-- Form to input filters -->
+        <form id="crud-form">
+            <!-- Dynamic form fields will be injected here from the json-->
+        </form>
+        <button id="submit-btn" class="btn btn-primary">Filter</button>
+
+        <!-- Table to display entities -->
+        <table class="table table-bordered mt-4" id="entities-table" style="display: none;">
+
+            <thead>
+                <tr id="table-headers">
+                    <!-- Dynamic headers will be injected here -->
+                </tr>
+            </thead>
+
+            <tbody id="entities-tbody">
+                <!-- Dynamic rows will be injected here -->
+            </tbody>
+
+        </table>
+    </div>
+
+    <!-- Bootstrap Modal for editing an entity -->
+    <div class="modal fade" id="editModal" tabindex="-1" role="dialog" aria-labelledby="editModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+
+            <div class="modal-content">
+
+                <div class="modal-header">
+                    <h5 class="modal-title" id="editModalLabel">Edit Entity</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+
+                    <form id="edit-form">
+                        <!-- Dynamic form fields for editing will be injected here -->
+                    </form>
+
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="save-edit-btn">Save changes</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Modal for creating a new product -->
+    <div class="modal fade" id="createProductModal" tabindex="-1" role="dialog" aria-labelledby="createProductModalLabel" aria-hidden="true">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createProductModalLabel">Create New</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <form id="create-product-form">
+                        <!-- Dynamic form fields for product creation will be injected here -->
+                    </form>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-primary" id="save-create-product-btn">Create</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script  defer src="/ajv.js" type="module"></script>
+
+    <script>
+        let validate;
+        let currentSchema;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            const Ajv = window.Ajv;
+            const ajv = new Ajv({ allErrors: true, strict: false });
+            window.ajvErrors(ajv);
+
+            let schema = await fetch(`/${entityType}_validation_schema.json`);
+            currentSchema = await schema.json();
+            console.log("currentSchema");
+            console.log(currentSchema);
+            validate = ajv.compile(currentSchema);
+        });
+
+        // Function to get the entity type from the URL (e.g., ?products or ?users)
+        function getEntityTypeFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('entity');  // Get the value after ?entity=
+        }
+
+        // Set the entity type dynamically based on the URL
+        const entityType = getEntityTypeFromUrl();
+
+        // Load the schema dynamically based on the entity type
+        async function loadSchema(entity) {
+            try {
+                const response = await fetch(`${entity}.json`);
+                const schema = await response.json();
+                console.log('Schema loaded:', schema);
+                return schema;
+            } catch (error) {
+                console.error('Error loading schema:', error);
+                return null;
+            }
+        }
+
+        // Render form based on the schema
+        function renderForm(schema) {
+            const form = document.getElementById('crud-form');
+            const title = document.getElementById('crud-title');
+            title.textContent = `Manage ${schema.entity}`;
+
+            schema.fields.forEach(field => {
+                if (!field.show_in_filter) return; // Skip non-editable or non-filter fields
+
+                const formGroup = document.createElement('div');
+                formGroup.className = 'form-group';
+
+                const label = document.createElement('label');
+                label.textContent = field.label;
+                formGroup.appendChild(label);
+
+                let input;
+
+                if (field.type === 'multiselect') {
+                    input = document.createElement('select');
+                    input.className = 'form-control';
+                    input.name = field.name;
+                    input.multiple = true;
+
+                    // Fetch options from the server for categories
+                    fetch(field.options_url)
+                        .then(response => response.json())
+                        .then(options => {
+                            options.forEach(option => {
+                                const opt = document.createElement('option');
+                                opt.value = option.id;  // Assuming categories are fetched with id and name
+                                opt.textContent = option.name;
+                                input.appendChild(opt);
+                            });
+                        })
+                        .catch(error => {
+                            console.error(`Error loading ${field.name} options:`, error);
+                        });
+                } else if (field.type === 'image') {
+                    // Create an image element
+                    input = document.createElement('img');
+                    input.className = 'form-image';
+                    input.src = `/images/${field.value}`;
+                    input.alt = 'Image Preview';
+                    input.style.maxWidth = '50px';
+                    input.style.height = 'auto';
+
+                } else if (field.type === 'select') {
+                    input = document.createElement('select');
+                    input.className = 'form-control';
+                    input.name = field.name;
+
+                    // Fetch options from the server
+                    fetch(field.options_url)
+                        .then(response => response.json())
+                        .then(options => {
+                            options.forEach(option => {
+                                const opt = document.createElement('option');
+                                opt.value = option.name;
+                                opt.textContent = option.name;
+                                input.appendChild(opt);
+                            });
+                        })
+                        .catch(error => {
+                            console.error(`Error loading ${field.name} options:`, error);
+                        });
+                } else if (field.type === 'number' || field.type === 'integer') {
+                    input = document.createElement('input');
+                    input.type = 'number';
+                } else if (field.type === 'boolean') {
+                    input = document.createElement('input');
+                    input.type = 'checkbox';
+                } else {
+                    input = document.createElement('input');
+                    input.type = 'text';
+                }
+
+                input.className = 'form-control';
+                input.name = field.name;
+                formGroup.appendChild(input);
+
+                form.appendChild(formGroup);
+            });
+        }
+
+        // Handle form submission
+        async function handleSubmit(event) {
+            event.preventDefault();
+            console.log('Form submitted');
+
+            const formData = new FormData(document.getElementById('crud-form'));
+
+            console.log("formData");
+            console.log(formData);
+
+            const data = {};
+            const filters = {};  // Object to hold filter criteria
+            filters['schema'] = currentSchema;
+
+            formData.forEach((value, key) => {
+
+                console.log("value");
+                console.log(value);
+                console.log("key");
+                console.log(key);
+
+
+                // Add non-empty fields to the filters object
+                if (value) {
+                    // Special case for multiselect fields (categories in this case)
+                    if (key === 'categories') {
+                        filters[key] = [...formData.getAll(key)]; // Get all selected categories
+                    } else {
+                        filters[key] = value;
+                    }
+                }
+            });
+
+            console.log("data");
+            console.log(data);
+
+            console.log("filters");
+            console.log(filters);
+
+            // Fetch filtered products from the back-end
+            try {
+                const response = await fetch(`/crud/${entityType}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(filters),
+                });
+
+                const entities = await response.json();
+
+                console.log("entities");
+                console.log(entities);
+
+                renderEntityTable(entities);  // Render the filtered entities
+            } catch (error) {
+                console.error('Error submitting form:', error);
+            }
+        }
+
+        // Render the entities table
+        function renderEntityTable(entities) {
+            console.log("entities in renderEntityTable");
+            console.log(entities);
+
+            const table = document.getElementById('entities-table');
+            const tbody = document.getElementById('entities-tbody');
+            const tableHeaders = document.getElementById('table-headers');
+
+            tbody.innerHTML = '';  // Clear existing rows
+            tableHeaders.innerHTML = '';  // Clear existing headers
+
+            if (entities.length === 0) {
+                alert('No products found');
+                return;
+            }
+
+            // Generate headers dynamically based on schema
+            const schemaFields = entities[0] ? Object.keys(entities[0]) : [];
+            schemaFields.forEach(field => {
+                const th = document.createElement('th');
+                th.textContent = field.charAt(0).toUpperCase() + field.slice(1);
+                tableHeaders.appendChild(th);
+            });
+
+            // Add "Options" column for Edit/Delete buttons
+            const optionsTh = document.createElement('th');
+            optionsTh.textContent = 'Options';
+            tableHeaders.appendChild(optionsTh);
+
+            // Generate rows dynamically
+            entities.forEach(entity => {
+                const row = document.createElement('tr');
+
+                schemaFields.forEach(field => {
+                    const cell = document.createElement('td');
+
+                    if (field === 'images') {
+                        // Handle the array of images
+                        const images = entity[field];  // Array of image paths
+                        console.log("entity[field]");
+                        console.log(entity[field]);
+                        images.forEach(imagePath => {
+                            console.log("imagePath");
+                            console.log(imagePath);
+                            const img = document.createElement('img');
+                            img.src = `/${imagePath}`;
+                            img.style.maxWidth = '100px';
+                            img.style.height = 'auto';
+                            cell.appendChild(img);
+                        });
+                    } else {
+                        // For other fields, simply set the text content
+                        cell.textContent = entity[field];
+                    }
+
+                    row.appendChild(cell);
+                });
+
+                // Add Edit/Delete buttons
+                const optionsCell = document.createElement('td');
+
+                const editBtn = document.createElement('button');
+                editBtn.className = 'btn btn-warning btn-sm';
+                editBtn.textContent = 'Edit';
+                editBtn.onclick = () => editEntity(entity,entity.id);  // Call edit function
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'btn btn-danger btn-sm';
+                deleteBtn.textContent = 'Delete';
+                deleteBtn.onclick = () => deleteEntity(entity.id);  // Call delete function
+
+                optionsCell.appendChild(editBtn);
+                optionsCell.appendChild(deleteBtn);
+                row.appendChild(optionsCell);
+
+                tbody.appendChild(row);
+            });
+
+            table.style.display = 'table';  // Show the table
+        }
+
+        // Edit Entity function: Opens the modal and populates the form with current entity data
+        async function editEntity(entity, id) {
+            const modal = document.getElementById('editModal');
+            const editForm = document.getElementById('edit-form');
+            editForm.innerHTML = ''; 
+
+            const filters = {};
+            filters['schema'] = currentSchema;
+            filters['id'] = id;
+
+            try {
+                const response = await fetch(`/crud/${entityType}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(filters),
+                });
+
+                // Fetch the entity data from the backend using the entityId
+                // const response = await fetch(`/${entityType}/${id}`);
+                const entity = await response.json();
+                const entityData = entity[0];
+                console.log("entityData", entityData);
+
+                // Load schema again and render the edit form dynamically
+                loadSchema(entityType).then(schema => {
+                    schema.fields.forEach(field => {
+                        console.log("field", field);
+
+                        if (!field.editable) return;  // Skip non-editable fields
+
+                        // Ensure the field exists in entityData
+                        if (!(field.name in entityData)) {
+                            if (field.name == "currency_id" && 'symbol' in entityData) {
+                                entityData['currency_id'] = entityData['symbol'];
+                            } else if (field.name == "country_code_id" && 'code' in entityData) {
+                                entityData['country_code_id'] = entityData['code'];
+                            } else {
+                                console.warn(`Field ${field.name} does not exist in entityData`);
+                                return;
+                            }
+                        }
+
+                        let input;
+
+                        if (field.name === 'id') {
+                            input = document.createElement('input');
+                            input.type = 'hidden';  // Hide the ID field
+                            input.value = entityData[field.name];  // Pre-fill with the entity data
+                            input.name = field.name;  // Still give it a name for submission
+
+                            // Append the hidden ID field directly to the form without a label
+                            editForm.appendChild(input);
+                            return;
+                        }
+
+                        const formGroup = document.createElement('div');
+                        formGroup.className = 'form-group';
+
+                        const label = document.createElement('label');
+                        label.textContent = field.label;
+                        formGroup.appendChild(label);
+
+                        if (field.type === 'multiselect' && Array.isArray(entityData[field.name])) {
+                            console.log("CATEGORIES IF");
+
+                            input = document.createElement('select');
+                            input.className = 'form-control';
+                            input.name = field.name;
+                            input.multiple = true;
+
+                            // Fetch options and mark selected ones
+                            fetch(field.options_url)
+                                .then(response => response.json())
+                                .then(options => {
+                                    options.forEach(option => {
+                                        const opt = document.createElement('option');
+                                        opt.value = option.id;
+                                        opt.textContent = option.name;
+                                        if (entityData[field.name].includes(option.name)) {
+                                            opt.selected = true;  // Pre-select categories that the product already has
+                                        }
+                                        input.appendChild(opt);
+                                        formGroup.appendChild(input);
+                                    });
+                                })
+                                .catch(error => {
+                                    console.error(`Error loading ${field.name} options:`, error);
+                                });
+                        } else if (field.name === 'images' && Array.isArray(entityData[field.name])) {
+
+                            // Handle the array of images
+                            const images = entityData[field.name];  // Array of image paths
+
+                            // Iterate through each image and create its preview along with remove option
+                            images.forEach((imagePath, index) => {
+                                if (!imagePath) return;  // Ensure imagePath is valid
+
+                                const imageWrapper = document.createElement('div');
+                                imageWrapper.className = 'image-wrapper';
+
+                                const imagePreview = document.createElement('img');
+                                imagePreview.className = 'form-image';
+                                imagePreview.src = `/${imagePath}`;
+                                imagePreview.alt = 'Image Preview';
+                                imagePreview.style.maxWidth = '150px';
+                                imagePreview.style.height = 'auto';
+
+                                // Create a checkbox to allow image removal
+                                const removeCheckbox = document.createElement('input');
+                                removeCheckbox.type = 'checkbox';
+                                removeCheckbox.name = `remove_image_${index}`;  // Unique name for each image
+                                removeCheckbox.value = imagePath;  // Use the image path as value
+
+                                const removeLabel = document.createElement('label');
+                                removeLabel.textContent = 'Remove Image';
+
+                                // Append image preview and remove option to the wrapper
+                                imageWrapper.appendChild(imagePreview);
+                                imageWrapper.appendChild(removeCheckbox);
+                                imageWrapper.appendChild(removeLabel);
+
+                                // Append the entire wrapper to the form group
+                                formGroup.appendChild(imageWrapper);
+                            });
+
+                            // Allow new image upload
+                            const newImageInput = document.createElement('input');
+                            newImageInput.type = 'file';
+                            newImageInput.name = 'new_images';
+                            newImageInput.multiple = true; 
+                            formGroup.appendChild(newImageInput);
+                        } else if (field.type === 'select') {
+                            input = document.createElement('select');
+                            input.className = 'form-control';
+                            input.name = field.name;
+
+                            // Fetch options from the server for the select field
+                            fetch(field.options_url)
+                                .then(response => response.json())
+                                .then(options => {
+                                    options.forEach(option => {
+                                        console.log("option", option);
+                                        const opt = document.createElement('option');
+                                        if (option.param == undefined) {
+                                            opt.value = option.name;  // or option.id
+                                            opt.textContent = option.name;
+                                            if (option.symbol === entityData[field.name]) {
+                                                opt.selected = true;
+                                            }
+                                        } else {
+                                            opt.value = option.id;  // or option.id
+                                            opt.textContent = option.name + " ( " + option.param + " ) ";
+                                            if (option.name === entityData[field.name]) {
+                                                opt.selected = true;
+                                            }
+                                        }
+                                        input.appendChild(opt);
+                                    });
+                                })
+                                .catch(error => {
+                                    console.error(`Error loading ${field.name} options:`, error);
+                                });
+                            formGroup.appendChild(input);
+                        } else if (field.type === 'number' || field.type === 'integer') {
+                            input = document.createElement('input');
+                            input.type = 'number';
+                            input.value = entityData[field.name];
+                            input.className = 'form-control';
+                            input.name = field.name;
+                            formGroup.appendChild(input);
+                        } else if (field.type === 'boolean') {
+                            input = document.createElement('input');
+                            input.type = 'checkbox';
+                            input.checked = entityData[field.name];  // Set checkbox value
+                            input.className = 'form-control';
+                            input.name = field.name;
+                            formGroup.appendChild(input);
+                        } else {
+                            input = document.createElement('input');
+                            input.type = 'text';
+                            input.value = entityData[field.name];  // Pre-fill with entity data
+                            input.className = 'form-control';
+                            input.name = field.name;
+                            formGroup.appendChild(input);
+                        }
+
+                        editForm.appendChild(formGroup);
+                    });
+
+                    // Open the modal
+                    $('#editModal').modal('show');
+                });
+            } catch (error) {
+                console.error('Error fetching entity data:', error);
+                alert('Failed to load entity data for editing');
+            }
+        }
+
+
+        // Save Edit button in modal
+        document.getElementById('save-edit-btn').addEventListener('click', async function() {
+            const formData = new FormData(document.getElementById('edit-form'));
+            const updatedData = {};
+
+            console.log("formData");
+            console.log(formData);
+
+            formData.forEach((value, key) => {
+                if (key === 'categories') {
+                    if (!updatedData[key]) {
+                        updatedData[key] = [];
+                    }
+                    updatedData[key].push(value);  // Push all selected categories into an array
+                } else {
+                    updatedData[key] = value;  // For non-categories fields, store as usual
+                }
+            });
+
+            console.log("updatedData");
+            console.log(updatedData);
+
+            // Handle removed images (checkboxes that were checked)
+            const removedImages = [];
+            document.querySelectorAll('input[name^="remove_image_"]:checked').forEach(checkbox => {
+                removedImages.push(checkbox.value);  // Add the image path to the removedImages array
+            });
+
+            updatedData['removedImages'] = removedImages;
+
+            console.log("Updated data:", updatedData);
+            console.log("formData data:", formData);
+
+            try {
+                const response = await fetch(`/update/${entityType}/${updatedData.id}`, {
+                    method: 'PUT',  
+                    body: formData,
+                });
+
+                const result = await response.json();
+                alert(result.message);
+
+                // Close the modal after saving
+                $('#editModal').modal('hide');
+            } catch (error) {
+                console.error('Error saving changes:', error);
+            }
+        });
+
+        // Delete Entity function
+        async function deleteEntity(entityId) {
+            if (confirm('Are you sure you want to delete this entity?')) {
+                try {
+                    const response = await fetch(`/api/${entityType}/${entityId}`, {
+                        method: 'DELETE',
+                    });
+                    const result = await response.json();
+                    alert(result.message);
+                    handleSubmit();  // Refresh the product list after deletion
+                } catch (error) {
+                    console.error('Error deleting entity:', error);
+                }
+            }
+        }
+
+        document.getElementById('create-product-btn').addEventListener('click', function() {
+            loadSchema(entityType).then(schema => {
+                renderCreateProductForm(schema);
+                $('#createProductModal').modal('show');  // Open the modal
+            });
+        });
+
+        // Function to render the Create Product form based on the schema
+        function renderCreateProductForm(schema) {
+            const createForm = document.getElementById('create-product-form');
+            createForm.innerHTML = '';
+
+            schema.fields.forEach(field => {
+                if (!field.create) return; 
+
+                const formGroup = document.createElement('div');
+                formGroup.className = 'form-group';
+
+                const label = document.createElement('label');
+                label.textContent = field.label;
+                formGroup.appendChild(label);
+
+                let input;
+
+                if (field.type === 'multiselect') {
+                    input = document.createElement('select');
+                    input.className = 'form-control';
+                    input.name = field.name;
+                    input.multiple = true;
+
+                    // Fetch options for categories or other multiselect fields
+                    fetch(field.options_url)
+                        .then(response => response.json())
+                        .then(options => {
+                            options.forEach(option => {
+                                const opt = document.createElement('option');
+                                opt.value = option.id;  // Assuming categories or currencies
+                                opt.textContent = option.name;
+                                input.appendChild(opt);
+                            });
+                        })
+                        .catch(error => {
+                            console.error(`Error loading ${field.name} options:`, error);
+                        });
+                } else if (field.type === 'array' && field.item_type === 'image') {
+                    input = document.createElement('input');
+                    input.type = 'file';
+                    input.className = 'form-control';
+                    input.name = field.name;  // Use the field name for submission
+                    input.multiple = true;  // Allow multiple image uploads
+                } else if (field.type === 'select') {
+                    input = document.createElement('select');
+                    input.className = 'form-control';
+                    input.name = field.name;
+
+                    // Fetch options for the select field (like currency)
+                    fetch(field.options_url)
+                        .then(response => response.json())
+                        .then(options => {
+                            options.forEach(option => {
+                                if (Object.keys(option).length == 1) {
+                                    const opt = document.createElement('option');
+                                    opt.value = option.name;
+                                    opt.textContent = option.name;
+                                    input.appendChild(opt);
+                                } else if (Object.keys(option).length == 2) {
+                                    const opt = document.createElement('option');
+                                    opt.value = option.name;
+                                    opt.textContent = option.name + " (" + option.param + ")";
+                                    input.appendChild(opt);
+                                } else if (Object.keys(option).length == 3) {
+                                    const opt = document.createElement('option');
+                                    opt.value = parseInt(option.id);
+                                    opt.textContent = option.name + " (" + option.param + ")";
+                                    input.appendChild(opt);
+                                }
+                            });
+                        })
+                        .catch(error => {
+                            console.error(`Error loading ${field.name} options:`, error);
+                        });
+                } else if (field.type === 'number' || field.type === 'integer') {
+                    input = document.createElement('input');
+                    input.type = 'number';
+                    input.name = field.name;
+                } else if (field.type === 'boolean') {
+                    input = document.createElement('input');
+                    input.type = 'checkbox';
+                } else {
+                    input = document.createElement('input');
+                    input.type = 'text';
+                    input.name = field.name;
+                }
+
+                input.className = 'form-control';
+                formGroup.appendChild(input);
+
+                // errors for each field
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'error-message text-danger';
+                errorDiv.style.display = 'none';
+                formGroup.appendChild(errorDiv);
+
+                createForm.appendChild(formGroup);
+            });
+        }
+
+        document.getElementById('save-create-product-btn').addEventListener('click', async function() {
+            document.querySelectorAll('.error-message').forEach(div => {
+                div.style.display = 'none';
+                div.textContent = '';
+            });
+
+            const formData = new FormData(document.getElementById('create-product-form'));
+
+            console.log("formData");
+            console.log(formData);
+
+            const productData = Object.fromEntries(formData.entries());
+
+            console.log("productData");
+            console.log(productData);
+
+            console.log("entityType");
+            console.log(entityType);
+
+            if (entityType == 'products') {
+                // Convert formData to an object (handling arrays like categories and images)
+                productData.categories = formData.getAll('categories'); // Handle multiselect categories
+                productData.images = formData.getAll('images'); // Handle multiple images
+                console.log("productData.images");
+                console.log(productData.images);
+                productData.price = parseFloat(productData.price);
+                productData.quantity = parseInt(productData.quantity);
+                const imageConstraints = currentSchema.properties.images.fileConstraints;
+                const validExtensions = imageConstraints.validExtensions;
+                const maxSizeInBytes = imageConstraints.maxSize;
+
+                const images = formData.getAll('images');
+                for (const file of images) {
+                    if (!validExtensions.some(ext => file.name.toLowerCase().endsWith(ext))) {
+                        alert(`Invalid file type: ${file.name}. Only JPG and PNG files are allowed.`);
+                        return;
+                    }
+                    if (file.size > maxSizeInBytes) {
+                        alert(`File too large: ${file.name}. Maximum size allowed is 5 MB.`);
+                        return;
+                    }
+                }
+
+                formData.delete('categories');
+                productData.categories.forEach(category => {
+                    formData.append('categories', parseInt(category));
+                });
+            } else if (entityType == 'users') {
+                productData.country_code_id = parseInt(productData.country_code_id);
+                productData.verification_status = formData.has('verification_status');
+                formData.append('country_code_id', productData.country_code_id);
+                formData.append('verification_status', productData.verification_status);
+            }
+
+            const isValidData = validate(productData);
+
+            console.log(validate.errors);
+            console.log("isValidData");
+            console.log(isValidData);
+
+            if (!isValidData) {
+                // For each validation error, find the corresponding error container
+                validate.errors.forEach(err => {
+                    console.log("err");
+                    console.log(err);
+                    const fieldName = err.instancePath.slice(1);
+                    const inputElement = document.querySelector(`[name="${fieldName}"]`);
+
+                    console.log("inputElement");
+                    console.log(inputElement);
+
+                    if (inputElement) {
+                        const errorDiv = inputElement.closest('.form-group').querySelector('.error-message');
+
+                        console.log("errorDiv");
+                        console.log(errorDiv);
+
+                        if (errorDiv) {
+                            errorDiv.style.display = 'block';
+                            errorDiv.textContent = err.message;
+                        }
+                    } else {
+                        console.warn(`No input element found for field "${fieldName}"`);
+                    }
+                });
+                return;
+            }
+
+            try {
+                const response = await fetch(`/create/${entityType}`, {
+                    method: 'POST',
+                    body: formData,
+                });
+
+                const result = await response.json();
+                alert(result.message);
+
+                // Close the modal after creation
+                $('#createProductModal').modal('hide');
+            } catch (error) {
+                console.error('Error creating product:', error);
+            }
+        });
+
+        document.getElementById('submit-btn').addEventListener('click', handleSubmit);
+
+        // Load and render form on page load
+        loadSchema(entityType).then(schema => {
+            if (schema) renderForm(schema);
+        });
+    </script>
+</body>
+</html>

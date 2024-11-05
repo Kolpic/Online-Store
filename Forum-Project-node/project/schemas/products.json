@@ -1,0 +1,89 @@
+{
+    "entity": "products",
+    "fields": [
+        {
+            "name": "id",
+            "type": "integer",
+            "label": "ID",
+            "create": false,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "name",
+            "type": "string",
+            "label": "Name",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true
+        },
+        {
+            "name": "price",
+            "type": "number",
+            "label": "Price",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "price_min",
+            "type": "number",
+            "label": "Price Min",
+            "create": false,
+            "editable": false,
+            "show_in_filter": true
+        },
+        {
+            "name": "price_max",
+            "type": "number",
+            "label": "Price Max",
+            "create": false,
+            "editable": false,
+            "show_in_filter": true
+        },
+        {
+            "name": "quantity",
+            "type": "integer",
+            "label": "Quantity",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "categories",
+            "type": "multiselect",
+            "label": "Categories",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true,
+            "options_url": "/categories"
+        },
+        {
+            "name": "currency_id",
+            "type": "select",
+            "label": "Currency",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false,
+            "options_url": "/currencies"
+        },
+        {
+            "name": "vat",
+            "type": "integer",
+            "label": "VAT",
+            "create": false,
+            "editable": false,
+            "show_in_filter": false
+        },
+         {
+          "name": "images",
+          "type": "array",
+          "label": "Images",
+          "create": true,
+          "editable": true,
+          "show_in_filter": false,
+          "item_type": "image",
+          "max_images": 3
+        }
+    ]
+}

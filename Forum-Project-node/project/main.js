@@ -95,8 +95,18 @@ router.use(async (req, res, next) => {
 
         await client.query('COMMIT');
 	} catch (error) {
-		await client.query('ROLLBACK');
-        console.log(error, "error")
+        console.log(error, "error");
+
+        let sessionId = req.cookies['session_id'];
+        let userData = await sessions.getCurrentUser(sessionId, client);
+        if (userData == null) {
+            userData = "Guest";
+        }
+
+        await logException(userData, error.name, error.message, "site");
+
+        await client.query('ROLLBACK');
+
         if (error instanceof WrongUserInputException) {
             return res.status(400).json({
                 error_message: error.message, 
@@ -516,6 +526,16 @@ async function postProfileHandler(req, res, next, client) {
         success: true,
         message: result.message,
     });
+}
+
+async function logException(user_email, exception_type, message, subSystem) {
+    let clientForExcaptionLog = await pool.connect();
+    await clientForExcaptionLog.query('BEGIN');
+
+    await clientForExcaptionLog.query(`INSERT INTO exception_logs (user_email, exception_type, message, sub_system) VALUES ($1, $2, $3, $4)`, [user_email, exception_type, message, subSystem]);
+
+    await clientForExcaptionLog.query('COMMIT');
+    clientForExcaptionLog.release();
 }
 
 module.exports = {

@@ -1,0 +1,101 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "users",
+  "description": "Schema for a user entity",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Unique identifier for the user",
+      "readOnly": true
+    },
+    "first_name": {
+      "type": "string",
+      "description": "User's first name",
+      "minLength": 5,
+      "maxLength": 50
+    },
+    "last_name": {
+      "type": "string",
+      "description": "User's last name",
+      "minLength": 5,
+      "maxLength": 50
+    },
+    "email": {
+      "type": "string",
+      "description": "User's email",
+      "minLength": 5,
+      "maxLength": 50
+    },
+    "password": {
+      "type": "string",
+      "description": "User's password",
+      "minLength": 5,
+      "maxLength": 150
+    },
+    "verification_status": {
+      "type": "boolean",
+      "description": "User's account verification status"
+    },
+    "verification_code": {
+      "type": "string",
+      "description": "User's verification code",
+      "minLength": 5,
+      "maxLength": 50
+    },
+    "address": {
+      "type": "string",
+      "description": "User's address",
+      "minLength": 5,
+      "maxLength": 255
+    },
+    "gender": {
+      "type": "string",
+      "description": "User's gender",
+      "enum": ["", "male","female"]
+    },
+    "phone": {
+      "type": "string",
+      "description": "User's phone",
+      "minLength": 5,
+      "maxLength": 20
+    },
+    "country_code_id": {
+      "foreignKey": {
+        "table": "country_codes",
+        "tablePK": "id",
+        "value": "id",
+        "column": "code"
+      },
+      "type": "integer",
+      "description": "User's country code id"
+    }
+  },
+  "filters": ["first_name", "last_name", "email", "id"],
+  "required": ["first_name", "last_name", "email", "password", "verification_status", "verification_code", "phone", "country_code_id"],
+  "errorMessage": {
+    "required": {
+        "first_name": "User's first name is required",
+        "last_name": "User's last name is required",
+        "email": "User's email is required",
+        "password": "User's password is required",
+        "verification_status": "User's verification status is required",
+        "verification_code": "User's verification code is required",
+        "phone": "User's phone is required",
+        "country_code_id": "User's country code is required"
+      },
+  "properties": {
+        "first_name": "User's first name should be between 5 and 50 characters",
+        "last_name": "User's last name should be between 5 and 50 characters",
+        "email": "User's email should be between 5 and 50 characters",
+        "password": "User's password should be at least 5 characters",
+        "verification_status": "User's verification status should be true or false",
+        "verification_code": "User's verification code should be between 5 and 50 characters",
+        "phone": "User's phone should be between 5 and 20 digits",
+        "country_code_id": "User's country_code should be valid",
+        "address": "User's address must be between 5 and 255 characters",
+        "gender": "User's gender must be one of the given values"
+      }
+  },
+  "additionalProperties": false
+}

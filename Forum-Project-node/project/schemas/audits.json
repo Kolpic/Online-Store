@@ -1,0 +1,42 @@
+{
+    "entity": "audits",
+    "fields": [
+        {
+            "key": "time",
+            "grouping_expression": "el.time",
+            "filter_expression": "el.time >= $FILTER_VALUE_BEGIN$ AND el.time <= $FILTER_VALUE_END$",
+            "order_by_expression": "el.time",
+            "order_direction": "DESC",
+            "type": "timestamp",
+            "groupable": true
+        },
+        {
+            "key": "message",
+            "grouping_expression": "el.message",
+            "filter_expression": "STRPOS(el.message, $FILTER_VALUE$) <> 0",
+            "type": "text",
+            "groupable": true
+        },
+        {
+            "key": "exception_type",
+            "grouping_expression": "el.exception_type",
+            "filter_expression": "STRPOS(el.exception_type, $FILTER_VALUE$) <> 0",
+            "type": "text",
+            "groupable": true
+        },
+        {
+            "key": "user_email",
+            "grouping_expression": "el.user_email",
+            "filter_expression": "STRPOS(el.user_email, $FILTER_VALUE$) <> 0",
+            "type": "text",
+            "groupable": true
+        },
+        {
+            "key": "sub_system",
+            "grouping_expression": "el.sub_system",
+            "filter_expression": "STRPOS(el.sub_system, $FILTER_VALUE$) <> 0",
+            "type": "text",
+            "groupable": true
+        }
+    ]
+}

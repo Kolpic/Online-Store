@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Staff Portal</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <style>
+        .container {
+            margin-top: 50px;
+        }
+        .list-group-item {
+            font-size: 1.2rem; 
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .nav {
+            display: flex;
+            justify-content: flex-end;
+        }
+        .nav .btn {
+            margin-left: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+
+        <div id="header"></div>
+
+        <div class="list-group">
+            <a href="/reports.html?entity=audits" class="list-group-item list-group-item-action">1. View Logs</a>
+            <a href="/crud.html?entity=products" class="list-group-item list-group-item-action">2. Manage Products</a>
+            <a href="/update_captcha_settings" class="list-group-item list-group-item-action">3. Settings</a>
+            <a href="/report_sales" class="list-group-item list-group-item-action">4. Report Sales</a>
+            <a href="/crud_staff" class="list-group-item list-group-item-action">5. Assign a role to staff</a>
+            <a href="/role_permissions" class="list-group-item list-group-item-action">6. Assign a permission to role</a>
+            <a href="/crud_orders" class="list-group-item list-group-item-action">7. Manage Orders</a>
+            <a href="/active_users" class="list-group-item list-group-item-action">8. See active users</a>
+            <a href="/crud.html?entity=users" class="list-group-item list-group-item-action">9. Manage Users</a>
+            <a href="/template_email" class="list-group-item list-group-item-action">10. Sending email template</a>
+        </div>
+    </div>
+</body>
+<script>
+    async function fetchHeaderData() {
+            const response = await fetch('/header');
+            const responseData = await response.json();
+            // const data = responseData.userInformation;
+
+            console.log(responseData);
+
+            const headerHtml = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <p class="mb-0">${responseData.email || ''}</p>
+                    <div class="d-flex align-items-center">
+                        <a href="/staff_portal.html" class="btn btn-primary mr-3">Home</a>
+                        ${responseData.email ? `
+                            <a id="logoutButton" href="/logout" class="btn btn-danger mr-3">Logout</a>
+                        ` : `
+                        `}
+                    </div>
+                </div>`;
+            document.getElementById('header').innerHTML = headerHtml;
+
+            // Bind the event listener after the content is loaded
+            const logoutButton = document.querySelector('#logoutButton');
+            if (logoutButton) {
+                logoutButton.addEventListener('click', handleLogout);
+            }
+    }
+    async function handleLogout() {
+        event.preventDefault()
+        try {
+            const response = await fetch('/logout', {
+                method: 'GET',
+                credentials: 'include'  // Ensure cookies are sent
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                sessionStorage.setItem('message', result.message);
+                window.location.href = '/login.html';
+            } else {
+                alert('Error logging out: ' + result.message);
+            }
+        } catch (error) {
+            console.error('Error:', error);
+        }
+    }
+        fetchHeaderData();
+</script>
+</html>

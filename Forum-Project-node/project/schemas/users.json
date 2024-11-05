@@ -1,0 +1,103 @@
+{
+    "entity": "users",
+    "fields": [
+        {
+            "name": "id",
+            "type": "integer",
+            "label": "ID",
+            "create": false,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "first_name",
+            "type": "string",
+            "label": "First Name",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true
+        },
+        {
+            "name": "last_name",
+            "type": "string",
+            "label": "Last Name",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true
+        },
+        {
+            "name": "email",
+            "type": "string",
+            "label": "Email",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true
+        },
+        {
+            "name": "password",
+            "type": "string",
+            "label": "Password",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "verification_status",
+            "type": "boolean",
+            "label": "Verification Status",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "verification_code",
+            "type": "string",
+            "label": "Verification Code",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "last_active",
+            "type": "date",
+            "label": "Last Active",
+            "create": false,
+            "editable": false,
+            "show_in_filter": false
+        },
+        {
+            "name": "address",
+            "type": "string",
+            "label": "Address",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "gender",
+            "type": "select",
+            "label": "Gender",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false,
+            "options_url": "/gender"
+        },
+        {
+            "name": "phone",
+            "type": "string",
+            "label": "Phone",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "country_code_id",
+            "type": "select",
+            "label": "Country Code",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false,
+            "options_url": "/country_codes"
+        }
+    ]
+}

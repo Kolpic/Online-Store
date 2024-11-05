@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Report with Filters</title>
+</head>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+        background-color: #f4f4f4;
+    }
+
+    h1 {
+        text-align: center;
+        color: #333;
+    }
+
+    #filterForm {
+        margin-bottom: 20px;
+        background: #fff;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    #filterContainer {
+        margin-bottom: 10px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+        background-color: #fff;
+        border-radius: 5px;
+        overflow: hidden;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    }
+
+    th, td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #ddd;
+    }
+
+    th {
+        background-color: #007BFF;
+        color: white;
+    }
+
+    tr:hover {
+        background-color: #f1f1f1;
+    }
+
+    button {
+        background-color: #007BFF;
+        color: white;
+        border: none;
+        padding: 10px 15px;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+
+    button:hover {
+        background-color: #0056b3;
+    }
+</style>
+<body>
+    <h1>Report</h1>
+    
+    <!-- Filters Form -->
+    <form id="filterForm">
+        <div id="filterContainer"></div>
+        <button type="button" onclick="fetchAndRenderReport()">Generate Report</button>
+    </form>
+    
+    <!-- Report Table -->
+    <table id="reportTable">
+        <thead id="tableHead"></thead>
+        <tbody id="tableBody"></tbody>
+    </table>
+
+    <script>
+        let entityType;
+        let reportFilters;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            entityType = getEntityTypeFromUrl();
+            console.log("entityType");
+            console.log(entityType);
+
+            let schema = await fetch(`/${entityType}.json`);
+            reportFilters = await schema.json();
+            console.log("reportFilters");
+            console.log(reportFilters);
+
+            generateFilterInputs();
+            setDefaultDateRange();
+        });
+
+        function getEntityTypeFromUrl() {
+            const urlParams = new URLSearchParams(window.location.search);
+            return urlParams.get('entity');  // Get the value after ?entity=
+        }  
+
+        function setDefaultDateRange() {
+            const now = new Date();
+            const oneMonthAgo = new Date();
+            oneMonthAgo.setMonth(now.getMonth() - 1);
+
+            const formatDateTime = (date) => date.toISOString().slice(0, 16);
+
+            // Set the default values in date inputs
+            document.querySelectorAll('input[type="datetime-local"]').forEach(input => {
+                if (input.name.endsWith('_filter_value_begin')) {
+                    input.value = formatDateTime(oneMonthAgo);
+                }
+                if (input.name.endsWith('_filter_value_end')) {
+                    input.value = formatDateTime(now);
+                }
+            });
+        }
+
+        // Function to generate filter inputs dynamically
+        function generateFilterInputs() {
+            const container = document.getElementById('filterContainer');
+            reportFilters.fields.forEach(filter => {
+                console.log("filter");
+                console.log(filter);
+                let inputHtml = '';
+                const labelText = filter.key.replace(/_/g, ' '); // Replace underscores with spaces
+
+                // Filters
+                switch (filter.type) {
+                    case 'timestamp':
+                        inputHtml = `
+                            <label>${labelText} (Start Date):</label>
+                            <input type="datetime-local" name="${filter.key}_filter_value_begin"><br>
+                            <label>${labelText} (End Date):</label>
+                            <input type="datetime-local" name="${filter.key}_filter_value_end"><br>
+                        `;
+                        break;
+
+                    case 'select':
+                        inputHtml = `
+                            <label>${labelText}:</label>
+                            <select name="${filter.key}_filter_value">
+                                <option value="all">All</option>
+                            </select><br>
+                        `;
+                        break;
+
+                    case 'number':
+                        inputHtml = `
+                            <label>${labelText}:</label>
+                            <input type="number" name="${filter.key}_filter_value" placeholder="Enter minimum value"><br>
+                        `;
+                        break;
+
+                    case 'text':
+                        inputHtml = `
+                            <label>${labelText}:</label>
+                            <input type="text" name="${filter.key}_filter_value" placeholder="Enter text"><br>
+                        `;
+                        break;
+                }
+
+                // Add ordering dropdown
+                inputHtml += `
+                    <label>${labelText} Order:</label>
+                    <select name="${filter.key}_order">
+                        <option value="">No Order</option>
+                        <option value="asc">Ascending</option>
+                        <option value="desc">Descending</option>
+                    </select><br>
+                `;
+
+                // Grouping Option
+                if (filter.groupable) {
+                    inputHtml += `
+                        <label><input type="checkbox" name="${filter.key}_grouping_select_value" value="group"> Group by ${labelText}</label><br>
+                        <br>
+                    `;
+                }
+
+                container.innerHTML += inputHtml;
+            });
+        }
+
+        // Fetch data with applied filters and render report
+        async function fetchAndRenderReport() {
+            const formData = new FormData(document.getElementById('filterForm'));
+
+            const queryString = new URLSearchParams(formData).toString();
+            console.log("queryString");
+            console.log(queryString);
+            
+            const response = await fetch(`/reports/${entityType}?${queryString}`);
+            const data = await response.json();
+
+            // Generate HTML table headers and rows dynamically
+            const tableHead = document.getElementById('tableHead');
+            const tableBody = document.getElementById('tableBody');
+            tableHead.innerHTML = '';
+            tableBody.innerHTML = '';
+
+            if (data.length > 0) {
+                // Create table headers
+                const headers = Object.keys(data[0]);
+                let headerRow = '<tr>';
+                headers.forEach(header => headerRow += `<th>${header}</th>`);
+                headerRow += '</tr>';
+                tableHead.innerHTML = headerRow;
+
+                // Populate table rows
+                data.forEach(row => {
+                    let rowHtml = '<tr>';
+                    headers.forEach(header => rowHtml += `<td>${row[header]}</td>`);
+                    rowHtml += '</tr>';
+                    tableBody.innerHTML += rowHtml;
+                });
+            } else {
+                tableBody.innerHTML = '<tr><td colspan="100%">No data available</td></tr>';
+            }
+        }
+    </script>
+</body>
+</html>

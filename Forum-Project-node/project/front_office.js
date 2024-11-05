@@ -238,8 +238,6 @@ async function prepareHomeData(client, filters) {
         LIMIT $${paramaterCounter} OFFSET $${paramaterCounter + 1};
     `;
 
-    // queryParams.push(productsPerPage, offset);
-
     queryParams.push(productsPerPage, offset);
     
     let productsResult = await client.query(productQuery, queryParams);
@@ -419,7 +417,7 @@ async function addToCart(userId, productId, quantity, authenticatedUser, client)
 
         let cart = await client.query(`SELECT * FROM carts WHERE session_id = $1`, [userId]);
         let cartRow = cart.rows;
-
+        
         console.log("cartRow");
         console.log(cartRow);
 
