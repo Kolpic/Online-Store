@@ -18,6 +18,15 @@
             "show_in_filter": true
         },
         {
+            "name": "currency_id",
+            "type": "select",
+            "label": "Currency",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false,
+            "options_url": "/currencies"
+        },
+        {
             "name": "price",
             "type": "number",
             "label": "Price",
@@ -57,15 +66,6 @@
             "editable": true,
             "show_in_filter": true,
             "options_url": "/categories"
-        },
-        {
-            "name": "currency_id",
-            "type": "select",
-            "label": "Currency",
-            "create": true,
-            "editable": true,
-            "show_in_filter": false,
-            "options_url": "/currencies"
         },
         {
             "name": "vat",

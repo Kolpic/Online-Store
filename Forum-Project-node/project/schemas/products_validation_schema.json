@@ -22,6 +22,15 @@
       "minimum": 1,
       "maximum": 10000
     },
+    "currency_id": {
+      "type": "string",
+      "description": "Currency symbol",
+      "foreignKey": {
+        "table": "currencies",
+        "value": "id",
+        "column": "symbol"
+      }
+    },
     "quantity": {
       "type": "integer",
       "description": "Available stock quantity",
@@ -41,15 +50,6 @@
         "targetTable": "categories",
         "targetColumn": "name",
         "targetColumnFilter": "id"
-      }
-    },
-    "currency_id": {
-      "type": "string",
-      "description": "Currency symbol",
-      "foreignKey": {
-        "table": "currencies",
-        "value": "id",
-        "column": "symbol"
       }
     },
     "vat_id": {
@@ -87,7 +87,7 @@
       }
     }
   },
-  "filters": ["name", "categories", "price"],
+  "filters": ["id", "name", "categories", "price"],
   "required": ["name", "price", "quantity", "categories", "currency_id", "images"],
   "errorMessage": {
     "required": {

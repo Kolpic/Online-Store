@@ -1,6 +1,6 @@
 const { AssertUser, AssertDev } = require('./exceptions');
 const errors = require('./error_codes');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const fs = require('fs');
 const path = require('path');
 const { pipeline } = require('stream');
@@ -19,76 +19,83 @@ async function login(username, password, client) {
 	return userRow[0].username;
 }
 
-async function parseMultipartFormData(req) {
+async function parseMultipartFormData(req, client) {
     AssertUser(req.headers['content-type'].startsWith('multipart/form-data'), 'Invalid inputs: Expected multipart/form-data', errors.NOT_FOUND_MULTYPART_FROM_DATA);
 
     const boundary = getBoundary(req.headers['content-type']);
     AssertUser(boundary, 'Invalid inputs: Boundary not found in the Content-Type header', errors.NOT_FOUND_BOUNDARY);
 
-    return new Promise((resolve, reject) => {
-        const formData = {};
-        const files = [];
-        let buffer = Buffer.alloc(0);
+    const formData = {};
+    const imageIds = [];
+    let buffer = Buffer.alloc(0);
 
-        req.on('data', (chunk) => {
-            buffer = Buffer.concat([buffer, chunk]);
-        });
+    for await (const chunk of req) {
+        buffer = Buffer.concat([buffer, chunk]);
+    }
 
-        req.on('end', async () => {
-            try {
-                const parts = buffer.toString().split(`--${boundary}`);
+    try {
+        const parts = buffer.toString().split(`--${boundary}`);
 
-                for (const part of parts) {
-                    if (part === '--\r\n' || part === '--\r\n--') continue;
+        for (const part of parts) {
+            if (part === '--\r\n' || part === '--\r\n--') continue;
 
-                    // Separate headers from content
-                    const [headers, content] = part.split('\r\n\r\n');
-                    if (!headers || !content) continue;
+            // Separate headers from content
+            const [headers, content] = part.split('\r\n\r\n');
+            if (!headers || !content) continue;
 
-                    const headerLines = headers.split('\r\n');
-                    const contentDisposition = headerLines.find(line => line.startsWith('Content-Disposition'));
-                    const contentType = headerLines.find(line => line.startsWith('Content-Type'));
+            const headerLines = headers.split('\r\n');
+            const contentDisposition = headerLines.find(line => line.startsWith('Content-Disposition'));
+            const contentType = headerLines.find(line => line.startsWith('Content-Type'));
 
-                    const nameMatch = /name="(.+?)"/.exec(contentDisposition);
-                    const filenameMatch = /filename="(.+?)"/.exec(contentDisposition);
+            const nameMatch = /name="(.+?)"/.exec(contentDisposition);
+            const filenameMatch = /filename="(.+?)"/.exec(contentDisposition);
 
-                    if (filenameMatch) {
-                        console.log("File contentType:", contentType);
+            if (filenameMatch) {
+                console.log("File contentType:", contentType);
 
-                        AssertDev(contentType && contentType.includes("image/jpeg"), "Not image/jpeg");
-                        const filename = filenameMatch[1];
-                        const uniqueFilename = `${uuidv4()}-${filename}`;
-                        const filePath = path.join(__dirname, 'images', uniqueFilename);
+                AssertDev(contentType && contentType.includes("image/jpeg"), "Not image/jpeg");
+                const filename = filenameMatch[1];
+                const uniqueFilename = `${uuidv4()}-${filename}`;
+                const filePath = path.join(__dirname, 'images', uniqueFilename);
 
-                        const binaryContent = Buffer.from(content, 'binary').slice(0, -2);
-                        await fs.promises.writeFile(filePath, binaryContent);
+                const { rows } = await client.query(
+                    `INSERT INTO images (product_id, path, status) VALUES ($1, $2, $3) RETURNING id`,
+                    [null, uniqueFilename, 'in_progress']
+                );
 
-                        files.push({ name: nameMatch[1], filepath: filePath, filename });
-                    } else {
-                        const fieldName = nameMatch[1];
-                        const fieldValue = content.trim();
+                await client.query('COMMIT');
+                await client.query('BEGIN');
 
-                        if (fieldName === 'categories') {
-                            formData.categories = formData.categories || [];
-                            formData.categories.push(fieldValue);
-                        } else {
-                            formData[fieldName] = fieldValue;
-                        }
-                    }
+                const imageId = rows[0].id;
+                imageIds.push(imageId);
+
+                const binaryContent = Buffer.from(content, 'binary').slice(0, -2);
+                await fs.promises.writeFile(filePath, binaryContent);
+
+                await client.query(`UPDATE images SET status = 'completed' WHERE id = $1`, [imageId]);
+            } else {
+                const fieldName = nameMatch[1];
+                const fieldValue = content.trim();
+
+                if (fieldName === 'categories') {
+                    formData.categories = formData.categories || [];
+                    formData.categories.push(fieldValue);
+                } else {
+                    formData[fieldName] = fieldValue;
                 }
-                resolve({ formData, files });
-            } catch (error) {
-                reject(error);
             }
-        });
+        }
 
-        req.on('error', (error) => {
-            reject(error);
-        });
-    });
+        return { formData, imageIds};
+    } catch (error) {
+        throw(error);
+    }
 }
 
-async function mapSchemaPropertiesToDBRelations(formData, files, schema) {
+async function mapSchemaPropertiesToDBRelations(formData, schema) {
+    console.log("ENTERED IN mapSchemaPropertiesToDBRelations");
+    console.log("formData");
+    console.log(formData);
 	let columns = [];
     let values = [];
     let foreignKeyLookups = [];
@@ -106,25 +113,36 @@ async function mapSchemaPropertiesToDBRelations(formData, files, schema) {
         console.log("formData[field]");
         console.log(formData[field]);
 
+        console.log("formData[field]");
+        console.log(formData.field);
+
         console.log("");
 
         if (definition.readOnly || field == "vat_id") continue;
 
         if (definition.foreignKey) {
             if (definition.type == 'array') {
+                if (field == "images") {continue;}
                 console.log("Entered in array foreignKey handling for", field);
-                // Check if the field is 'images' and has an array of files in the files array
-                if (field === 'images' && Array.isArray(files)) {
-                    for (let file of files) {
-                        const filenameOnly = file.filepath.split("/").pop();
-                        // Each file is associated with the main entity via foreign key relationship
-                        oneToManyInsertions.push({
-                            query: `INSERT INTO ${definition.foreignKey.table} (${definition.foreignKey.value}, ${definition.foreignKey.column})
-                                    VALUES ($1, $2)`,
-                            values: [null, filenameOnly]
-                        });
-                    }
-                }
+                // continue;
+                // oneToManyInsertions.push({ field, ...definition.manyToMany, values: formData[field] });
+                const itemsArray = JSON.parse(formData[field]); 
+                const tableName = definition.foreignKey.table;
+                const foreignKeyField = definition.foreignKey.value;
+
+                console.log("itemsArray");
+                console.log(itemsArray);
+                console.log("tableName");
+                console.log(tableName);
+                console.log("foreignKeyField");
+                console.log(foreignKeyField);
+
+                const orderItemsInsertions = buildInsertQueries(tableName, itemsArray, foreignKeyField);
+                console.log("orderItemsInsertions");
+                console.log(orderItemsInsertions);
+                oneToManyInsertions.push(...orderItemsInsertions);
+                console.log("oneToManyInsertions");
+                console.log(oneToManyInsertions);
             } else {
                 console.log("Entered in single value foreignKey handling for", field);
                 foreignKeyLookups.push({ field, ...definition.foreignKey, value: formData[field] });
@@ -173,6 +191,20 @@ async function makeTableJoins(schema) {
         console.log("details");
         console.log(details);
 
+        if (details.computed) {
+            if (field === "total") {
+                selectFields.push("SUM(order_items.price * order_items.quantity) AS Total");
+            } else if (field === "vat") {
+                selectFields.push("ROUND(SUM(order_items.price * order_items.quantity * (CAST(order_items.vat AS numeric) / 100)), 2) AS Vat");
+            } else if (field === "total_with_vat") {
+                selectFields.push(
+                    "ROUND(SUM(order_items.price * order_items.quantity) + " +
+                    "SUM(order_items.price * order_items.quantity * (CAST(order_items.vat AS numeric) / 100)), 2) AS Total_With_Vat"
+                );
+            }
+            continue;
+        }
+
 	    if (details.manyToMany) {
 
 	        let joinTable = details.manyToMany.joinTable;
@@ -187,12 +219,20 @@ async function makeTableJoins(schema) {
 	        selectFields.push(`array_agg(DISTINCT(${targetTable}.${targetColumn})) AS ${targetTable}`);
 
 	    } else if (details.foreignKey) {
+            // if (field == "order_items") {continue;}
 
 	        let joinTable = details.foreignKey.table;
 	        let joinColumn = details.foreignKey.value;
 	        let joinColumnToDisplay = details.foreignKey.column;
 	        let currentTableToJoin = details.foreignKey.currentTableToJoin;
 
+            console.log("-----------------------------");
+            console.log("joinTable");
+            console.log(joinTable);
+            console.log("joinColumn");
+            console.log(joinColumn);
+            console.log("joinColumnToDisplay");
+            console.log(joinColumnToDisplay);
 	        console.log("currentTableToJoin");
 	        console.log(currentTableToJoin);
 	        console.log("details.type");
@@ -200,9 +240,13 @@ async function makeTableJoins(schema) {
 
 	        if (details.type == 'array') { // Handle one-to-many
 	            console.log("Array.isArray(details.type) NO ELSEEE");
-
-	             joins.push(`JOIN ${joinTable} ON ${currentTableToJoin} = ${joinTable}.${joinColumn}`);
-	             selectFields.push(`array_agg(DISTINCT(${joinTable}.${joinColumnToDisplay})) AS ${field}`);
+                if (joinTable == 'order_items') {
+                    joins.push(`JOIN ${joinTable} ON ${currentTableToJoin} = ${joinTable}.${joinColumn}`);
+                    selectFields.push(`array_agg(DISTINCT(${details.foreignKey.columnsToShowOnEdit})) AS ${field}`);
+                } else {
+                    joins.push(`JOIN ${joinTable} ON ${currentTableToJoin} = ${joinTable}.${joinColumn}`);
+	                selectFields.push(`array_agg(DISTINCT(${joinTable}.${joinColumnToDisplay})) AS ${field}`);
+                }
 	        } else {
 	            console.log("Array.isArray(details.type) ELSEEE");
 
@@ -212,6 +256,7 @@ async function makeTableJoins(schema) {
 
 	             groupByFields.push(`${joinTable}.${joinColumnToDisplay}`);
 	        }
+            console.log("-----------------------------");
 	        
 	        // joins.push(`JOIN ${joinTable} ON ${tableName}.${field} = ${joinTable}.${joinColumn}`);
 
@@ -224,10 +269,19 @@ async function makeTableJoins(schema) {
         }
     }
 
+    console.log("selectFields");
+    console.log(selectFields);
+    console.log("joins");
+    console.log(joins);
+    console.log("groupByFields");
+    console.log(groupByFields);
     return {selectFields, joins, groupByFields}
 }
 
 async function makeTableFilters(schema, req) {
+    console.log("req.body");
+    console.log(req.body);
+
 	let tableName = schema.title;
 
 	let filters = schema.filters;
@@ -244,12 +298,22 @@ async function makeTableFilters(schema, req) {
         console.log(schema.properties[filter].type);
         console.log("schema.properties[filter].fieldType");
         console.log(schema.properties[filter].fieldType);
-        console.log("schema.properties[filter].type === 'number' && schema.properties[filter].fieldType == 'range'");
-        console.log(schema.properties[filter].type === 'number' && schema.properties[filter].fieldType == 'range');
 
         // if (req.body[filter] === undefined) { return; }
 
-        if (schema.properties[filter].type === 'string' && req.body[filter] != undefined) {
+        if (schema.properties[filter].format === 'date') {
+            const fromDate = req.body[`${filter}_from`];
+            const toDate = req.body[`${filter}_to`];
+
+            if (fromDate) {
+                whereConditions.push(`${tableName}.${filter} >= $${values.length + 1}`);
+                values.push(fromDate);
+            }
+            if (toDate) {
+                whereConditions.push(`${tableName}.${filter} <= $${values.length + 1}`);
+                values.push(toDate);
+            }
+        } else if (schema.properties[filter].type === 'string' && req.body[filter] != undefined) {
             console.log("filter is string");
             whereConditions.push(`${tableName}.${filter} = $${values.length + 1}`);
             values.push(req.body[filter]);
@@ -279,6 +343,9 @@ async function makeTableFilters(schema, req) {
             console.log("filter is integer");
             whereConditions.push(`${tableName}.${filter} = $${values.length + 1}`);
             values.push(req.body[filter]);
+        } else if (filter === "user_id" && req.body.email) {
+            whereConditions.push(`users.email = $${values.length + 1}`);
+            values.push(req.body.email);
         }
     });
 
@@ -296,6 +363,7 @@ async function generateReportSQLQuery(inputData, reportFilters) {
             AND $exception_type_filter_expression$
             AND $user_email_filter_expression$
             AND $sub_system_filter_expression$
+            AND $log_type_filter_expression$
         $group_by_clause$
         ORDER BY $order_by_clause$
         LIMIT 20
@@ -306,9 +374,11 @@ async function generateReportSQLQuery(inputData, reportFilters) {
     let orderByClauses = [];
     let groupingSelected = false;
     let countExpression = '';
+    let queryParams = [];
+    let paramIndex = 1;
 
     reportFilters.fields.forEach((reportFilter) => {
-    	if (inputData[`${reportFilter.key}_grouping_select_value`] !== undefined) {
+    	if (inputData[`${reportFilter.key}_grouping_select_value`] !== undefined && inputData[`${reportFilter.key}_grouping_select_value`] != "") {
             groupingSelected = true;
         }
     });
@@ -317,10 +387,16 @@ async function generateReportSQLQuery(inputData, reportFilters) {
         const groupingKey = `${reportFilter.key}_grouping_select_value`;
         const groupingValue = inputData[groupingKey];
 
-        if (groupingValue !== undefined) {
-        	// Group by for the wanted columns
-            selectExpressions.push(`${reportFilter.grouping_expression} AS "${reportFilter.key}"`);
-            groupByExpressions.push(reportFilter.grouping_expression);
+        if (groupingValue !== undefined && groupingValue != "") {
+        	if (reportFilter.type === 'timestamp' && groupingValue) {
+                // Apply `date_trunc` based on grouping value (day, month, year)
+                const dateTruncExpression = `date_trunc('${groupingValue}', ${reportFilter.grouping_expression})`;
+                selectExpressions.push(`${dateTruncExpression} AS "${reportFilter.key}"`);
+                groupByExpressions.push(dateTruncExpression);
+            } else {
+                selectExpressions.push(`${reportFilter.grouping_expression} AS "${reportFilter.key}"`);
+                groupByExpressions.push(reportFilter.grouping_expression);
+            }
         } else if (!groupingSelected) {
             // For non-grouped fields, include them directly in SELECT clause
             selectExpressions.push(`${reportFilter.grouping_expression} AS "${reportFilter.key}"`);
@@ -337,8 +413,10 @@ async function generateReportSQLQuery(inputData, reportFilters) {
 
             if (beginTimestamp && endTimestamp) {
                 let filterExpr = reportFilter.filter_expression
-                    .replace('$FILTER_VALUE_BEGIN$', `'${beginTimestamp}'`)
-                    .replace('$FILTER_VALUE_END$', `'${endTimestamp}'`);
+                    .replace('$FILTER_VALUE_BEGIN$', `$${paramIndex}`)
+                    .replace('$FILTER_VALUE_END$', `$${paramIndex + 1}`);
+                queryParams.push(beginTimestamp, endTimestamp);
+                paramIndex += 2;
                 sqlTemplate = sqlTemplate.replace(`$${filterKey}$`, filterExpr);
             } else {
                 sqlTemplate = sqlTemplate.replace(`$${filterKey}$`, 'TRUE');
@@ -346,7 +424,9 @@ async function generateReportSQLQuery(inputData, reportFilters) {
         } else {
             const filterValue = inputData[`${reportFilter.key}_filter_value`];
             if (filterValue) {
-                const filterExpr = reportFilter.filter_expression.replace('$FILTER_VALUE$', `'${filterValue}'`);
+                const filterExpr = reportFilter.filter_expression.replace('$FILTER_VALUE$', `$${paramIndex}`);
+                queryParams.push(filterValue);
+                paramIndex += 1;
                 sqlTemplate = sqlTemplate.replace(`$${filterKey}$`, filterExpr);
             } else {
                 sqlTemplate = sqlTemplate.replace(`$${filterKey}$`, 'TRUE');
@@ -362,7 +442,7 @@ async function generateReportSQLQuery(inputData, reportFilters) {
 
     // COUNT if we have group by
     if (groupingSelected) {
-        countExpression = `, COUNT(*) AS "count"`;
+        countExpression = `, COUNT(*) AS "Count"`;
     }
 
     sqlTemplate = sqlTemplate
@@ -371,7 +451,29 @@ async function generateReportSQLQuery(inputData, reportFilters) {
         .replace('$order_by_clause$', orderByClauses.length > 0 ? orderByClauses.join(', ') : '1 DESC');
 
     console.log("Final SQL Query:", sqlTemplate);
-    return sqlTemplate;
+    console.log("QueryParams:", queryParams);
+
+    return {sqlTemplate, queryParams};
+}
+
+function buildInsertQueries(tableName, itemsArray, foreignKeyField) {
+    return itemsArray.map(item => {
+        const fields = [foreignKeyField, ...Object.keys(item)];
+        const placeholders = fields.map((_, index) => `$${index + 1}`);
+        const values = [null, ...Object.values(item)];  // `null` placeholder for foreign key (e.g., order_id)
+
+        console.log("fields");
+        console.log(fields);
+        console.log("placeholders");
+        console.log(placeholders);
+        console.log("values");
+        console.log(values);
+
+        return {
+            query: `INSERT INTO ${tableName} (${fields.join(", ")}) VALUES (${placeholders.join(", ")})`,
+            values: values
+        };
+    });
 }
 
 module.exports = {

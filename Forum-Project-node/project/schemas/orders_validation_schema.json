@@ -1,0 +1,76 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "orders",
+  "description": "Schema for a order entity",
+  "type": "object",
+  "properties": {
+    "order_id": {
+      "type": "integer",
+      "description": "Unique identifier for the order",
+      "readOnly": true
+    },
+    "order_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Order Date"
+    },
+    "user_id": {
+      "type": "integer",
+      "description": "User ID",
+      "foreignKey": {
+        "table": "users",
+        "value": "id",
+        "column": "email"
+      }
+    },
+    "status": {
+      "type": "string",
+      "description": "Order Status",
+      "enum": ["Ready for Paying", "Paid"]
+    },
+    "vat": {
+      "type": "number",
+      "description": "VAT on items ",
+      "computed": true
+    },
+    "total": {
+      "type": "number",
+      "description": "Total price of items (computed)",
+      "computed": true
+    },
+    "total_with_vat": {
+      "type": "number",
+      "description": "Total price including VAT (computed)",
+      "computed": true
+    },
+    "order_items": {
+      "type": "array",
+      "description": "Order Items",
+      "fieldType": "collapsed",
+      "foreignKey": {
+        "table": "order_items",
+        "value": "order_id",
+        "column": "order_id",
+        "currentTableToJoin": "orders.order_id",
+        "columnsToShowOnEdit": ["product_id","quantity","price"]
+      }
+    }
+  },
+  "filters": ["order_id", "user_id", "status", "order_date"],
+  "required": ["status", "order_date"],
+  "errorMessage": {
+    "required": {
+        "order_id": "Order Id is required",
+        "user_id": "User ID is required",
+        "status": "Status is required",
+        "order_date": "Order Date is required"
+      },
+    "properties": {
+        "order_id": "Order Id must be number",
+        "user_id": "User ID must be number",
+        "status": "Status must be one of the given values",
+        "order_date": "Order Date should be date"
+      }
+  },
+  "additionalProperties": true
+}

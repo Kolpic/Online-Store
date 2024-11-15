@@ -30,7 +30,7 @@ module.exports = {
   MAIL_PASSWORD: "kskf nciq lqfm zevh",
   MAIL_USE_TLS: false,
   MAIL_USE_SSL: true,
-  database: "users_registration",
+  database: database,
   user: "myuser",
   password: "1234",
   host: "localhost",

@@ -8,6 +8,37 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.7/umd/popper.min.js"></script>
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 </head>
+<style>
+    #loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(255, 255, 255, 0.8);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 1050;
+    }
+
+    #order-items-container {
+    height: 300px;
+    overflow-y: auto;
+    border: 1px solid #ccc;
+    padding: 10px;
+    }
+
+    #order-items-container .table {
+        width: 100%;
+        margin-bottom: 0;
+    }
+
+    #order-items-container .table td, #order-items-container .table th {
+        padding: 8px;
+        vertical-align: middle;
+    }
+</style>
 <body>
     <div class="container">
         <h1 id="crud-title"></h1>
@@ -34,6 +65,11 @@
             </tbody>
 
         </table>
+        <div id="loading-overlay" class="d-none">
+            <div class="spinner-border text-primary" role="status">
+                <span class="sr-only">Loading...</span>
+            </div>
+        </div>
     </div>
 
     <!-- Bootstrap Modal for editing an entity -->
@@ -121,6 +157,8 @@
         // Load the schema dynamically based on the entity type
         async function loadSchema(entity) {
             try {
+                console.log("entityType");
+                console.log(entityType);
                 const response = await fetch(`${entity}.json`);
                 const schema = await response.json();
                 console.log('Schema loaded:', schema);
@@ -135,7 +173,7 @@
         function renderForm(schema) {
             const form = document.getElementById('crud-form');
             const title = document.getElementById('crud-title');
-            title.textContent = `Manage ${schema.entity}`;
+            title.textContent = `Manage ${entityType}`;
 
             schema.fields.forEach(field => {
                 if (!field.show_in_filter) return; // Skip non-editable or non-filter fields
@@ -149,7 +187,38 @@
 
                 let input;
 
-                if (field.type === 'multiselect') {
+                if (field.type === 'date') {
+                    const dateFromGroup = document.createElement('div');
+                    dateFromGroup.className = 'form-group';
+                    
+                    const dateFromLabel = document.createElement('label');
+                    dateFromLabel.textContent = `${field.label} From`;
+                    dateFromGroup.appendChild(dateFromLabel);
+                    
+                    const dateFromInput = document.createElement('input');
+                    dateFromInput.type = 'date';
+                    dateFromInput.className = 'form-control';
+                    dateFromInput.name = `${field.name}_from`;
+                    dateFromGroup.appendChild(dateFromInput);
+                    form.appendChild(dateFromGroup);
+
+                    const dateToGroup = document.createElement('div');
+                    dateToGroup.className = 'form-group';
+
+                    const dateToLabel = document.createElement('label');
+                    dateToLabel.textContent = `${field.label} To`;
+                    dateToGroup.appendChild(dateToLabel);
+
+                    const dateToInput = document.createElement('input');
+                    dateToInput.type = 'date';
+                    dateToInput.className = 'form-control';
+                    dateToInput.name = `${field.name}_to`;
+                    dateToGroup.appendChild(dateToInput);
+                    form.appendChild(dateToGroup);
+
+                    return;
+
+                } else if (field.type === 'multiselect') {
                     input = document.createElement('select');
                     input.className = 'form-control';
                     input.name = field.name;
@@ -255,6 +324,8 @@
             console.log("filters");
             console.log(filters);
 
+            showLoadingSpinner();
+
             // Fetch filtered products from the back-end
             try {
                 const response = await fetch(`/crud/${entityType}`, {
@@ -273,6 +344,8 @@
                 renderEntityTable(entities);  // Render the filtered entities
             } catch (error) {
                 console.error('Error submitting form:', error);
+            } finally {
+                hideLoadingSpinner();
             }
         }
 
@@ -289,7 +362,7 @@
             tableHeaders.innerHTML = '';  // Clear existing headers
 
             if (entities.length === 0) {
-                alert('No products found');
+                alert('No results found');
                 return;
             }
 
@@ -298,6 +371,7 @@
             schemaFields.forEach(field => {
                 const th = document.createElement('th');
                 th.textContent = field.charAt(0).toUpperCase() + field.slice(1);
+                th.style.textAlign = 'center';
                 tableHeaders.appendChild(th);
             });
 
@@ -312,8 +386,19 @@
 
                 schemaFields.forEach(field => {
                     const cell = document.createElement('td');
+                    cell.style.textAlign = 'right';
 
-                    if (field === 'images') {
+                    if (field === 'order_items') {
+                        const button = document.createElement('button');
+                        button.textContent = 'Show Items';
+                        button.className = 'btn btn-info btn-sm';
+
+                        button.onclick = async () => {
+                            await fetchOrderItems(entity.order_id, cell);
+                        };
+
+                        cell.appendChild(button);
+                    } else if (field === 'images') {
                         // Handle the array of images
                         const images = entity[field];  // Array of image paths
                         console.log("entity[field]");
@@ -341,7 +426,13 @@
                 const editBtn = document.createElement('button');
                 editBtn.className = 'btn btn-warning btn-sm';
                 editBtn.textContent = 'Edit';
-                editBtn.onclick = () => editEntity(entity,entity.id);  // Call edit function
+                if (entityType == 'orders') {
+                    console.log("entity.order_id");
+                    console.log(entity.order_id);
+                    editBtn.onclick = () => editEntity(entity, entity.order_id);  // Call edit function
+                } else {
+                    editBtn.onclick = () => editEntity(entity, entity.id);  // Call edit function
+                }
 
                 const deleteBtn = document.createElement('button');
                 deleteBtn.className = 'btn btn-danger btn-sm';
@@ -366,7 +457,13 @@
 
             const filters = {};
             filters['schema'] = currentSchema;
-            filters['id'] = id;
+            if (entityType == 'orders') {
+                filters['order_id'] = id;
+            } else {
+                filters['id'] = id;
+            }
+            console.log("filters['id']");
+            console.log(filters['id']);
 
             try {
                 const response = await fetch(`/crud/${entityType}`, {
@@ -396,18 +493,23 @@
                                 entityData['currency_id'] = entityData['symbol'];
                             } else if (field.name == "country_code_id" && 'code' in entityData) {
                                 entityData['country_code_id'] = entityData['code'];
+                            } else if (field.name == 'id' && 'order_id' in entityData && entityType == 'orders') {
+                                entityData['order_id'] = entityData['order_id'];
                             } else {
                                 console.warn(`Field ${field.name} does not exist in entityData`);
                                 return;
                             }
                         }
 
+                        console.log("entityData BEFORE INPUT", entityData);
                         let input;
 
-                        if (field.name === 'id') {
+                        if (field.name === 'id' || field.name == 'order_id') {
                             input = document.createElement('input');
                             input.type = 'hidden';  // Hide the ID field
                             input.value = entityData[field.name];  // Pre-fill with the entity data
+                            console.log("ENTITY ID TO EDIT");
+                            console.log(entityData[field.name]);
                             input.name = field.name;  // Still give it a name for submission
 
                             // Append the hidden ID field directly to the form without a label
@@ -537,6 +639,17 @@
                             input.className = 'form-control';
                             input.name = field.name;
                             formGroup.appendChild(input);
+                        }else if (field.type === 'date') { 
+                            input = document.createElement('input');
+                            input.type = 'datetime-local';
+
+                            const isoDateTime = entityData[field.name];
+                            const dateTimeWithoutSeconds = isoDateTime ? isoDateTime.slice(0, 16) : ''; // Extract "YYYY-MM-DDTHH:MM" portion
+                            input.value = dateTimeWithoutSeconds;
+
+                            input.name = field.name; // 'date-create'
+                            input.className = 'form-control';
+                            formGroup.appendChild(input);
                         } else {
                             input = document.createElement('input');
                             input.type = 'text';
@@ -548,7 +661,85 @@
 
                         editForm.appendChild(formGroup);
                     });
+                    // Parse the order_items string into individual items
+            if (entityData.order_items) {
+                const orderItemsString = entityData.order_items.replace(/^\{/, "[").replace(/\}$/, "]");
+                console.log("orderItemsString");
+                console.log(orderItemsString);
 
+                const formattedOrderItems = orderItemsString.replace(/\((\d+),(\d+),([\d.]+)\)/g, '[$1, $2, $3]');
+                console.log("formattedOrderItems");
+                console.log(formattedOrderItems);
+
+                const orderItemsStr = JSON.parse(formattedOrderItems);
+                console.log("orderItemsStr");
+                console.log(orderItemsStr);
+
+                const orderItems = orderItemsStr.map(item => JSON.parse(item));
+                console.log("orderItems");
+                console.log(orderItems);
+
+                // Create the table element
+                const table = document.createElement('table');
+                table.className = 'table table-bordered';
+
+                // Create the table header row
+                const headerRow = document.createElement('tr');
+                const headers = ['Product ID', 'Quantity', 'Price'];
+
+                headers.forEach(headerText => {
+                    const th = document.createElement('th');
+                    th.textContent = headerText;
+                    headerRow.appendChild(th);
+                });
+                table.appendChild(headerRow);
+
+                orderItems.forEach((item, index) => {
+                    const [productId, quantity, price] = item;
+                    console.log("item", item);
+                    console.log("productId", productId);
+                    console.log("quantity", quantity);
+                    console.log("price", price);
+
+                    // Create a new row for each product
+                    const row = document.createElement('tr');
+
+                    // Product ID cell
+                    const productIdCell = document.createElement('td');
+                    const productIdInput = document.createElement('input');
+                    productIdInput.type = 'number';
+                    productIdInput.className = 'form-control';
+                    productIdInput.name = `order_items[${index}][product_id]`;
+                    productIdInput.value = productId;
+                    productIdInput.readOnly = true;  // Make Product ID read-only
+                    productIdCell.appendChild(productIdInput);
+                    row.appendChild(productIdCell);
+
+                    // Quantity cell
+                    const quantityCell = document.createElement('td');
+                    const quantityInput = document.createElement('input');
+                    quantityInput.type = 'number';
+                    quantityInput.className = 'form-control';
+                    quantityInput.name = `order_items[${index}][quantity]`;
+                    quantityInput.value = quantity;
+                    quantityCell.appendChild(quantityInput);
+                    row.appendChild(quantityCell);
+
+                    // Price cell
+                    const priceCell = document.createElement('td');
+                    const priceInput = document.createElement('input');
+                    priceInput.type = 'number';
+                    priceInput.className = 'form-control';
+                    priceInput.name = `order_items[${index}][price]`;
+                    priceInput.value = price;
+                    priceCell.appendChild(priceInput);
+                    row.appendChild(priceCell);
+
+                    // Append the row to the table
+                    table.appendChild(row);
+                });
+                editForm.appendChild(table);
+            }
                     // Open the modal
                     $('#editModal').modal('show');
                 });
@@ -563,6 +754,7 @@
         document.getElementById('save-edit-btn').addEventListener('click', async function() {
             const formData = new FormData(document.getElementById('edit-form'));
             const updatedData = {};
+            const orderItems = {};
 
             console.log("formData");
             console.log(formData);
@@ -573,13 +765,35 @@
                         updatedData[key] = [];
                     }
                     updatedData[key].push(value);  // Push all selected categories into an array
+                } else if (key.startsWith('order_items')) {
+                    // Match pattern: order_items[index][field]
+                    const match = key.match(/^order_items\[(\d+)]\[(\w+)]$/);
+                    if (match) {
+                        const index = match[1];
+                        const field = match[2];
+                        
+                        // Initialize an object for each order item index
+                        if (!orderItems[index]) {
+                            orderItems[index] = {};
+                        }
+                        
+                        // Assign the value to the appropriate field
+                        orderItems[index][field] = value;
+                    }
                 } else {
                     updatedData[key] = value;  // For non-categories fields, store as usual
                 }
             });
 
+            // Convert the orderItems object to an array of objects and add to updatedData
+            updatedData['order_items'] = Object.values(orderItems);
+
+            formData.append('order_items', JSON.stringify(updatedData['order_items']));
+
             console.log("updatedData");
             console.log(updatedData);
+            console.log("formData['order_items']");
+            console.log(formData.order_items);
 
             // Handle removed images (checkboxes that were checked)
             const removedImages = [];
@@ -592,11 +806,27 @@
             console.log("Updated data:", updatedData);
             console.log("formData data:", formData);
 
+            let entityToUpdateId;
+            if (entityType == 'orders') {
+                entityToUpdateId = updatedData.order_id
+            } else {
+                entityToUpdateId = updatedData.id
+            }
+            console.log("entityToUpdateId");
+            console.log(entityToUpdateId);
+
             try {
-                const response = await fetch(`/update/${entityType}/${updatedData.id}`, {
+                const response = await fetch(`/update/${entityType}/${entityToUpdateId}`, {
                     method: 'PUT',  
                     body: formData,
                 });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.log("errorData");
+                    console.log(errorData);
+                    throw new Error(errorData.error_message);
+                }
 
                 const result = await response.json();
                 alert(result.message);
@@ -604,6 +834,7 @@
                 // Close the modal after saving
                 $('#editModal').modal('hide');
             } catch (error) {
+                alert(error)
                 console.error('Error saving changes:', error);
             }
         });
@@ -648,7 +879,48 @@
 
                 let input;
 
-                if (field.type === 'multiselect') {
+                if (field.name === 'email' && field.paginated) {
+                    input = document.createElement('select');
+                    input.id = 'email-dropdown';
+                    input.className = 'form-control';
+                    input.name = field.name;
+                    input.size = 5;
+                    input.style.overflowY = 'scroll';
+
+                    input.dataset.optionsUrl = field.options_url;
+                    input.dataset.pageSize = field.page_size || 20;
+
+                    loadMoreOptions(input, field.options_url, field.page_size || 20);
+
+                    input.addEventListener('scroll', onScrollLoadMore);
+                    formGroup.appendChild(input);
+
+                } else if (field.name === 'order_items' && field.paginated) {
+                    const table = document.createElement('table');
+                    table.className = 'table table-bordered table-hover';
+                    const tableBody = document.createElement('tbody');
+                    table.appendChild(tableBody);
+
+                    // Infinite scroll container for the table
+                    const scrollContainer = document.createElement('div');
+                    scrollContainer.id = 'order-items-container';
+                    scrollContainer.style.height = '300px';
+                    scrollContainer.style.overflowY = 'auto';
+                    scrollContainer.appendChild(table);
+                    scrollContainer.dataset.optionsUrl = field.options_url;
+                    scrollContainer.dataset.pageSize = field.page_size || 20;
+
+                    loadMoreProducts(tableBody, field.options_url, field.page_size || 20);
+
+                    scrollContainer.addEventListener('scroll', onScrollLoadMoreProducts);
+
+                    formGroup.appendChild(scrollContainer);
+
+                    const selectedProductsContainer = document.createElement('div');
+                    selectedProductsContainer.id = 'selected-products-container';
+                    selectedProductsContainer.className = 'mt-3';
+                    formGroup.appendChild(selectedProductsContainer);
+                } else if (field.type === 'multiselect') {
                     input = document.createElement('select');
                     input.className = 'form-control';
                     input.name = field.name;
@@ -668,12 +940,14 @@
                         .catch(error => {
                             console.error(`Error loading ${field.name} options:`, error);
                         });
+                    formGroup.appendChild(input);
                 } else if (field.type === 'array' && field.item_type === 'image') {
                     input = document.createElement('input');
                     input.type = 'file';
                     input.className = 'form-control';
                     input.name = field.name;  // Use the field name for submission
                     input.multiple = true;  // Allow multiple image uploads
+                    formGroup.appendChild(input);
                 } else if (field.type === 'select') {
                     input = document.createElement('select');
                     input.className = 'form-control';
@@ -705,21 +979,34 @@
                         .catch(error => {
                             console.error(`Error loading ${field.name} options:`, error);
                         });
+                    formGroup.appendChild(input);
                 } else if (field.type === 'number' || field.type === 'integer') {
                     input = document.createElement('input');
                     input.type = 'number';
                     input.name = field.name;
+                    input.className = 'form-control';
+                    formGroup.appendChild(input);
                 } else if (field.type === 'boolean') {
                     input = document.createElement('input');
                     input.type = 'checkbox';
+                    input.className = 'form-control';
+                    formGroup.appendChild(input);
+                } else if (field.type === 'date') { 
+                    input = document.createElement('input');
+                    input.type = 'datetime-local';
+                    input.name = 'date-create';
+                    input.className = 'form-control';
+                    formGroup.appendChild(input);
                 } else {
                     input = document.createElement('input');
                     input.type = 'text';
                     input.name = field.name;
+                    input.className = 'form-control';
+                    formGroup.appendChild(input);
                 }
 
-                input.className = 'form-control';
-                formGroup.appendChild(input);
+                // input.className = 'form-control';
+                // formGroup.appendChild(input);
 
                 // errors for each field
                 const errorDiv = document.createElement('div');
@@ -783,7 +1070,47 @@
                 productData.verification_status = formData.has('verification_status');
                 formData.append('country_code_id', productData.country_code_id);
                 formData.append('verification_status', productData.verification_status);
+            } else if (entityType == 'orders') {
+                const productsArray = [];
+                selectedProducts.forEach((product, productId) => {
+                    // form-control quantity-input
+                    const quantityInput = document.querySelector(`input.quantity-input[data-product-id="${productId}"]`);
+                    console.log("quantityInput  FOR THE PRODUCT" + quantityInput);
+                    const quantity = quantityInput ? parseInt(quantityInput.value, 10) : 1;
+
+                    productsArray.push({
+                        product_id: productId,
+                        // name: product.name,
+                        price: product.price,
+                        quantity: quantity,
+                        // total_price: product.price * quantity,
+                        // currency: product.symbol,
+                        vat: product.vat
+                    });
+                });
+
+                console.log("PRODUCTS GIVEN TO THE BACK END");
+                console.log(productsArray);
+
+                formData.append('order_items', JSON.stringify(productsArray));
+                productData.selected_products =  JSON.stringify(productsArray);
+
+                const dateInput = document.querySelector('input[name="date-create"]');
+                console.log("dateInput");
+                console.log(dateInput);
+                if (dateInput && dateInput.value) {
+                    formData.append('order_date', dateInput.value);
+                    productData.order_date = dateInput.value;
+                }
+                delete productData['date-create'];
+                formData.delete('date-create');
+
             }
+
+            console.log("productData AFTER HOOK");
+            console.log(productData);
+            console.log("formData AFTER HOOK");
+            console.log(formData);
 
             const isValidData = validate(productData);
 
@@ -824,15 +1151,29 @@
                     method: 'POST',
                     body: formData,
                 });
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    console.log("errorData");
+                    console.log(errorData);
+                    // alert(errorData.error_message);
+                    throw new Error(errorData.error_message);
+                }
 
                 const result = await response.json();
                 alert(result.message);
-
                 // Close the modal after creation
                 $('#createProductModal').modal('hide');
             } catch (error) {
-                console.error('Error creating product:', error);
+                console.log("ERROR WHEN CREATING ENTITY");
+                console.log("error");
+                console.log(error);
+                console.log(alert(error));
             }
+        });
+
+        $('#createProductModal').on('hidden.bs.modal', () => {
+            selectedProducts.clear();
+            console.log("selectedProducts cleared:", selectedProducts);
         });
 
         document.getElementById('submit-btn').addEventListener('click', handleSubmit);
@@ -841,6 +1182,280 @@
         loadSchema(entityType).then(schema => {
             if (schema) renderForm(schema);
         });
+
+        async function fetchOrderItems(orderId, cell) {
+            try {
+                cell.innerHTML = '<div class="spinner-border text-primary" role="status"><span class="sr-only">Loading...</span></div>';
+
+                const response = await fetch(`/order_items?order_id=${orderId}`);
+
+                console.log("response");
+                console.log(response);
+
+                const orderItems = await response.json();
+
+                console.log("orderItems.data");
+                console.log(orderItems.data);
+
+                cell.innerHTML = ''; 
+                if (orderItems.data.length === 0) {
+                    cell.innerHTML = 'No items found for this order';
+                    return;
+                }
+
+                const currentRow = cell.closest('tr');
+
+                const newRow = document.createElement('tr');
+                const newCell = document.createElement('td');
+                newCell.colSpan = currentRow.cells.length;
+
+                const collapsibleDiv = document.createElement('div');
+                collapsibleDiv.className = 'collapse';
+
+                const table = document.createElement('table');
+                table.className = 'table table-sm table-bordered';
+
+                const thead = document.createElement('thead');
+                thead.innerHTML = `
+                    <tr>
+                        <th class="text-center">Product ID</th>
+                        <th class="text-center">Product Name</th>
+                        <th class="text-center">Quantity</th>
+                        <th class="text-center">Price</th>
+                        <th class="text-center">Currency</th>
+                    </tr>
+                `;
+                table.appendChild(thead);
+
+                const tbody = document.createElement('tbody');
+                orderItems.data.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="text-right">${item.product_id}</td>
+                        <td class="text-right">${item.product_name}</td>
+                        <td class="text-right">${item.quantity}</td>
+                        <td class="text-right">${item.price}</td>
+                        <td class="text-right">${item.currency_symbol}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+                table.appendChild(tbody);
+
+                collapsibleDiv.appendChild(table);
+                newCell.appendChild(collapsibleDiv);
+                newRow.appendChild(newCell);
+
+                currentRow.parentNode.insertBefore(newRow, currentRow.nextSibling);
+
+                // const collapsibleDiv = document.createElement('div');
+                // collapsibleDiv.className = 'collapse';
+                // collapsibleDiv.appendChild(table);
+
+                const toggleButton = document.createElement('button');
+                toggleButton.className = 'btn btn-link p-0';
+                toggleButton.textContent = 'Show Items';
+                toggleButton.onclick = () => {
+                    const isCollapsed = collapsibleDiv.classList.toggle('show');
+                    toggleButton.textContent = isCollapsed ? 'Hide Items' : 'Show Items';
+                };
+
+                cell.appendChild(toggleButton);
+                // cell.appendChild(collapsibleDiv);
+            } catch (error) {
+                console.error('Error fetching order items:', error);
+            }
+        }
+
+        function showLoadingSpinner() {
+            document.getElementById('loading-overlay').classList.remove('d-none');
+        }
+
+        function hideLoadingSpinner() {
+            document.getElementById('loading-overlay').classList.add('d-none');
+        }
+
+        let currentPage = 0;
+
+        async function loadMoreOptions(selectElement, url, pageSize) {
+            currentPage += 1;
+            const fetchUrl = `${url}?page=${currentPage}&page_size=${pageSize}`;
+
+            try {
+                const response = await fetch(fetchUrl);
+                const options = await response.json();
+
+                console.log("options");
+                console.log(options);
+
+                options.forEach(option => {
+                    const opt = document.createElement('option');
+                    opt.value = option.email;
+                    opt.textContent = option.email;
+                    selectElement.appendChild(opt);
+                });
+
+                if (options.length < pageSize) {
+                    selectElement.removeEventListener('scroll', loadMoreOptions);
+                }
+            } catch (error) {
+                console.error(`Error loading options for dropdown: ${error}`);
+            }
+        }
+
+        function onScrollLoadMore(event) {
+            const selectElement = event.target;
+
+            if (selectElement.scrollTop + selectElement.clientHeight >= selectElement.scrollHeight - 10) {
+                loadMoreOptions(selectElement, selectElement.dataset.optionsUrl, parseInt(selectElement.dataset.pageSize, 10));
+            }
+        }
+
+        let currentProductPage = 0;
+        let selectedProducts = new Map();
+
+        async function loadMoreProducts(tableBody, url, pageSize) {
+            currentProductPage += 1;
+            const fetchUrl = `${url}?page=${currentProductPage}&page_size=${pageSize}`;
+
+            try {
+                const response = await fetch(fetchUrl);
+                const products = await response.json();
+
+                console.log("products");
+                console.log(products);
+
+                products.forEach(product => {
+                    const row = document.createElement('tr');
+
+                    // Checkbox for selection
+                    const checkboxCell = document.createElement('td');
+                    const checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.value = product.id;
+
+                    checkbox.addEventListener('change', (event) => {
+                        if (event.target.checked) {
+                            selectedProducts.set(product.id, product);
+                        } else {
+                            selectedProducts.delete(product.id);
+                        }
+                        updateSelectedProductsDisplay();
+                    });
+
+                    checkboxCell.appendChild(checkbox);
+                    row.appendChild(checkboxCell);
+
+                    // Product Details
+                    const idCell = document.createElement('td');
+                    idCell.textContent = product.id;
+                    row.appendChild(idCell);
+
+                    const nameCell = document.createElement('td');
+                    nameCell.textContent = product.name;
+                    row.appendChild(nameCell);
+
+                    const priceCell = document.createElement('td');
+                    priceCell.textContent = product.price;
+                    row.appendChild(priceCell);
+
+                    const symbolCell = document.createElement('td');
+                    symbolCell.textContent = product.symbol;
+                    row.appendChild(symbolCell);
+
+                    // const vatCell = document.createElement('td');
+                    // vatCell.textContent = product.vat;
+                    // row.appendChild(vatCell);
+
+                    tableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error(`Error loading products: ${error}`);
+            }
+        }
+
+        function onScrollLoadMoreProducts(event) {
+            const container = event.target;
+
+            if (container.scrollTop + container.clientHeight >= container.scrollHeight - 10) {
+                const tableBody = container.querySelector('tbody');
+                const url = container.dataset.optionsUrl;
+                const pageSize = parseInt(container.dataset.pageSize, 10);
+
+                loadMoreProducts(tableBody, url, pageSize);
+            }
+        }
+
+        function updateSelectedProductsDisplay() {
+            const container = document.getElementById('selected-products-container');
+            container.innerHTML = '';
+
+            if (selectedProducts.size === 0) {
+                container.textContent = 'No products selected';
+                return;
+            }
+
+            const table = document.createElement('table');
+            table.className = 'table table-bordered';
+            const headerRow = document.createElement('tr');
+
+            ['ID', 'Name', 'Price', 'Currency', 'Quantity', 'Total Price'].forEach(headerText => {
+                const header = document.createElement('th');
+                header.textContent = headerText;
+                headerRow.appendChild(header);
+            });
+            table.appendChild(headerRow);
+
+            selectedProducts.forEach(product => {
+                const row = document.createElement('tr');
+
+                const idCell = document.createElement('td');
+                idCell.textContent = product.id;
+                row.appendChild(idCell);
+
+                const nameCell = document.createElement('td');
+                nameCell.textContent = product.name;
+                row.appendChild(nameCell);
+
+                const priceCell = document.createElement('td');
+                priceCell.textContent = product.price;
+                row.appendChild(priceCell);
+
+                const symbolCell = document.createElement('td');
+                symbolCell.textContent = product.symbol;
+                row.appendChild(symbolCell);
+
+                // Quantity Cell (editable input)
+                const quantityCell = document.createElement('td');
+                const quantityInput = document.createElement('input');
+                quantityInput.type = 'number';
+                quantityInput.value = 1;
+                quantityInput.min = 1;
+                quantityInput.className = 'form-control quantity-input';
+                quantityInput.setAttribute('data-product-id', product.id); 
+                quantityCell.appendChild(quantityInput);
+                row.appendChild(quantityCell);
+
+                const totalPriceCell = document.createElement('td');
+                totalPriceCell.className = 'total-price-cell';
+                const initialTotalPrice = product.price * parseInt(quantityInput.value, 10);
+                totalPriceCell.textContent = `${initialTotalPrice} ${product.symbol}`;
+                row.appendChild(totalPriceCell);
+
+                // const vatCell = document.createElement('td');
+                // vatCell.textContent = product.vat;
+                // row.appendChild(vatCell);
+
+                quantityInput.addEventListener('input', () => {
+                    const quantity = parseInt(quantityInput.value, 10);
+                    const totalPrice = product.price * quantity;
+                    totalPriceCell.textContent = `${totalPrice.toFixed(2)} ${product.symbol}`;
+                });
+
+                table.appendChild(row);
+            });
+
+            container.appendChild(table);
+    }
     </script>
 </body>
 </html>

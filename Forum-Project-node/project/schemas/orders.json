@@ -1,0 +1,61 @@
+{
+    "entity": "products",
+    "fields": [
+        {
+            "name": "order_id",
+            "type": "integer",
+            "label": "Order ID",
+            "create": false,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "order_date",
+            "type": "date",
+            "label": "Order Date",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true
+        },
+        {
+            "name": "price",
+            "type": "number",
+            "label": "Price",
+            "create": false,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "status",
+            "type": "select",
+            "label": "Order Status",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true,
+            "options_url": "/order_status"
+        },
+        {
+            "name": "email",
+            "type": "string",
+            "label": "User email",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true,
+            "options_url": "/user_emails",
+            "paginated": true,
+            "page_size": 20
+        },
+        {
+            "name": "order_items",
+            "type": "array",
+            "label": "Order Items",
+            "create": true,
+            "editable": false,
+            "show_in_filter": false,
+            "options_url": "/products_for_order",
+            "paginated": true,
+            "page_size": 20
+        }
+
+    ]
+}

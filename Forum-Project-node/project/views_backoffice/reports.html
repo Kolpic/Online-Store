@@ -80,6 +80,7 @@
     <table id="reportTable">
         <thead id="tableHead"></thead>
         <tbody id="tableBody"></tbody>
+        <div id="rowCount" style="margin-top: 10px; font-weight: bold;"></div>
     </table>
 
     <script>
@@ -130,7 +131,7 @@
                 console.log("filter");
                 console.log(filter);
                 let inputHtml = '';
-                const labelText = filter.key.replace(/_/g, ' '); // Replace underscores with spaces
+                const labelText = filter.display_name.replace(/_/g, ' '); // Replace underscores with spaces
 
                 // Filters
                 switch (filter.type) {
@@ -178,7 +179,18 @@
                 `;
 
                 // Grouping Option
-                if (filter.groupable) {
+                if (filter.groupable && filter.type === 'timestamp') {
+                    inputHtml += `
+                        <label>Group by ${labelText}:</label>
+                        <select name="${filter.key}_grouping_select_value">
+                            <option value="">No Grouping</option>
+                            <option value="day">Day</option>
+                            <option value="month">Month</option>
+                            <option value="year">Year</option>
+                        </select><br>
+                        <br>
+                    `;
+                } else if (filter.groupable) {
                     inputHtml += `
                         <label><input type="checkbox" name="${filter.key}_grouping_select_value" value="group"> Group by ${labelText}</label><br>
                         <br>
@@ -194,33 +206,55 @@
             const formData = new FormData(document.getElementById('filterForm'));
 
             const queryString = new URLSearchParams(formData).toString();
-            console.log("queryString");
-            console.log(queryString);
             
             const response = await fetch(`/reports/${entityType}?${queryString}`);
-            const data = await response.json();
+            const {resultRows, totalRows} = await response.json();
 
             // Generate HTML table headers and rows dynamically
             const tableHead = document.getElementById('tableHead');
             const tableBody = document.getElementById('tableBody');
+            const rowCount = document.getElementById('rowCount');
             tableHead.innerHTML = '';
             tableBody.innerHTML = '';
+            rowCount.innerHTML = '';
 
-            if (data.length > 0) {
-                // Create table headers
-                const headers = Object.keys(data[0]);
+            if (resultRows.length > 0) {
+                const headers = Object.keys(resultRows[0]);
                 let headerRow = '<tr>';
-                headers.forEach(header => headerRow += `<th>${header}</th>`);
+                reportFilters.fields.forEach(header => headerRow += `<th>${header.display_name}</th>`);
+
+                if (headers.includes("Count")) {
+                    headerRow += `<th>${headers[headers.length - 1]}</th>`
+                }
+
                 headerRow += '</tr>';
                 tableHead.innerHTML = headerRow;
 
-                // Populate table rows
-                data.forEach(row => {
+                resultRows.forEach(row => {
+                    console.log(row);
                     let rowHtml = '<tr>';
-                    headers.forEach(header => rowHtml += `<td>${row[header]}</td>`);
+                    headers.forEach(header => {
+                        let cellValue = row[header];
+                        
+                        const field = reportFilters.fields.find(f => f.key === header);
+                        if (field && field.type === 'timestamp' && cellValue && cellValue != "-") {
+                            const date = new Date(cellValue);
+                            cellValue = date.toLocaleString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: 'numeric',
+                                hour12: true
+                            });
+                        }
+
+                        rowHtml += `<td>${cellValue}</td>`;
+                    });
                     rowHtml += '</tr>';
                     tableBody.innerHTML += rowHtml;
                 });
+                rowCount.innerHTML = `Rows in report: ${resultRows.length} from ${totalRows} total rows`;
             } else {
                 tableBody.innerHTML = '<tr><td colspan="100%">No data available</td></tr>';
             }

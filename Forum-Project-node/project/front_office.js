@@ -1,7 +1,7 @@
 const { AssertUser, AssertDev } = require('./exceptions');
 const errors = require('./error_codes');
 const pool = require('./db');
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 
 const Ajv = require('ajv');
 const ajv = new Ajv();
@@ -787,6 +787,20 @@ async function payOrder(orderId, paymentAmount, client) {
 
     AssertUser(!(roundedPaymentAmount < totalWithVatToFixed), "You entered amout, which is less than the order you have");
     AssertUser(!(roundedPaymentAmount > totalWithVatToFixed), "You entered amout, which is bigger than the order you have");
+
+    const paymentResult = await fetch("http://10.20.3.224:5002/api/payments", {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+            client_id: orderId,
+            amount: totalWithVatToFixed,
+        }),
+    });
+
+    console.log(paymentResult);
+    AssertUser(paymentResult.ok, "Payment method failed, try again", errors.PAYMENT_METHOD_FAILED);  
 
     await client.query(`UPDATE orders SET status = 'Paid' WHERE order_id = $1`, [orderId]);
 

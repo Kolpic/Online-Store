@@ -3,6 +3,7 @@
     "fields": [
         {
             "key": "time",
+            "display_name": "Time",
             "grouping_expression": "el.time",
             "filter_expression": "el.time >= $FILTER_VALUE_BEGIN$ AND el.time <= $FILTER_VALUE_END$",
             "order_by_expression": "el.time",
@@ -12,6 +13,7 @@
         },
         {
             "key": "message",
+            "display_name": "Message",
             "grouping_expression": "el.message",
             "filter_expression": "STRPOS(el.message, $FILTER_VALUE$) <> 0",
             "type": "text",
@@ -19,6 +21,7 @@
         },
         {
             "key": "exception_type",
+            "display_name": "Exception",
             "grouping_expression": "el.exception_type",
             "filter_expression": "STRPOS(el.exception_type, $FILTER_VALUE$) <> 0",
             "type": "text",
@@ -26,6 +29,7 @@
         },
         {
             "key": "user_email",
+            "display_name": "User",
             "grouping_expression": "el.user_email",
             "filter_expression": "STRPOS(el.user_email, $FILTER_VALUE$) <> 0",
             "type": "text",
@@ -33,8 +37,17 @@
         },
         {
             "key": "sub_system",
+            "display_name": "Sub System",
             "grouping_expression": "el.sub_system",
             "filter_expression": "STRPOS(el.sub_system, $FILTER_VALUE$) <> 0",
+            "type": "text",
+            "groupable": true
+        },
+        {
+            "key": "log_type",
+            "display_name": "Log Type",
+            "grouping_expression": "el.log_type",
+            "filter_expression": "STRPOS(el.log_type, $FILTER_VALUE$) <> 0",
             "type": "text",
             "groupable": true
         }

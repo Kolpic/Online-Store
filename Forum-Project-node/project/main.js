@@ -6,7 +6,7 @@ const mailer = require('./mailer');
 const express = require('express');
 const { AssertUser, AssertDev, WrongUserInputException } = require('./exceptions');
 const front_office = require('./front_office')
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const router = express.Router();
 
 console.log("Pool imported in main.js:");  
@@ -98,9 +98,13 @@ router.use(async (req, res, next) => {
         console.log(error, "error");
 
         let sessionId = req.cookies['session_id'];
-        let userData = await sessions.getCurrentUser(sessionId, client);
-        if (userData == null) {
+        let userDataSession = await sessions.getCurrentUser(sessionId, client);
+        let userData;
+
+        if (userDataSession == null) {
             userData = "Guest";
+        } else {
+            userData = userDataSession.userRow.data;
         }
 
         await logException(userData, error.name, error.message, "site");
@@ -168,6 +172,8 @@ async function postRegistrationHandler(req, res, next, client) {
 
     await front_office.registration(client, user);
 
+    await logEvent(email, "", "User just registered in site");
+
     let resultEmail = await mailer.sendEmail(email, verification_code);
 
     return res.status(201).json({
@@ -227,6 +233,9 @@ async function postLoginHandler(req, res, next, client) {
             res.clearCookie('session_id_unauthenticated_user');
         }
     }
+
+    let user = await sessions.getCurrentUser(sessionId, client);
+    await logEvent(user.userRow.data, "", "User logged in site");
 
     res.cookie('session_id', sessionId, {
       httpOnly: true,
@@ -317,6 +326,8 @@ async function getLogoutHandler(req, res, next, client) {
     authenticatedUser = await sessions.getCurrentUser(sessionId, client)
 
     await client.query(`DELETE FROM custom_sessions WHERE session_id = $1`,[authenticatedUser['userRow']['session_id']]);
+
+    await logEvent(authenticatedUser.userRow.data, "", "User logged out from the site");
 
     res.cookie('session_id', "", {
       httpOnly: true,
@@ -522,6 +533,8 @@ async function postProfileHandler(req, res, next, client) {
 
     let result = await front_office.postProfile(userDetails, authenticatedUser, client);
 
+    await logEvent(authenticatedUser.userRow.data, "", "User " + authenticatedUser.userRow.data + " " +  result.message)
+
     return res.json({
         success: true,
         message: result.message,
@@ -532,11 +545,44 @@ async function logException(user_email, exception_type, message, subSystem) {
     let clientForExcaptionLog = await pool.connect();
     await clientForExcaptionLog.query('BEGIN');
 
-    await clientForExcaptionLog.query(`INSERT INTO exception_logs (user_email, exception_type, message, sub_system) VALUES ($1, $2, $3, $4)`, [user_email, exception_type, message, subSystem]);
+    await clientForExcaptionLog.query(`INSERT INTO exception_logs (user_email, exception_type, message, sub_system, log_type) VALUES ($1, $2, $3, $4, $5)`, 
+        [user_email, exception_type, message, subSystem, "error"]);
 
     await clientForExcaptionLog.query('COMMIT');
     clientForExcaptionLog.release();
 }
+
+async function logEvent(user_email, exception_type, message) {
+    let clientForExcaptionLog = await pool.connect();
+    await clientForExcaptionLog.query('BEGIN');
+
+    console.log("Logged event -> " + message);
+    await clientForExcaptionLog.query(`INSERT INTO exception_logs (user_email, exception_type, message, sub_system, log_type) VALUES ($1, $2, $3, $4, $5)`, 
+        [user_email, exception_type, message, "site", "event"]);
+
+    await clientForExcaptionLog.query('COMMIT');
+    clientForExcaptionLog.release();
+}
+
+process.on('uncaughtException', async (error) => {
+    console.error("error in uncaughtException");
+    console.error(error);
+    try {
+        await logException("Guest", error.name, error.message, "site");
+    } catch (loggingError) {
+        console.error("Error while logging uncaught exception:", loggingError);
+    }
+});
+
+process.on('unhandledRejection', async (error) => {
+    console.error("error in unhandledRejection --");
+    console.error(error);
+    try {
+        await logException("Guest", error.name || "Error", error.message || reason, "site");
+    } catch (loggingError) {
+        console.error("Error while logging unhandled rejection:", loggingError);
+    }
+});
 
 module.exports = {
     router,

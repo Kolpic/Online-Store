@@ -46,10 +46,9 @@ async function getUserBySession(sessionId, client) {
        		users ON custom_sessions.user_id = users.id AND custom_sessions.user_id IS NOT NULL
        LEFT JOIN 
        		staff ON custom_sessions.staff_id = staff.id AND custom_sessions.staff_id IS NOT NULL
-       WHERE custom_sessions.session_id = $1`,
+       WHERE custom_sessions.session_id = $1`, 
       [sessionId]
     );
-
     const customSessionUserRow = sessionRes.rows[0];
 
     if (!customSessionUserRow) {
