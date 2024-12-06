@@ -109,6 +109,9 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function() {
+    if (!navigator.onLine) {
+            alert("You are offline. Please check your internet connection.");
+        }
     fetchHeaderData();
     fetch('/cart')
         .then(response => response.json())
@@ -127,7 +130,9 @@
         const shippingForm = document.getElementById('shipping-form');
         shippingForm.addEventListener('submit', function(event) {
             event.preventDefault();
-
+            if (!navigator.onLine) {
+                alert("You are offline. Please check your internet connection.");
+            }
             const formData = {
                 first_name: document.getElementById('first_name').value,
                 last_name: document.getElementById('last_name').value,
@@ -158,6 +163,10 @@
                         displayErrorMessage(data.error_message + " code: " + data.error_code);
                     }
                 }
+            })
+            .catch(error => {
+                console.error('Error post cart:', error);
+                alert(`Internal server error. Try again later.`);
             })
         });
     });
@@ -221,34 +230,43 @@
     }
 
     $(document).on('click', '.btn-danger', function() {
-    const itemId = $(this).data('item-id');  // Fetch the product id from data attribute
-    if (!itemId) {
-        console.error('Item ID is not defined.');
-        return;  // Exit if itemId is not defined
-    }
-
-    fetch('/removeFromCart', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ itemId: itemId })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(data.message);
-            location.reload();  // Reload the page to refresh the cart
-        } else {
-            alert('Failed to remove item.');
+        const itemId = $(this).data('item-id');  // Fetch the product id from data attribute
+        if (!itemId) {
+            console.error('Item ID is not defined.');
+            return;  // Exit if itemId is not defined
         }
-    })
-    .catch(error => {
-        console.error('Error removing item:', error); // Log any errors
+
+        if (!navigator.onLine) {
+            alert("You are offline. Please check your internet connection.");
+        }
+
+        fetch('/removeFromCart', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ itemId: itemId })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                location.reload();
+            } else {
+                alert('Failed to remove item.');
+            }
+        })
+        .catch(error => {
+            console.error('Error removing item:', error);
+            alert(`Internal server error. Try again later.`);
+        });
     });
-});
 
 $(document).on('change', '.quantity', function() {
+    if (!navigator.onLine) {
+        alert("You are offline. Please check your internet connection.");
+        return;
+    }
     const itemId = $(this).data('item-id');
     const newQuantity = parseFloat($(this).val());
     const oldQuantity = parseFloat($(this).data('old-quantity') || 0);
@@ -293,6 +311,9 @@ $(document).on('change', '.quantity', function() {
                 } else {
                     alert('Failed to update cart. Please try again!');
                 }
+            },
+            error: function(xhr, status, error) {
+                    alert('Internal server error. Please try again later.');
             }
         });
     }
@@ -300,6 +321,10 @@ $(document).on('change', '.quantity', function() {
 
     async function handleLogout() {
         try {
+            if (!navigator.onLine) {
+                alert("You are offline. Please check your internet connection.");
+            }
+
             const response = await fetch('/logout', {
                 method: 'GET',
                 credentials: 'include'
@@ -314,6 +339,7 @@ $(document).on('change', '.quantity', function() {
             }
         } catch (error) {
             console.error('Error:', error);
+            alert('Internal server error. Please try again later.');
         }
     }
 

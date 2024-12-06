@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "role_permissions",
+  "description": "Schema for a role_permissions entity",
+  "type": "object",
+  "primaryKey": "id",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Unique identifier for the roles",
+      "readOnly": true,
+      "PK": true
+    },
+    "role_id": {
+      "type": "integer",
+      "description": "Role name",
+      "foreignKey": {
+        "table": "roles",
+        "value": "role_id",
+        "column": "role_name"
+      }
+    },
+    "permission_id": {
+      "type": "integer",
+      "description": "Permission name",
+      "foreignKey": {
+        "table": "permissions",
+        "value": "permission_id",
+        "column": "permission_name"
+      }
+    }
+  },
+  "filters": ["role_id"],
+  "required": ["role_name"],
+  "errorMessage": {
+    "required": {
+        "role_name": "Role name is required"
+      },
+  "properties": {
+        "role_name": "Role name should be between 5 and 50 characters"
+      }
+  },
+  "additionalProperties": true
+}

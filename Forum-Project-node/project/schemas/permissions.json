@@ -1,0 +1,37 @@
+{
+    "entity": "permissions",
+    "fields": [
+        {
+            "name": "permission_id",
+            "type": "integer",
+            "label": "Permission ID",
+            "create": false,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "permission_name",
+            "type": "string",
+            "label": "Permission Name",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true
+        },
+        {
+            "name": "description",
+            "type": "string",
+            "label": "Pemission description",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "interface",
+            "type": "string",
+            "label": "Interface where the permission is for",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true
+        }
+    ]
+}

@@ -16,6 +16,11 @@ const { promisify } = require('util');
 const { v4: uuidv4 } = require('uuid');
 const Ajv = require('ajv');
 const ajvErrors = require('ajv-errors');
+const addFormats = require("ajv-formats");
+const { stringify } = require('csv-stringify');
+const ExcelJS = require('exceljs');
+const { Transform } = require('stream');
+const { PassThrough } = require('stream');
 
 console.log("Pool imported in back_office.js:"); 
 
@@ -32,11 +37,18 @@ const urlToFunctionMapBackOffice = {
         '/order_status': getOrderStatusHadler,
         '/user_emails': getUserEmailsHandler,
         '/products_for_order': getProductsForOrderHandler,
+        '/roles': getRolesHandler,
+        '/role_permissions': getRolePermissions,
+        '/permissions': getPermissions,
+        '/permissions_for_create': getPermissionsForCreate,
+        '/get_staff_permissions': getStaffPermissions,
     },
     POST: {
         '/login': postLoginHandler,
         '/crud/:schema': filterEntities,
-        '/create/:schema': createEntity,
+        '/create/:schema': createEntityHandler,
+        '/export/:entity': exportEntityHandler,
+        '/upload/:schema/csv': uploadEntitiesHandler,
     },
     PUT: {
         '/update/:schema': updateEntity,
@@ -99,6 +111,42 @@ const crudHooks = {
 
             }
         }
+    },
+    staff: {
+        create: {
+            before: {
+                handlePasswordHash
+            },
+            after: {
+
+            }
+        },
+        update: {
+            before: {
+                handlePasswordHash
+            },
+            after: {
+
+            }
+        }
+    },
+    roles: {
+        create: {
+            before: {
+                
+            },
+            after: {
+
+            }
+        },
+        update: {
+            before: {
+                auditRolePermissionChanges,
+            },
+            after: {
+
+            }
+        }
     }
 }
 
@@ -151,6 +199,7 @@ router.use(async (req, res, next) => {
 
         // Assign the parsed cookie object to req.cookies
         req.cookies = cookieObj
+        console.log("Parsed cookies:", req.cookies);
 
         console.log(req.path);
 
@@ -191,6 +240,10 @@ router.use(async (req, res, next) => {
         } else if (error.code == '23514') {
             return res.status(500).json({ 
                 error_message: 'The seleted quantity you want for the product will be negative in out store. Try selecting less.' 
+            });
+        } else if (error.code == '23505') {
+            return res.status(500).json({
+                error_message: 'Some of the products you are trying to upload are already present'
             });
         } else if (error.code == 'P8000') {
             return res.status(500).json({ 
@@ -250,7 +303,7 @@ async function postLoginHandler(req, res, next, client) {
       sameSite: 'Lax',
     });
 
-    res.json({
+    return res.json({
       success: true,
       user: response,
     });
@@ -289,11 +342,21 @@ async function getLogoutHandler(req, res, next, client) {
 }
 
 async function filterEntities(req, res, next, client) {
+    let sessionId = req.cookies['session_id']
+    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+    AssertUser(authenticatedUser != null, "You have to login to access this page");
+
     let schema = req.body.schema;
     let filterById = req.body.id;
+    console.log("filterById", filterById);
     let tableName = schema.title;
 
+    await backOfficeService.checkStaffPermissions(client, authenticatedUser.userRow.data, schema.title, "read");
+
     let {selectFields, joins, groupByFields} = await backOfficeService.makeTableJoins(schema);
+
+    console.log("selectFields", selectFields, "joins", joins, "groupByFields", groupByFields);
 
     let { whereConditions, values} = await backOfficeService.makeTableFilters(schema, req);
 
@@ -304,8 +367,9 @@ async function filterEntities(req, res, next, client) {
 
     let query = `SELECT ${selectClause} FROM ${tableName} ${joinClause} ${whereClause} ${groupByClause} LIMIT 50`;
     console.log(query);
-
+    console.log(values);
     const result = await client.query(query, values);
+    AssertUser(result.rows.length != 0, "There is no such entity with this filters, try another filters", errors.NO_SUCH_ENTITY_WITH_APLIED_FILTERS);
     return res.json(result.rows);
 }
 
@@ -347,18 +411,33 @@ async function getCategoriesHandler(req, res, next, client) {
 
 const pipelineAsync = promisify(pipeline);
 
-async function createEntity(req, res, next, client) {
+async function createEntityHandler(req, res, next, client) { // client -> dbConnection
     let sessionId = req.cookies['session_id']
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+    AssertUser(authenticatedUser != null, "You have to login to access this page");
 
     let schemaName = req.path.split("/")[2];
     let schema = require(`./schemas/${schemaName}_validation_schema.json`);
 
-    const ajv = new Ajv({ allErrors: true, useDefaults: true, strict: false});
-    ajvErrors(ajv);
-    const validateEntity = ajv.compile(schema);
+    await backOfficeService.checkStaffPermissions(client, authenticatedUser.userRow.data, schema.title, "create");
 
     let {formData, imageIds} = await backOfficeService.parseMultipartFormData(req, client);
+
+    console.log("formData (?)", formData, "imageIds (?)", imageIds);
+
+    await createEntity(client, schemaName, schema, formData, imageIds);
+
+    await logEvent(authenticatedUser.userRow.data, "", "User created new " + schema.title + " from CRUD inteface");
+
+    res.status(201).json({ message: `${schema.title} created successfully`});
+}
+
+async function createEntity(client, schemaName, schema, formData, imageIds) {
+    const ajv = new Ajv({ allErrors: true, useDefaults: true, strict: false});
+    addFormats(ajv);
+    ajvErrors(ajv);
+    const validateEntity = ajv.compile(schema);
 
     let beforeHookObj = {formData}
     let hooksBefore = crudHooks[schemaName]?.create.before;
@@ -370,6 +449,8 @@ async function createEntity(req, res, next, client) {
 
     let {columns, values, foreignKeyLookups, manyToManyInserts, oneToManyInsertions} = await backOfficeService.mapSchemaPropertiesToDBRelations(formData, schema);
 
+    console.log("columns (?)", columns, "values (?)", values, "foreignKeyLookups (?)", foreignKeyLookups, "manyToManyInserts (?)", manyToManyInserts, "oneToManyInsertions (?)", oneToManyInsertions);
+
     // Step 2: Execute foreign key lookups
     for (const fk of foreignKeyLookups) {
         columns.push(fk.field);
@@ -377,41 +458,96 @@ async function createEntity(req, res, next, client) {
     }
 
     let insertQuery;
+    let tablePK = schema.primaryKey;
+    console.log("tablePK in create entity", tablePK);
     let entityId;
 
-    if (schemaName == "orders") {
-        // Step 3: Insert main entity
-        const placeholders = columns.map((_, i) => `$${i + 1}`);
-        insertQuery = `INSERT INTO ${schema.title} (${columns.join(", ")})
-                             VALUES (${placeholders.join(", ")}) RETURNING order_id`;
 
-        const { rows } = await client.query(insertQuery, values);
-        entityId = rows[0].order_id;
-    } else {
-        // Step 3: Insert main entity
-        const placeholders = columns.map((_, i) => `$${i + 1}`);
-        insertQuery = `INSERT INTO ${schema.title} (${columns.join(", ")})
-                             VALUES (${placeholders.join(", ")}) RETURNING id`;
 
-        const { rows } = await client.query(insertQuery, values);
-        entityId = rows[0].id;
-    }
+    // if (schemaName == "orders") {
+    //     // Step 3: Insert main entity
+    //     const placeholders = columns.map((_, i) => `$${i + 1}`);
+    //     insertQuery = `INSERT INTO ${schema.title} (${columns.join(", ")})
+    //                          VALUES (${placeholders.join(", ")}) RETURNING ${tablePK}`;
+
+    //     const { rows } = await client.query(insertQuery, values);
+    //     entityId = rows[0].order_id;
+    // } else {
+    //     // Step 3: Insert main entity
+    //     const placeholders = columns.map((_, i) => `$${i + 1}`);
+    //     insertQuery = `INSERT INTO ${schema.title} (${columns.join(", ")})
+    //                          VALUES (${placeholders.join(", ")}) RETURNING ${tablePK}`;
+
+    //     console.log("insertQuery", insertQuery);
+    //     console.log("values", values);
+    //     const { rows } = await client.query(insertQuery, values);
+    //     console.log(rows);
+    //     entityId = rows[tablePK];
+    // }
+
+
+
+
+
+    // Step 3: Insert main entity
+    const placeholders = columns.map((_, i) => `$${i + 1}`);
+    insertQuery = `INSERT INTO ${schema.title} (${columns.join(", ")})
+                         VALUES (${placeholders.join(", ")}) RETURNING ${tablePK}`;
+
+    const { rows } = await client.query(insertQuery, values);
+    console.log("rows[0][tablePK]", rows[0][tablePK]);
+    entityId = rows[0][tablePK];
+
+    console.log("entityId", entityId);
 
     // Step 4: Handle many-to-many insertions
     for (const m2m of manyToManyInserts) {
-        const joinInserts = m2m.values.map(value => ({
-            query: `INSERT INTO ${m2m.joinTable} (${m2m.joinColumnOnePK}, ${m2m.joinColumnTwoPK})
-                    VALUES ($1, (SELECT ${m2m.targetColumnFilter} FROM ${m2m.targetTable} WHERE ${m2m.targetColumnFilter} = $2))`,
-            values: [entityId, value]
-        }));
-        for (const insert of joinInserts) {
-            await client.query(insert.query, insert.values);
+        console.log("m2m", m2m);
+        console.log("m2m.values", m2m.values);
+        console.log("m2m.values.typeof", typeof m2m.values);
+
+        if (m2m.field === 'permissions') {
+            formData.permissions = JSON.parse(formData.permissions);
+            for (const permissionId of formData.permissions) {
+                const insertQuery = `
+                    INSERT INTO ${m2m.joinTable} (${m2m.joinColumnOnePK}, ${m2m.joinColumnTwoPK})
+                    VALUES ($1, $2)
+                `;
+                console.log("permissionId", permissionId, "typeof permissionId", typeof permissionId, "insertQuery", insertQuery, "entityId", entityId);
+                await client.query(insertQuery, [entityId, permissionId]);
+            }
+        } else if (typeof m2m.values === 'string') {
+            m2m.values = [...m2m.values];
+            console.log("m2m.values", m2m.values);
+            console.log("m2m.values.typeof", typeof m2m.values);
+
+            const joinInserts = m2m.values.map(value => ({
+                query: `INSERT INTO ${m2m.joinTable} (${m2m.joinColumnOnePK}, ${m2m.joinColumnTwoPK})
+                        VALUES ($1, (SELECT ${m2m.targetColumnFilter} FROM ${m2m.targetTable} WHERE ${m2m.targetColumnFilter} = $2))`,
+                values: [entityId, value]
+            }));
+
+            for (const insert of joinInserts) {
+                await client.query(insert.query, insert.values);
+            }
+        } else {
+            const joinInserts = m2m.values.map(value => ({
+                query: `INSERT INTO ${m2m.joinTable} (${m2m.joinColumnOnePK}, ${m2m.joinColumnTwoPK})
+                        VALUES ($1, (SELECT ${m2m.targetColumnFilter} FROM ${m2m.targetTable} WHERE ${m2m.targetColumnFilter} = $2))`,
+                values: [entityId, value]
+            }));
+
+            for (const insert of joinInserts) {
+                await client.query(insert.query, insert.values);
+            }
         }
     }
 
     // Step 5: Handle one to many insertions
     for (const o2m of oneToManyInsertions) {
         // Update each insertion with the actual entityId
+        console.log("o2m", o2m);
+        console.log("values[0]", values[0]);
         o2m.values[0] = entityId;
 
         await client.query(o2m.query, o2m.values);
@@ -424,24 +560,27 @@ async function createEntity(req, res, next, client) {
             values = await hook(client, entityId, afterHookObj);
         }
     }
-
-    await logEvent(authenticatedUser.userRow.data, "", "User created new " + schema.title + " from CRUD inteface");
-
-    res.status(201).json({ message: `${schema.title} created successfully`});
 }
 
 async function updateEntity(req, res, next, client) {
+
     let sessionId = req.cookies['session_id']
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
+    AssertUser(authenticatedUser != null, "You have to login to access this page");
+
     let schemaName = req.path.split("/")[2];
     let schema = require(`./schemas/${schemaName}_validation_schema.json`);
+
+    await backOfficeService.checkStaffPermissions(client, authenticatedUser.userRow.data, schema.title, "update");
 
     const ajv = new Ajv({ allErrors: true, useDefaults: true, strict: false});
     ajvErrors(ajv);
     const validateEntity = ajv.compile(schema);
 
     let {formData, imageIds} = await backOfficeService.parseMultipartFormData(req, client);
+
+    formData.user = authenticatedUser.userRow.data;
 
     let beforeHookObj = {formData}
     let hooksBefore = crudHooks[schemaName]?.update.before;
@@ -452,6 +591,8 @@ async function updateEntity(req, res, next, client) {
     }
 
     let {columns, values, foreignKeyLookups, manyToManyInserts, oneToManyInsertions} = await backOfficeService.mapSchemaPropertiesToDBRelations(formData, schema);
+
+    console.log("columns", columns, "values", values, "foreignKeyLookups", foreignKeyLookups, "manyToManyInserts", manyToManyInserts, "oneToManyInsertions", oneToManyInsertions);
 
     // Step 2: Execute foreign key lookups
     for (const fk of foreignKeyLookups) {
@@ -467,36 +608,55 @@ async function updateEntity(req, res, next, client) {
     const setClause = columns.map((column, index) => `${column} = $${index + 1}`).join(", ");
 
     let updateQuery;
-    if (schemaName == "orders") {
-        updateQuery = `UPDATE ${schema.title} SET ${setClause} WHERE order_id = $${columns.length + 1} RETURNING order_id`;
-    } else {
-        updateQuery = `UPDATE ${schema.title} SET ${setClause} WHERE id = $${columns.length + 1} RETURNING id`;
-    }
+    let tablePK = schema.primaryKey;
+    console.log("tablePK", tablePK);
 
+    updateQuery = `UPDATE ${schema.title} SET ${setClause} WHERE ${tablePK} = $${columns.length + 1} RETURNING ${tablePK}`;
+    // if (schemaName == "orders") {
+    //     updateQuery = `UPDATE ${schema.title} SET ${setClause} WHERE order_id = $${columns.length + 1} RETURNING order_id`;
+    // } else {
+    //     updateQuery = `UPDATE ${schema.title} SET ${setClause} WHERE id = $${columns.length + 1} RETURNING id`;
+    // }
 
-    let entityId;
-    if (schemaName == 'orders') {
-        entityId = formData.order_id;
-    } else {
-        entityId = formData.id;
-    }
+    console.log("formData", formData, "formData.tablePK", formData[tablePK]);
+    // let update
+    let entityId = formData[tablePK];
+    console.log("entityId", entityId);
+    // if (schemaName == 'orders') {
+    //     entityId = formData.order_id;
+    // } else {
+    //     entityId = formData.id;
+    // }
 
     values.push(entityId);
+    console.log("updateQuery", updateQuery, "values", values);
 
     const { rows } = await client.query(updateQuery, values);
 
     // Handle Many-to-Many Updates
     for (const m2m of manyToManyInserts) {
         const deleteQuery = `DELETE FROM ${m2m.joinTable} WHERE ${m2m.joinColumnOnePK} = $1`;
+        console.log("m2m", m2m, "deleteQuery", deleteQuery, "entityId", entityId);
         await client.query(deleteQuery, [entityId]);
 
-        // Insert updated relations
-        for (const value of m2m.values) {
-            const insertQuery = `
-                INSERT INTO ${m2m.joinTable} (${m2m.joinColumnOnePK}, ${m2m.joinColumnTwoPK})
-                VALUES ($1, (SELECT ${m2m.targetColumnFilter} FROM ${m2m.targetTable} WHERE ${m2m.targetColumnFilter} = $2))
-            `;
-            await client.query(insertQuery, [entityId, value]);
+        if (m2m.field === 'permissions') {
+            formData.permissions = JSON.parse(formData.permissions);
+            for (const permissionId of formData.permissions) {
+                const insertQuery = `
+                    INSERT INTO ${m2m.joinTable} (${m2m.joinColumnOnePK}, ${m2m.joinColumnTwoPK})
+                    VALUES ($1, $2)
+                `;
+                console.log("permissionId", permissionId, "typeof permissionId", typeof permissionId, "insertQuery", insertQuery, "entityId", entityId);
+                await client.query(insertQuery, [entityId, permissionId]);
+            }
+        } else {
+            for (const value of m2m.values) {
+                const insertQuery = `
+                    INSERT INTO ${m2m.joinTable} (${m2m.joinColumnOnePK}, ${m2m.joinColumnTwoPK})
+                    VALUES ($1, (SELECT ${m2m.targetColumnFilter} FROM ${m2m.targetTable} WHERE ${m2m.targetColumnFilter} = $2))
+                `;
+                await client.query(insertQuery, [entityId, value]);
+            }
         }
     }
 
@@ -559,17 +719,20 @@ async function getReportsHandler(req, res, next, client) {
     let reportName = req.path.split("/")[2];
     let reportFilters = require(`./schemas/${reportName}.json`);
 
-    const { sqlTemplate, queryParams } = await backOfficeService.generateReportSQLQuery(inputData, reportFilters);
+    console.log("inputData");
+    console.log(inputData);
+    console.log("reportFilters");
+    console.log(reportFilters);
+    console.log("reportName");
+    console.log(reportName);
 
-    const countQuery = `
-        SELECT COUNT(*) AS total_rows
-        FROM (${sqlTemplate.replace("LIMIT 20", "")}) AS total_count_query
-    `;
-    const countResult = await client.query(countQuery, queryParams);
-    const totalRows = countResult.rows[0].total_rows;
+    const { sqlTemplate, queryParams } = await backOfficeService.generateReportSQLQuery(inputData, reportFilters, reportName);
 
     const result = await client.query(sqlTemplate, queryParams);
     let resultRows = result.rows;
+
+    let totalRows = resultRows.length > 0 ? resultRows[0]["Total Rows"] : 0;
+    resultRows.forEach(row => delete row["Total Rows"]);
 
     res.json({resultRows, totalRows});
 }
@@ -577,6 +740,8 @@ async function getReportsHandler(req, res, next, client) {
 async function getOrderItemsData(req, res, next, client) {
     const inputData = req.query;
     let orderId = inputData.order_id;
+
+    let settings = await client.query(`SELECT vat FROM settings`);
 
     let rows = await client.query(`
                                 SELECT 
@@ -591,7 +756,30 @@ async function getOrderItemsData(req, res, next, client) {
                                     JOIN currencies  ON products.currency_id   = currencies.id
                                 WHERE orders.order_id = $1
                                 `, [orderId]);
-    return res.status(200).json({ data: rows.rows });
+
+    return res.status(200).json({ data: rows.rows, vat: settings.rows[0].vat });
+}
+
+async function getRolePermissions(req, res, next, client) {
+    const inputData = req.query;
+    let roleId = inputData.role_id;
+
+    console.log("getRolePermissions for role");    
+
+    let rows = await client.query(`
+                                SELECT
+                                    permissions.permission_id,
+                                    permission_name, 
+                                    interface, 
+                                    description 
+                                FROM roles 
+                                    JOIN role_permissions ON roles.role_id = role_permissions.role_id 
+                                    JOIN permissions ON role_permissions.permission_id = permissions.permission_id 
+                                where roles.role_id = $1;
+                                `, [roleId]);
+    let permissionResult = rows.rows;
+    console.log(permissionResult);
+    return res.status(200).json({ permissionResult });
 }
 
 async function getOrderStatusHadler(req, res, next, client) {
@@ -693,6 +881,220 @@ async function updateProductsQuantityDB(client, beforeHookObj) {
         await client.query(`DELETE FROM order_items WHERE order_id = $1 AND product_id = $2`, [beforeHookObj.formData.order_id, product.product_id]);
         await client.query(`UPDATE products SET quantity = $1 WHERE id = $2`, [updatedProductQuantity, product.product_id]);
     }
+}
+
+async function exportEntityHandler(req, res, next, client) {
+    const { format } = req.query;
+    const { entityType, filters } = req.body;
+
+    const { sqlTemplate, queryParams } = await backOfficeService.generateReportSQLQuery(filters, require(`./schemas/${entityType}.json`), entityType);
+
+    console.log("sqlTemplate", sqlTemplate);
+    console.log("queryParams", queryParams);
+
+     const metadata = [
+        ['Filters Applied'],
+        ...Object.entries(filters).map(([key, details]) => 
+            [`${key}`, JSON.stringify(details)]
+        ),
+        ['Generated On', new Date().toLocaleString()]
+    ];
+
+    if (format === 'csv') {
+        await exportCsv(res, client, sqlTemplate, queryParams, metadata);
+    } else if (format === 'excel') {
+        await exportExcel(res, client, sqlTemplate, queryParams, metadata);
+    } else {
+        AssertUser(false, "Invalid format");
+    }
+}
+
+async function exportCsv(res, client, sqlTemplate, queryParams, metadata) {
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename="report.csv"');
+
+    const csvStream = stringify();
+    csvStream.pipe(res);
+
+    metadata.forEach((meta) => csvStream.write(meta));
+
+    const reportHeaders = await getReportHeaders(client, sqlTemplate, queryParams);
+    csvStream.write(reportHeaders);
+
+    for await (const rows of backOfficeService.fetchReportData(client, sqlTemplate, queryParams)) {
+        rows.forEach((row) => {
+            // {} -> [] 
+            const formattedRow = Object.entries(row).reduce((acc, [key, value]) => {
+                if (key.includes('Inserted At') && value) {
+                    acc[key] = formatTimestamp(value);
+                } else {
+                    acc[key] = value;
+                }
+                return acc;
+            }, {});
+
+            // taking only the values from the key, value pairs and write
+            csvStream.write(Object.values(formattedRow));
+        });
+    }
+
+    csvStream.end();
+}
+
+async function getReportHeaders(client, sqlTemplate, queryParams) {
+    const previewQuery = sqlTemplate.replace('LIMIT 1000', 'LIMIT 1');
+    const { rows } = await client.query(previewQuery, queryParams);
+    return rows.length > 0 ? Object.keys(rows[0]) : [];
+}
+
+async function exportExcel(res, client, sqlTemplate, queryParams, metadata) {
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', 'attachment; filename="report.xlsx"');
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Report');
+
+    metadata.forEach((metaRow) => {
+        worksheet.addRow(metaRow);
+    });
+
+    worksheet.addRow([]);
+
+    const reportHeaders = await getReportHeaders(client, sqlTemplate, queryParams);
+    worksheet.addRow(reportHeaders);
+
+    for await (const rows of backOfficeService.fetchReportData(client, sqlTemplate, queryParams)) {
+        rows.forEach((row) => {
+            const formattedRow = Object.entries(row).map(([key, value]) => {
+                if (key.includes('Inserted At') && value) {
+                    return formatTimestamp(value);
+                }
+                return value;
+            });
+
+            worksheet.addRow(formattedRow);
+        });
+
+        await streamWorkbookToResponse(workbook, res);
+    }
+
+    await workbook.xlsx.write(res);
+    res.end();
+}
+async function streamWorkbookToResponse(workbook, res) {
+    const tempStream = new PassThrough();
+    await workbook.xlsx.write(tempStream, { useSharedStrings: true, useStyles: true });
+    tempStream.pipe(res, { end: false });
+}
+
+function formatTimestamp(timestamp) {
+    const date = new Date(Number(timestamp)); 
+    return date.toLocaleString();
+}
+
+async function uploadEntitiesHandler(req, res, next, client) {
+    let sessionId = req.cookies['session_id']
+    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+    // let schemaName = req.path.split("/")[2];
+    let schemaName = "products";
+    let schema = require(`./schemas/${schemaName}_validation_schema.json`);
+
+    await client.query('COMMIT');
+    let count = 0;
+    for await (const formData of backOfficeService.parseMultipartFormDataGenerator(req, client)) {
+
+        await client.query('BEGIN');
+
+        await createEntity(client, schemaName, schema, formData.row, formData.imageId);
+
+        await client.query('COMMIT');
+    }
+
+    return res.status(200).json({ message: `Successfully uploaded ${count} rows`});
+}
+
+async function getRolesHandler(req, res, next, client) {
+    const result = await client.query(`
+        SELECT
+            role_id             AS id ,
+            role_name           AS name
+        FROM roles
+    `); 
+    return res.json(result.rows); 
+}
+
+async function getPermissions(req, res, next, client) {
+    const result = await client.query(`
+        SELECT
+            *
+        FROM permissions
+    `); 
+    return res.json({data: result.rows}); 
+}
+
+async function getPermissionsForCreate(req, res, next, client) {
+    const result = await client.query(`
+        SELECT
+            DISTINCT(permission_name) as name
+        FROM permissions
+    `);
+
+    return res.json( result.rows ); 
+}
+
+async function getStaffPermissions(req, res, next, client) {
+    let sessionId = req.cookies['session_id']
+    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+    AssertUser(authenticatedUser != null, "You have to login to access this page");
+
+    console.log("authenticatedUser", authenticatedUser);
+
+    const permissions = await backOfficeService.getStaffPermissions(client, authenticatedUser.userRow.data);
+
+    return res.json({ data: permissions })
+}
+
+async function auditRolePermissionChanges(client, beforeHookObj) {
+    console.log(" beforeHookObj in auditRolePermissionChanges", beforeHookObj);
+
+    const permissionsAudit = JSON.parse(beforeHookObj.formData.permissionsAudit);
+
+    console.log("Parsed permissionsAudit:", permissionsAudit);
+
+    let message = "";
+
+    const permissionIds = [...permissionsAudit.added, ...permissionsAudit.removed];
+
+    if (permissionIds.length > 0) {
+        const query = `
+            SELECT permission_id, permission_name
+            FROM permissions
+            WHERE permission_id = ANY($1)
+        `;
+        const { rows } = await client.query(query, [permissionIds]);
+
+        const idToNameMap = rows.reduce((acc, row) => {
+            acc[row.permission_id] = row.permission_name;
+            return acc;
+        }, {});
+
+        if (permissionsAudit.added.length > 0) {
+            const addedNames = permissionsAudit.added.map(id => idToNameMap[id]);
+            message += `Added permissions: ${addedNames.join(", ")}. `;
+        }
+
+        if (permissionsAudit.removed.length > 0) {
+            const removedNames = permissionsAudit.removed.map(id => idToNameMap[id]);
+            message += `Removed permissions: ${removedNames.join(", ")}. `;
+        }
+        message += `Updated for role: ${beforeHookObj.formData.role_name}`;
+    }
+
+    console.log("Audit Log Message:", message);
+
+    await logEvent(beforeHookObj.formData.user, "", message);
 }
 
 process.on('uncaughtException', async (error) => {

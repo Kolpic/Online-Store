@@ -6,15 +6,19 @@ const path = require('path');
 const { pipeline } = require('stream');
 const { promisify } = require('util');
 const { v4: uuidv4 } = require('uuid');
+const bufferSplit = require('buffer-split');
+const Cursor = require('pg-cursor');
+const axios = require('axios');
 
 async function login(username, password, client) {
 	AssertDev(username != undefined, "username is undefined");
 	AssertDev(password != undefined, "password is undefined");
 
-	let user = await client.query(`SELECT * FROM staff WHERE username = $1 AND password = $2`, [username, password]);
+	let user = await client.query(`SELECT * FROM staff WHERE username = $1`, [username]);
 	let userRow = user.rows;
 
 	AssertDev(userRow.length == 1, "User row can't return more than one user");
+    AssertUser(await bcrypt.compare(password, userRow[0]['password']), "Invalid email or password")
 
 	return userRow[0].username;
 }
@@ -25,25 +29,35 @@ async function parseMultipartFormData(req, client) {
     const boundary = getBoundary(req.headers['content-type']);
     AssertUser(boundary, 'Invalid inputs: Boundary not found in the Content-Type header', errors.NOT_FOUND_BOUNDARY);
 
-    const formData = {};
-    const imageIds = [];
+    let formData = {};
+    let imageIds = [];
     let buffer = Buffer.alloc(0);
 
     for await (const chunk of req) {
         buffer = Buffer.concat([buffer, chunk]);
     }
+    console.log("buffer.toString()", buffer.toString());
 
     try {
-        const parts = buffer.toString().split(`--${boundary}`);
+        const parts = bufferSplit(buffer, new Buffer(`--${boundary}`));
+
+        console.log("parts", parts.toString());
 
         for (const part of parts) {
-            if (part === '--\r\n' || part === '--\r\n--') continue;
+            let partString = part.toString();
+
+            console.log("partString", partString);
+
+            if (partString === '--\r\n' || partString === '--\r\n--') continue;
 
             // Separate headers from content
-            const [headers, content] = part.split('\r\n\r\n');
+            const [headers, content] = bufferSplit(part, new Buffer('\r\n\r\n')); // '\r\n\r\n'
+
             if (!headers || !content) continue;
 
-            const headerLines = headers.split('\r\n');
+            let headersString = headers.toString();
+            const headerLines = headersString.split('\r\n');
+
             const contentDisposition = headerLines.find(line => line.startsWith('Content-Disposition'));
             const contentType = headerLines.find(line => line.startsWith('Content-Type'));
 
@@ -51,8 +65,6 @@ async function parseMultipartFormData(req, client) {
             const filenameMatch = /filename="(.+?)"/.exec(contentDisposition);
 
             if (filenameMatch) {
-                console.log("File contentType:", contentType);
-
                 AssertDev(contentType && contentType.includes("image/jpeg"), "Not image/jpeg");
                 const filename = filenameMatch[1];
                 const uniqueFilename = `${uuidv4()}-${filename}`;
@@ -69,17 +81,23 @@ async function parseMultipartFormData(req, client) {
                 const imageId = rows[0].id;
                 imageIds.push(imageId);
 
-                const binaryContent = Buffer.from(content, 'binary').slice(0, -2);
-                await fs.promises.writeFile(filePath, binaryContent);
+                var len = Buffer.byteLength(content);
+                console.log("binaryContent", filenameMatch, len);
+
+                await fs.promises.writeFile(filePath, content.slice(0, -2));
 
                 await client.query(`UPDATE images SET status = 'completed' WHERE id = $1`, [imageId]);
             } else {
                 const fieldName = nameMatch[1];
-                const fieldValue = content.trim();
+                const fieldValue = content.toString().trim();
+                console.log("fieldName", fieldName, "fieldValue", fieldValue)
 
                 if (fieldName === 'categories') {
                     formData.categories = formData.categories || [];
                     formData.categories.push(fieldValue);
+                } if (fieldName === 'roles') {
+                    formData.roles = formData.roles || [];
+                    formData.roles.push(fieldValue);
                 } else {
                     formData[fieldName] = fieldValue;
                 }
@@ -90,6 +108,132 @@ async function parseMultipartFormData(req, client) {
     } catch (error) {
         throw(error);
     }
+}
+
+async function* parseMultipartFormDataGenerator(req, client) {
+    AssertUser(req.headers['content-type'].startsWith('multipart/form-data'), 'Invalid inputs: Expected multipart/form-data', errors.NOT_FOUND_MULTYPART_FROM_DATA);
+
+    const boundary = getBoundary(req.headers['content-type']);
+    AssertUser(boundary, 'Invalid inputs: Boundary not found in the Content-Type header', errors.NOT_FOUND_BOUNDARY);
+
+    let buffer = Buffer.alloc(0);
+
+    for await (const chunk of req) {
+        buffer = Buffer.concat([buffer, chunk]);
+    }
+    const parts = bufferSplit(buffer, new Buffer(`--${boundary}`));
+
+    for (const part of parts) {
+        let partString = part.toString();
+
+        if (partString.startsWith('--\r\n') || partString.startsWith('--\r\n--') || partString === `--\n `) continue;
+
+        const [headers, content] = bufferSplit(part, new Buffer('\r\n\r\n')); // '\r\n\r\n'
+
+        if (!headers || !content) continue;
+
+        let headersString = headers.toString();
+        const headerLines = headersString.split('\r\n');
+        const contentDisposition = headerLines.find(line => line.startsWith('Content-Disposition'));
+        const contentType = headerLines.find(line => line.startsWith('Content-Type'));
+
+        const filenameMatch = /filename="(.+?)"/.exec(contentDisposition);
+        const csvMatch =  contentType.includes("text/csv");
+
+        AssertUser(csvMatch, "Provide csv file !");
+
+        console.log("contentDisposition", contentDisposition);
+        console.log("contentDisposition", contentDisposition.split(";")[2].split("filename="));
+
+        const filename = filenameMatch[1];
+        const filePath = path.join(__dirname, 'uploads', filename);
+        await fs.promises.writeFile(filePath, content.slice(0, -2));
+        const csvData = await fs.promises.readFile(filePath, 'utf8');
+
+        for await (const parsedRow of parseCSV(csvData, client)) {
+            yield parsedRow; // Yield each parsed row from CSV
+        }
+    }
+
+}
+
+async function* parseCSV(data, client) {
+    const lines = data.split('\n').filter(line => line.trim().length > 0);
+    const headers = parseLine(lines[0]);
+
+    for (const line of lines.slice(1)) {
+        const values = parseLine(line);
+
+        const row = headers.reduce((obj, header, index) => {
+            obj[header] = values[index];
+            return obj;
+        }, {});
+
+        const originalFileName = path.basename(new URL(row.path).pathname);
+        const uniqueFilename = `${uuidv4()}-${originalFileName}`;
+        const filePath = path.join(__dirname, 'images', uniqueFilename);
+
+        const { rows } = await client.query(
+            `INSERT INTO images (product_id, path, status) VALUES ($1, $2, $3) RETURNING id`,
+            [null, uniqueFilename, 'in_progress']
+        );
+
+        await client.query('COMMIT');
+        await client.query('BEGIN');
+
+        const imageId = rows[0].id;
+        let imageIds = [];
+        imageIds.push(imageId);
+
+        try {
+            const response = await axios({
+                method: 'get',
+                url: row.path,
+                responseType: 'arraybuffer'
+            });
+
+            await fs.promises.writeFile(filePath, response.data);
+            await client.query(`UPDATE images SET status = 'completed' WHERE id = $1`, [imageId]);
+
+        } catch (error) {
+            console.error(`Error processing image at ${row.path}:`, error);
+            throw error;
+        }
+
+        let objToReturn = {row: row, imageId: imageIds}
+        yield objToReturn;
+    }
+}
+
+function parseLine(line) {
+    const result = [];
+    let currentField = '';
+    let insideQuotes = false;
+
+    for (let i = 0; i < line.length; i++) {
+        const char = line[i];
+
+        if (char === '"' && line[i + 1] === '"') {
+            // Handle escaped quotes (double quotes inside a quoted field)
+            currentField += '"';
+            i++; // Skip the next quote
+        } else if (char === '"') {
+            // Whether we are inside quotes
+            insideQuotes = !insideQuotes;
+        } else if (char === ',' && !insideQuotes) {
+            // Field separator (only outside quotes)
+            result.push(currentField);
+            currentField = '';
+        } else {
+            // Add character to the current field
+            currentField += char;
+        }
+    }
+
+    // Add the last field
+    result.push(currentField);
+
+    return result.map(value => value.trim()); // Trim spaces around each value
 }
 
 async function mapSchemaPropertiesToDBRelations(formData, schema) {
@@ -120,6 +264,7 @@ async function mapSchemaPropertiesToDBRelations(formData, schema) {
 
         if (definition.readOnly || field == "vat_id") continue;
 
+        console.log("After continue");
         if (definition.foreignKey) {
             if (definition.type == 'array') {
                 if (field == "images") {continue;}
@@ -154,6 +299,13 @@ async function mapSchemaPropertiesToDBRelations(formData, schema) {
             manyToManyInserts.push({ field, ...definition.manyToMany, values: formData[field] });
         } else {
             // Regular insert column
+            // if (details.PK === true) {
+            //     selectFields.push(`${tableName}.${tableNamePrimaryKey}`);
+            //     groupByFields.push(`${tableName}.${tableNamePrimaryKey}`);
+            // } else {
+            //     selectFields.push(`${tableName}.${field}`);
+            //     groupByFields.push(`${tableName}.${field}`);
+            // }
             columns.push(field);
             values.push(formData[field]);
         }
@@ -184,6 +336,8 @@ async function makeTableJoins(schema) {
     let groupByFields = [];
 
     let tableName = schema.title;
+    let tableNamePrimaryKey = schema.primaryKey;
+    console.log("tableNamePrimaryKey", tableNamePrimaryKey);
 
     for (const [field, details] of Object.entries(schema.properties)) {
         console.log("field");
@@ -213,8 +367,16 @@ async function makeTableJoins(schema) {
 	        let targetTable = details.manyToMany.targetTable;
 	        let targetColumn = details.manyToMany.targetColumn;
 
-	        joins.push(`JOIN ${joinTable} ON ${tableName}.id = ${joinTable}.${joinColumnOnePK}`);
-	        joins.push(`JOIN ${targetTable} ON ${joinTable}.${joinColumnTwoPK} = ${targetTable}.id`);
+            console.log("joinTable", joinTable, "joinColumnOnePK", joinColumnOnePK, "joinColumnTwoPK", joinColumnTwoPK, "targetTable", targetTable, "targetColumn", targetColumn);
+
+	        // joins.push(`JOIN ${joinTable} ON ${tableName}.id = ${joinTable}.${joinColumnOnePK}`);
+            joins.push(`JOIN ${joinTable} ON ${tableName}.${schema.primaryKey} = ${joinTable}.${joinColumnOnePK}`);
+	        // joins.push(`JOIN ${targetTable} ON ${joinTable}.${joinColumnTwoPK} = ${targetTable}.id`);
+            // if (schema.title == "roles") {
+            joins.push(`JOIN ${targetTable} ON ${joinTable}.${joinColumnTwoPK} = ${targetTable}.${joinColumnTwoPK}`);
+            // } else {
+            //     joins.push(`JOIN ${targetTable} ON ${joinTable}.${joinColumnTwoPK} = ${targetTable}.id`);
+            // }
 
 	        selectFields.push(`array_agg(DISTINCT(${targetTable}.${targetColumn})) AS ${targetTable}`);
 
@@ -264,8 +426,13 @@ async function makeTableJoins(schema) {
 
         } else {
             // Regular field, add to selectFields as is
-            selectFields.push(`${tableName}.${field}`);
-            groupByFields.push(`${tableName}.${field}`);
+            if (details.PK === true) {
+                selectFields.push(`${tableName}.${tableNamePrimaryKey}`);
+                groupByFields.push(`${tableName}.${tableNamePrimaryKey}`);
+            } else {
+                selectFields.push(`${tableName}.${field}`);
+                groupByFields.push(`${tableName}.${field}`);
+            }
         }
     }
 
@@ -298,6 +465,7 @@ async function makeTableFilters(schema, req) {
         console.log(schema.properties[filter].type);
         console.log("schema.properties[filter].fieldType");
         console.log(schema.properties[filter].fieldType);
+        console.log("req.body[filter]", req.body[filter]);
 
         // if (req.body[filter] === undefined) { return; }
 
@@ -340,9 +508,10 @@ async function makeTableFilters(schema, req) {
                 values.push(req.body.price_max);
             }
         } else if (schema.properties[filter].type === 'integer' && req.body[filter] != undefined) {
-            console.log("filter is integer");
-            whereConditions.push(`${tableName}.${filter} = $${values.length + 1}`);
+            console.log("filter is integer", "tableName", tableName, "filter", filter, "req.body[filter]", req.body[filter]);
+            whereConditions.push(`${tableName}.${schema.primaryKey} = $${values.length + 1}`);
             values.push(req.body[filter]);
+            console.log("values", values)
         } else if (filter === "user_id" && req.body.email) {
             whereConditions.push(`users.email = $${values.length + 1}`);
             values.push(req.body.email);
@@ -352,57 +521,35 @@ async function makeTableFilters(schema, req) {
     return {whereConditions, values}
 }
 
-async function generateReportSQLQuery(inputData, reportFilters) {
-    let sqlTemplate = `
-        SELECT 
-            $select_expressions$
-        FROM exception_logs el
-        WHERE TRUE
-            AND $time_filter_expression$
-            AND $message_filter_expression$
-            AND $exception_type_filter_expression$
-            AND $user_email_filter_expression$
-            AND $sub_system_filter_expression$
-            AND $log_type_filter_expression$
-        $group_by_clause$
-        ORDER BY $order_by_clause$
-        LIMIT 20
-    `;
+async function generateReportSQLQuery(inputData, reportFilters, reportName) {
+    let sqlTemplate = getSQLTemplateFromInterfaceName(reportName);
 
-    let selectExpressions = [];
-    let groupByExpressions = [];
     let orderByClauses = [];
     let groupingSelected = false;
     let countExpression = '';
     let queryParams = [];
-    let paramIndex = 1;
+    let paramIndex = 1; // fix -> da smenq podhoda ? 
 
     reportFilters.fields.forEach((reportFilter) => {
-    	if (inputData[`${reportFilter.key}_grouping_select_value`] !== undefined && inputData[`${reportFilter.key}_grouping_select_value`] != "") {
+    	if (inputData[`${reportFilter.key}_grouping_select_value`] !== undefined && inputData[`${reportFilter.key}_grouping_select_value`] != "all") {
             groupingSelected = true;
         }
     });
 
     reportFilters.fields.forEach((reportFilter) => {
-        const groupingKey = `${reportFilter.key}_grouping_select_value`;
-        const groupingValue = inputData[groupingKey];
-
-        if (groupingValue !== undefined && groupingValue != "") {
-        	if (reportFilter.type === 'timestamp' && groupingValue) {
-                // Apply `date_trunc` based on grouping value (day, month, year)
-                const dateTruncExpression = `date_trunc('${groupingValue}', ${reportFilter.grouping_expression})`;
-                selectExpressions.push(`${dateTruncExpression} AS "${reportFilter.key}"`);
-                groupByExpressions.push(dateTruncExpression);
-            } else {
-                selectExpressions.push(`${reportFilter.grouping_expression} AS "${reportFilter.key}"`);
-                groupByExpressions.push(reportFilter.grouping_expression);
-            }
-        } else if (!groupingSelected) {
-            // For non-grouped fields, include them directly in SELECT clause
-            selectExpressions.push(`${reportFilter.grouping_expression} AS "${reportFilter.key}"`);
+        let reportFilterKey = reportFilter.key;
+        if (inputData[reportFilterKey + '_' + 'grouping_select_value'] == "all" && groupingSelected == false) {
+            sqlTemplate = sqlTemplate.replace('$' + reportFilterKey + '_grouping_expression' + '$', reportFilter['grouping_expression']);
+        } else if (inputData[reportFilterKey + '_' + 'grouping_select_value'] == "all" && groupingSelected == true) { 
+            sqlTemplate = sqlTemplate.replace('$' + reportFilterKey + '_grouping_expression' + '$', "'-'");
         } else {
-            // Placeholder for grouped query with `-`
-            selectExpressions.push(`'-' AS "${reportFilter.key}"`);
+            const timeGroupingValue = inputData[reportFilterKey + '_' + 'grouping_select_value'];
+            if (timeGroupingValue && timeGroupingValue != "all") {
+                const timeGroupingExpression = `date_trunc('${timeGroupingValue}', ${reportFilter['grouping_expression']})`;
+                sqlTemplate = sqlTemplate.replace('$time_grouping_expression$', timeGroupingExpression);
+            } else {
+                sqlTemplate = sqlTemplate.replace('$' + reportFilterKey + '_grouping_expression' + '$', reportFilter['grouping_expression']);
+            }
         }
 
         // Filter expression logic
@@ -411,7 +558,7 @@ async function generateReportSQLQuery(inputData, reportFilters) {
             let beginTimestamp = inputData[`${reportFilter.key}_filter_value_begin`];
             let endTimestamp = inputData[`${reportFilter.key}_filter_value_end`];
 
-            if (beginTimestamp && endTimestamp) {
+            if (beginTimestamp && endTimestamp) { // dopulnitelna validaciq
                 let filterExpr = reportFilter.filter_expression
                     .replace('$FILTER_VALUE_BEGIN$', `$${paramIndex}`)
                     .replace('$FILTER_VALUE_END$', `$${paramIndex + 1}`);
@@ -440,15 +587,15 @@ async function generateReportSQLQuery(inputData, reportFilters) {
         }
     });
 
-    // COUNT if we have group by
-    if (groupingSelected) {
-        countExpression = `, COUNT(*) AS "Count"`;
-    }
-
     sqlTemplate = sqlTemplate
-        .replace('$select_expressions$', selectExpressions.join(', ') + countExpression)
-        .replace('$group_by_clause$', groupingSelected ? `GROUP BY ${groupByExpressions.join(', ')}` : '')
-        .replace('$order_by_clause$', orderByClauses.length > 0 ? orderByClauses.join(', ') : '1 DESC');
+        .replace('$order_by_clause$', orderByClauses.length > 0 ? orderByClauses.join(', ') : '1 DESC')
+        // .replace(/\$[a-z_]+_grouping_expression\$/g, (placeholder) => {
+        //     // Default to grouping expressions from the JSON
+        //     const matchingField = reportFilters.fields.find((field) => `$${field.key}_grouping_expression$` === placeholder);
+        //     return matchingField ? matchingField.grouping_expression : 'NULL';
+        // });
+
+    // sqlTemplate = sqlTemplate.replace(/\$\w+\$/g, 'TRUE');
 
     console.log("Final SQL Query:", sqlTemplate);
     console.log("QueryParams:", queryParams);
@@ -476,6 +623,124 @@ function buildInsertQueries(tableName, itemsArray, foreignKeyField) {
     });
 }
 
+function getSQLTemplateFromInterfaceName(reportName) {
+    let sqlTemplate;
+    if (reportName == "audits") {
+        sqlTemplate = `
+            SELECT 
+                $time_grouping_expression$           AS "Log Inserted At",
+                $message_grouping_expression$        AS "Message",
+                $exception_type_grouping_expression$ AS "Exception type",
+                $user_email_grouping_expression$     AS "User",
+                $sub_system_grouping_expression$     AS "Sub system",
+                $log_type_grouping_expression$       AS "Log type",
+                count(el.id)                         AS "Count",
+                count(*) OVER ()                     AS "Total Rows"     
+            FROM exception_logs el
+            WHERE TRUE
+                AND $time_filter_expression$
+                AND $message_filter_expression$
+                AND $exception_type_filter_expression$
+                AND $user_email_filter_expression$
+                AND $sub_system_filter_expression$
+                AND $log_type_filter_expression$
+            GROUP BY 1, 2, 3, 4, 5, 6
+            ORDER BY $order_by_clause$
+            LIMIT 100
+        `;
+    } else if (reportName == "order") {
+        sqlTemplate = `
+            SELECT 
+                $time_grouping_expression$ AS "Order Inserted At",
+                $order_id_grouping_expression$ AS "Order ID",
+                $status_grouping_expression$ AS "Status",
+                sum(oi.price * oi.quantity)                                                                          AS "Total",
+                round(sum(oi.price * oi.quantity * (CAST(oi.vat as numeric) / 100)),2)                               AS "VAT",
+                round(sum(oi.price * oi.quantity) + sum(oi.price * oi.quantity * (cast(oi.vat as numeric) / 100)),2) AS "Total With VAT",
+                c.symbol                                                                                             AS "Currency",
+                count(oi.order_id)                                                                                   AS "Number of orders items",
+                count(*) OVER ()                                                                                     AS "Total Rows" 
+            FROM orders o
+            JOIN order_items AS oi ON o.order_id = oi.order_id
+            JOIN users       AS u  ON o.user_id  = u.id
+            JOIN products    AS p  ON oi.product_id = p.id
+            JOIN currencies  AS c  ON p.currency_id = c.id 
+            WHERE TRUE
+                AND $time_filter_expression$
+                AND $order_id_filter_expression$
+                AND $status_filter_expression$
+            GROUP BY GROUPING SETS ( 
+                (1, 2, 3, 7),
+                ()
+            )
+            ORDER BY $order_by_clause$
+            LIMIT 1000
+        `;
+    }
+    return sqlTemplate;
+}
+
+async function* fetchReportData(client, sql, params) {
+    const cursor = client.query(new Cursor(sql, params));
+    try {
+        while (true) {
+            console.log("Fetched rows fetchReportData form db");
+            const rows = await new Promise((resolve, reject) => {
+                cursor.read(100, (err, rows) => {
+                    if (err) return reject(err);
+                    resolve(rows);
+                });
+            });
+
+            if (rows.length === 0) break;
+            yield rows;
+        }
+    } finally {
+        cursor.close();
+    }
+}
+
+async function getStaffPermissions(client, staffUsername) {
+    const permissions = await client.query(`
+                    SELECT 
+                        * 
+                    FROM staff 
+                        JOIN staff_roles      ON staff.id                       = staff_roles.staff_id 
+                        JOIN roles            ON staff_roles.role_id            = roles.role_id 
+                        JOIN role_permissions ON roles.role_id                  = role_permissions.role_id 
+                        JOIN permissions      ON role_permissions.permission_id = permissions.permission_id 
+                    WHERE staff.username = $1
+                      `, [staffUsername]);
+
+    return permissions.rows;
+}
+
+async function checkStaffPermissions(client, staffUsername, interface, permission) {
+    console.log(`Entered checkStaffPermissions`);
+    if (interface == "staff") {
+        interface = "CRUD Staff";
+    } else if (interface == "roles") {
+        interface = "Staff roles";
+    } else if (interface == "users") {
+        interface = "CRUD Users";
+    } else if (interface == "orders") {
+        interface = "CRUD Orders";
+    } else if (interface == "products") {
+        interface = "CRUD Orders";
+    }
+
+    const permissions = await getStaffPermissions(client, staffUsername);
+    const allowedPermissions = permissions
+        .filter(p => p.interface === interface)
+        .map(p => p.permission_name);
+    console.log("interface", interface);
+    console.log("allowedPermissions", allowedPermissions);
+
+    AssertUser(allowedPermissions.includes(permission), `Permission denied: Missing required permission '${permission}'`)
+
+    console.log(`Staff '${staffUsername}' has permission '${permission}'`);
+}
+
 module.exports = {
 	login,
 	parseMultipartFormData,
@@ -483,4 +748,8 @@ module.exports = {
 	makeTableJoins,
 	makeTableFilters,
 	generateReportSQLQuery,
+    fetchReportData,
+    parseMultipartFormDataGenerator,
+    getStaffPermissions,
+    checkStaffPermissions,
 }

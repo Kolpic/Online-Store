@@ -1,0 +1,14 @@
+{
+    "entity": "role_permissions",
+    "fields": [
+        {
+            "name": "role_name",
+            "type": "select",
+            "label": "Role name",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true,
+            "options_url": "/roles"
+        }
+    ]
+}

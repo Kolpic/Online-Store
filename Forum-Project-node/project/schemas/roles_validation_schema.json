@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "roles",
+  "description": "Schema for a roles entity",
+  "type": "object",
+  "primaryKey": "role_id",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Unique identifier for the roles",
+      "readOnly": true,
+      "PK": true
+    },
+    "role_name": {
+      "type": "string",
+      "description": "Role name",
+      "minLength": 5,
+      "maxLength": 50
+    },
+    "permissions": {
+      "type": "array",
+      "description": "Permissions associated with the role",
+      "fieldType": "collapsed",
+      "manyToMany": {
+        "joinTable": "role_permissions",
+        "joinColumnOnePK": "role_id",
+        "joinColumnTwoPK": "permission_id",
+        "targetTable": "permissions",
+        "targetColumn": "permission_name",
+        "targetColumnFilter": "permission_id"
+      }
+    }
+  },
+  "filters": ["role_name", "id"],
+  "required": ["role_name"],
+  "errorMessage": {
+    "required": {
+        "role_name": "Role name is required"
+      },
+  "properties": {
+        "role_name": "Role name should be between 5 and 50 characters"
+      }
+  },
+  "additionalProperties": true
+}

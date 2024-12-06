@@ -197,13 +197,24 @@ async function login(client, email, password) {
 async function prepareHomeData(client, filters) {
     let { sortBy, sortOrder, productsPerPage, offset, productName, productCategory, priceMin, priceMax } = filters;
 
+    console.log("productCategory", productCategory);
+
+    let categoriesArray = [];
+    if (typeof productCategory === 'string' && productCategory.trim() !== '') {
+        categoriesArray = productCategory.split(',');
+    } else if (Array.isArray(productCategory)) {
+        categoriesArray = productCategory;
+    }
+
+    console.log("categoriesArray", categoriesArray);
+
     AssertUser(productsPerPage < 50, "You can view 50 products max", errors.TOO_MANY_REQUESTED_PRODUCTS);
 
     let paramaterCounter = 1; 
     const queryParams = [];
     const filterConditions = [
         { value: productName, condition: `products.name ILIKE $`, pattern: `%${productName}%` },
-        { value: productCategory, condition: `products.category ILIKE $`, pattern: `%${productCategory}%` },
+        // { value: productCategory, condition: `products.category ILIKE $`, pattern: `%${productCategory}%` },
         { value: priceMin, condition: `price >= $`, pattern: priceMin },
         { value: priceMax, condition: `price <= $`, pattern: priceMax }
     ];
@@ -218,6 +229,12 @@ async function prepareHomeData(client, filters) {
         return clauses;
     }, []);
 
+    if (categoriesArray.length > 0) {
+        whereClauses.push(`categories.name = ANY($${paramaterCounter})`);
+        queryParams.push(categoriesArray);
+        paramaterCounter++;
+    }
+
     let whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
     let productQuery = `
@@ -226,14 +243,17 @@ async function prepareHomeData(client, filters) {
             products.name, 
             products.price, 
             products.quantity, 
-            products.category,
+            array_agg(DISTINCT(categories.name)) as category,
             products.image_path, 
             currencies.symbol, 
             settings.vat 
         FROM products
             JOIN currencies ON products.currency_id = currencies.id
             JOIN settings ON products.vat_id = settings.id
+            JOIN products_categories ON products.id = products_categories.product_id
+            JOIN categories ON products_categories.category_id = categories.id
         ${whereClause}
+        GROUP BY 1, 2, 3, 4, 6, 7, 8
         ORDER BY ${sortBy} ${sortOrder}
         LIMIT $${paramaterCounter} OFFSET $${paramaterCounter + 1};
     `;
@@ -242,11 +262,18 @@ async function prepareHomeData(client, filters) {
     
     let productsResult = await client.query(productQuery, queryParams);
 
-    let countQuery = `SELECT COUNT(*) FROM products ${whereClause};`;
+    let countQuery = `SELECT 
+                        COUNT(*) 
+                      FROM products 
+                        JOIN products_categories ON products.id                     = products_categories.product_id
+                        JOIN categories          ON products_categories.category_id = categories.id ${whereClause};`;
+                        
     let countResult = await client.query(countQuery, queryParams.slice(0, -2));
 
     let totalProducts = parseInt(countResult.rows[0].count);
     let totalPages = Math.ceil(totalProducts / productsPerPage);
+
+    console.log(productsResult.rows);
 
     return {
         products: productsResult.rows,

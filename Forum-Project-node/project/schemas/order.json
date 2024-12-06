@@ -1,0 +1,31 @@
+{
+    "entity": "order",
+    "fields": [
+        {
+            "key": "time",
+            "display_name": "Time",
+            "grouping_expression": "o.order_date",
+            "filter_expression": "o.order_date >= $FILTER_VALUE_BEGIN$ AND o.order_date <= $FILTER_VALUE_END$",
+            "order_by_expression": "o.order_date",
+            "order_direction": "DESC",
+            "type": "timestamp",
+            "groupable": true
+        },
+        {
+            "key": "order_id",
+            "display_name": "Order ID",
+            "grouping_expression": "o.order_id",
+            "filter_expression": "o.order_id = $FILTER_VALUE$",
+            "type": "number",
+            "groupable": true
+        },
+        {
+            "key": "status",
+            "display_name": "Status",
+            "grouping_expression": "o.status",
+            "filter_expression": "STRPOS(o.status, $FILTER_VALUE$) <> 0",
+            "type": "text",
+            "groupable": true
+        }
+    ]
+}

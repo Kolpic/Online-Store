@@ -3,11 +3,13 @@
   "title": "users",
   "description": "Schema for a user entity",
   "type": "object",
+  "primaryKey": "id",
   "properties": {
     "id": {
       "type": "integer",
       "description": "Unique identifier for the user",
-      "readOnly": true
+      "readOnly": true,
+      "PK": true
     },
     "first_name": {
       "type": "string",

@@ -14,6 +14,9 @@ user = "myuser";
 password = "1234";
 host = "localhost";
 
+// Database for testing js
+test_database_js = "users_registration_js_tests";
+
 // Database for testing
 test_database = "users_registration_database_for_pytest";
 
@@ -38,4 +41,5 @@ module.exports = {
   CACHE_TIMEOUT: 60000,
   test_database: "users_registration_database_for_pytest",
   test_qa_database: "user_registration_qa_testing",
+  test_database_js: test_database_js,
 };

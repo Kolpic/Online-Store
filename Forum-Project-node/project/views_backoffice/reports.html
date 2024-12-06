@@ -4,12 +4,41 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dynamic Report with Filters</title>
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 </head>
 <style>
     body {
         font-family: Arial, sans-serif;
-        margin: 20px;
+        margin: 0;
         background-color: #f4f4f4;
+    }
+
+    .sidebar {
+        height: 100vh;
+        position: fixed;
+        top: 0;
+        left: 0;
+        background-color: #007BFF;
+        padding-top: 20px;
+        color: white;
+    }
+
+    .sidebar .list-group-item {
+        background-color: transparent;
+        color: white;
+        border: none;
+    }
+
+    .sidebar .list-group-item:hover {
+        background-color: #0056b3;
+        color: white;
+    }
+
+    .main-content {
+        margin-left: 250px;
+        padding: 20px;
     }
 
     h1 {
@@ -68,37 +97,71 @@
     }
 </style>
 <body>
-    <h1>Report</h1>
-    
-    <!-- Filters Form -->
-    <form id="filterForm">
-        <div id="filterContainer"></div>
-        <button type="button" onclick="fetchAndRenderReport()">Generate Report</button>
-    </form>
-    
-    <!-- Report Table -->
-    <table id="reportTable">
-        <thead id="tableHead"></thead>
-        <tbody id="tableBody"></tbody>
-        <div id="rowCount" style="margin-top: 10px; font-weight: bold;"></div>
-    </table>
+    <div class="sidebar">
+        <div class="list-group">
+            <a href="/login.html" class="list-group-item list-group-item-action">0. Login</a>
+            <a href="/reports.html?entity=audits" class="list-group-item list-group-item-action">1. View Logs</a>
+            <a href="/crud.html?entity=products" class="list-group-item list-group-item-action">2. Manage Products</a>
+            <a href="/reports.html?entity=order" class="list-group-item list-group-item-action">3. Report Sales</a>
+            <a href="/crud.html?entity=orders" class="list-group-item list-group-item-action">4. Manage Orders</a>
+            <a href="/crud.html?entity=users" class="list-group-item list-group-item-action">5. Manage Users</a>
+            <a href="/crud.html?entity=staff" class="list-group-item list-group-item-action">6. Manage Staff</a>
+            <a href="/crud.html?entity=roles" class="list-group-item list-group-item-action">7. Manage Roles</a>
+            <a href="/crud.html?entity=permissions" class="list-group-item list-group-item-action">8. Manage Permissions</a>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <h1>Report</h1>
+        <!-- Filters Form -->
+        <form id="filterForm">
+            <div id="filterContainer"></div>
+            <button type="button" onclick="fetchAndRenderReport()">Generate Report</button>
+        </form>
+
+        <div id="loading-overlay" class="d-none">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="sr-only">Loading...</span>
+                </div>
+        </div>
+            <!-- Add Export Buttons -->
+        <button id="exportCsv" onclick="exportReport('csv')">Export to CSV</button>
+        <button id="exportExcel" onclick="exportReport('excel')">Export to Excel</button>
+        
+        <!-- Report Table -->
+        <table id="reportTable">
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody"></tbody>
+            <div id="rowCount" style="margin-top: 10px; font-weight: bold;"></div>
+        </table>
+    </div>
 
     <script>
-        let entityType;
+        const entityType = getEntityTypeFromUrl();
         let reportFilters;
 
         document.addEventListener('DOMContentLoaded', async () => {
-            entityType = getEntityTypeFromUrl();
+            // entityType = getEntityTypeFromUrl();
+            if (!navigator.onLine) {
+                alert("You are offline. Please check your internet connection.");
+                return;
+            }
+
             console.log("entityType");
             console.log(entityType);
 
-            let schema = await fetch(`/${entityType}.json`);
-            reportFilters = await schema.json();
-            console.log("reportFilters");
-            console.log(reportFilters);
+            try {
+                let schema = await fetch(`/${entityType}.json`);
+                reportFilters = await schema.json();
+                console.log("reportFilters");
+                console.log(reportFilters);
 
-            generateFilterInputs();
-            setDefaultDateRange();
+                generateFilterInputs();
+                setDefaultDateRange();
+            } catch (error) {
+                console.log(error);
+                alert(`Internal server error`);
+            }
         });
 
         function getEntityTypeFromUrl() {
@@ -126,6 +189,11 @@
 
         // Function to generate filter inputs dynamically
         function generateFilterInputs() {
+            if (!navigator.onLine) {
+                alert("You are offline. Please check your internet connection.");
+                return;
+            }
+
             const container = document.getElementById('filterContainer');
             reportFilters.fields.forEach(filter => {
                 console.log("filter");
@@ -137,6 +205,7 @@
                 switch (filter.type) {
                     case 'timestamp':
                         inputHtml = `
+                            <br>
                             <label>${labelText} (Start Date):</label>
                             <input type="datetime-local" name="${filter.key}_filter_value_begin"><br>
                             <label>${labelText} (End Date):</label>
@@ -146,6 +215,7 @@
 
                     case 'select':
                         inputHtml = `
+                            <br>
                             <label>${labelText}:</label>
                             <select name="${filter.key}_filter_value">
                                 <option value="all">All</option>
@@ -155,6 +225,7 @@
 
                     case 'number':
                         inputHtml = `
+                            <br>
                             <label>${labelText}:</label>
                             <input type="number" name="${filter.key}_filter_value" placeholder="Enter minimum value"><br>
                         `;
@@ -162,6 +233,7 @@
 
                     case 'text':
                         inputHtml = `
+                            <br>
                             <label>${labelText}:</label>
                             <input type="text" name="${filter.key}_filter_value" placeholder="Enter text"><br>
                         `;
@@ -183,18 +255,23 @@
                     inputHtml += `
                         <label>Group by ${labelText}:</label>
                         <select name="${filter.key}_grouping_select_value">
-                            <option value="">No Grouping</option>
+                            <option value="all">No Grouping</option>
                             <option value="day">Day</option>
                             <option value="month">Month</option>
                             <option value="year">Year</option>
                         </select><br>
-                        <br>
                     `;
                 } else if (filter.groupable) {
                     inputHtml += `
-                        <label><input type="checkbox" name="${filter.key}_grouping_select_value" value="group"> Group by ${labelText}</label><br>
-                        <br>
+                        <label>Group by ${labelText}:</label>
+                        <select name="${filter.key}_grouping_select_value">
+                            <option value="all">No Grouping</option>
+                            <option value="">Group by</option>
+                        </select><br>
                     `;
+                    // inputHtml += `
+                    //     <label><input type="checkbox" name="${filter.key}_grouping_select_value" value="group"> Group by ${labelText}</label><br>
+                    // `;
                 }
 
                 container.innerHTML += inputHtml;
@@ -203,61 +280,155 @@
 
         // Fetch data with applied filters and render report
         async function fetchAndRenderReport() {
+            if (!navigator.onLine) {
+                alert("You are offline. Please check your internet connection.");
+                return;
+            }
+
             const formData = new FormData(document.getElementById('filterForm'));
 
             const queryString = new URLSearchParams(formData).toString();
-            
-            const response = await fetch(`/reports/${entityType}?${queryString}`);
-            const {resultRows, totalRows} = await response.json();
+            showLoadingSpinner();
+            try {
+                const response = await fetch(`/reports/${entityType}?${queryString}`);
+                const {resultRows, totalRows} = await response.json();
 
-            // Generate HTML table headers and rows dynamically
-            const tableHead = document.getElementById('tableHead');
-            const tableBody = document.getElementById('tableBody');
-            const rowCount = document.getElementById('rowCount');
-            tableHead.innerHTML = '';
-            tableBody.innerHTML = '';
-            rowCount.innerHTML = '';
+                // Generate HTML table headers and rows dynamically
+                const tableHead = document.getElementById('tableHead');
+                const tableBody = document.getElementById('tableBody');
+                const rowCount = document.getElementById('rowCount');
+                tableHead.innerHTML = '';
+                tableBody.innerHTML = '';
+                rowCount.innerHTML = '';
 
-            if (resultRows.length > 0) {
-                const headers = Object.keys(resultRows[0]);
-                let headerRow = '<tr>';
-                reportFilters.fields.forEach(header => headerRow += `<th>${header.display_name}</th>`);
+                if (resultRows.length > 0) {
+                    const headers = Object.keys(resultRows[0]);
+                    let headerRow = '<tr>';
+                    headers.forEach(header => headerRow += `<th>${header}</th>`);
 
-                if (headers.includes("Count")) {
-                    headerRow += `<th>${headers[headers.length - 1]}</th>`
+                    // if (headers.includes("Count")) {
+                    //     headerRow += `<th>${headers[headers.length - 1]}</th>`
+                    // }
+
+                    headerRow += '</tr>';
+                    tableHead.innerHTML = headerRow;
+
+                    resultRows.forEach(row => {
+                        console.log("row", row);
+
+                        let rowHtml = '<tr>';
+                        headers.forEach(header => {
+                            console.log("header", header)
+
+                            let cellValue = row[header];
+
+                            // console.log("row[header]", row[header])
+
+                            const field = reportFilters.fields.find(f => f.key === header);
+                            // console.log("field", field);
+                            if (header.includes("Inserted At") && cellValue && cellValue != "-") {
+                                const date = new Date(cellValue);
+                                cellValue = date.toLocaleString('en-US', {
+                                    year: 'numeric',
+                                    month: 'short',
+                                    day: 'numeric',
+                                    hour: 'numeric',
+                                    minute: 'numeric',
+                                    second: 'numeric',
+                                    hour12: true
+                                });
+                            }
+
+                            if (cellValue == null) {
+                                cellValue = "-"
+                            }
+                            rowHtml += `<td>${cellValue}</td>`;
+                        });
+                        rowHtml += '</tr>';
+                        tableBody.innerHTML += rowHtml;
+                    });
+                    rowCount.innerHTML = `Rows in report: ${resultRows.length} from ${totalRows} total rows`;
+                } else {
+                    tableBody.innerHTML = '<tr><td colspan="100%">No data available</td></tr>';
+                }
+            } catch (err) {
+                console.error('Generate report error:', error);
+                alert('An error occurred during report generation.');
+            } finally {
+                hideLoadingSpinner();
+            }
+        }
+
+        async function exportReport(format) {
+            if (!navigator.onLine) {
+                alert("You are offline. Please check your internet connection.");
+                return;
+            }
+            const formData = new FormData(document.getElementById('filterForm'));
+            const queryString = new URLSearchParams(formData).toString();
+
+            console.log("entityType", entityType);
+
+            const filters = {};
+            formData.forEach((value, key) => {
+                if (value && key.includes("_")) {
+                    filters[key] = value;
+                }
+            });
+
+            console.log("filters", filters);
+
+            const payload = {
+                entityType: entityType,
+                filters: filters
+            };
+
+            showLoadingSpinner();
+
+            try {
+                const response = await fetch(`/export/${entityType}?format=${format}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    alert('Failed to export the report.');
+                    return;
                 }
 
-                headerRow += '</tr>';
-                tableHead.innerHTML = headerRow;
-
-                resultRows.forEach(row => {
-                    console.log(row);
-                    let rowHtml = '<tr>';
-                    headers.forEach(header => {
-                        let cellValue = row[header];
-                        
-                        const field = reportFilters.fields.find(f => f.key === header);
-                        if (field && field.type === 'timestamp' && cellValue && cellValue != "-") {
-                            const date = new Date(cellValue);
-                            cellValue = date.toLocaleString('en-US', {
-                                year: 'numeric',
-                                month: 'short',
-                                day: 'numeric',
-                                hour: 'numeric',
-                                minute: 'numeric',
-                                hour12: true
-                            });
-                        }
-
-                        rowHtml += `<td>${cellValue}</td>`;
-                    });
-                    rowHtml += '</tr>';
-                    tableBody.innerHTML += rowHtml;
-                });
-                rowCount.innerHTML = `Rows in report: ${resultRows.length} from ${totalRows} total rows`;
-            } else {
-                tableBody.innerHTML = '<tr><td colspan="100%">No data available</td></tr>';
+                // Converts the server's response
+                const blob = await response.blob();
+                // Creates a temporary URL that points to the downloaded file data in memory
+                const url = window.URL.createObjectURL(blob);
+                // Creates a new <a> (anchor) element dynamically in the DOM.
+                const a = document.createElement('a');
+                // Sets the href attribute of the anchor tag
+                a.style.display = 'none';
+                // Sets the href attribute of the anchor tag to the Blob
+                a.href = url;
+                a.download = `${entityType}.${format}`;
+                document.body.appendChild(a);
+                // Simulates a click on the anchor element, triggering the browser's file download process.
+                a.click();
+                // Cleans up the temporary Blob URL after the download is complete to free up memory
+                window.URL.revokeObjectURL(url);
+            } catch (error) {
+                console.error('Export error:', error);
+                alert('An error occurred during the export.');
+            } finally {
+                hideLoadingSpinner();
             }
+        }
+
+        function showLoadingSpinner() {
+            document.getElementById('loading-overlay').classList.remove('d-none');
+        }
+
+        function hideLoadingSpinner() {
+            document.getElementById('loading-overlay').classList.add('d-none');
         }
     </script>
 </body>

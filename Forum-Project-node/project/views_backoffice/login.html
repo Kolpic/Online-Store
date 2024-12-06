@@ -50,6 +50,10 @@
         // Handle form submission
          $('#staffForm').submit(function(event) {
             event.preventDefault();
+            if (!navigator.onLine) {
+                alert("You are offline. Please check your internet connection.");
+                return;
+            }
 
             // Clear any existing error message
             clearErrorMessage();
@@ -83,6 +87,9 @@
                     }
                 }
             })
+            .catch(error => {
+                alert('Internal server error.');
+            }) 
         });
     });
 

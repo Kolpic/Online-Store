@@ -3,11 +3,13 @@
   "title": "orders",
   "description": "Schema for a order entity",
   "type": "object",
+  "primaryKey": "order_id",
   "properties": {
-    "order_id": {
+    "id": {
       "type": "integer",
       "description": "Unique identifier for the order",
-      "readOnly": true
+      "readOnly": true,
+      "PK": true
     },
     "order_date": {
       "type": "string",
@@ -31,17 +33,20 @@
     "vat": {
       "type": "number",
       "description": "VAT on items ",
-      "computed": true
+      "computed": true,
+      "readOnly": true
     },
     "total": {
       "type": "number",
       "description": "Total price of items (computed)",
-      "computed": true
+      "computed": true,
+      "readOnly": true
     },
     "total_with_vat": {
       "type": "number",
       "description": "Total price including VAT (computed)",
-      "computed": true
+      "computed": true,
+      "readOnly": true
     },
     "order_items": {
       "type": "array",
@@ -56,7 +61,7 @@
       }
     }
   },
-  "filters": ["order_id", "user_id", "status", "order_date"],
+  "filters": ["id", "user_id", "status", "order_date"],
   "required": ["status", "order_date"],
   "errorMessage": {
     "required": {

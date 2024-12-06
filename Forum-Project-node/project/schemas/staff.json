@@ -1,0 +1,39 @@
+{
+    "entity": "staff",
+    "fields": [
+        {
+            "name": "id",
+            "type": "integer",
+            "label": "Staff ID",
+            "create": false,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "username",
+            "type": "string",
+            "label": "Username",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true
+        },
+        {
+            "name": "password",
+            "type": "string",
+            "label": "Password",
+            "create": true,
+            "editable": false,
+            "show_in_filter": false
+        },
+        {
+            "name": "roles",
+            "type": "multiselect",
+            "label": "Roles",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false,
+            "options_url": "/roles"
+        }
+
+    ]
+}

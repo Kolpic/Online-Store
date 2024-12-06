@@ -3,17 +3,35 @@
   "title": "products",
   "description": "Schema for a product entity",
   "type": "object",
+  "entityIdColumn": "id",
+  "primaryKey": "id",
   "properties": {
     "id": {
       "type": "integer",
       "description": "Unique identifier for the product",
-      "readOnly": true
+      "readOnly": true,
+      "PK": true
     },
     "name": {
       "type": "string",
       "description": "Name of the product",
       "minLength": 5,
       "maxLength": 255
+    },
+    "asin": {
+      "type": "string",
+      "description": "asin of the product",
+      "minLength": 5
+    },
+    "short_description": {
+      "type": "string",
+      "description": "asin of the product",
+      "minLength": 10
+    },
+    "long_description": {
+      "type": "string",
+      "description": "asin of the product",
+      "minLength": 10
     },
     "price": {
       "type": "number",

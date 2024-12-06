@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "permissions",
+  "description": "Schema for a permissions entity",
+  "type": "object",
+  "primaryKey": "permission_id",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Unique identifier for the permissions",
+      "readOnly": true,
+      "PK": true
+    },
+    "permission_name": {
+      "type": "string",
+      "description": "Permission name",
+      "minLength": 5,
+      "maxLength": 50
+    },
+    "description": {
+      "type": "string",
+      "description": "Permission description",
+      "minLength": 5,
+      "maxLength": 50
+    },
+    "interface": {
+      "type": "string",
+      "description": "Permission interface",
+      "minLength": 5,
+      "maxLength": 50
+    }
+  },
+  "filters": ["permission_name", "interface", "id"],
+  "required": ["permission_name", "description", "interface"],
+  "errorMessage": {
+    "required": {
+        "permission_name": "Role name is required",
+        "description": "Description is required",
+        "interface": "Interface required"
+      },
+  "properties": {
+        "permission_name": "Role name should be between 5 and 50 characters",
+        "description": "Description should be between 5 and 50 characters",
+        "interface": "Interface should be between 5 and 50 characters"
+      }
+  },
+  "additionalProperties": true
+}

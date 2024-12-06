@@ -12,6 +12,23 @@
             padding: 0.25em 0.4em;
             transform: translate(-20%, -20%) scale(0.8);
         }
+<<<<<<< HEAD
+=======
+        #filtersForm h4 {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+        #filtersForm .form-group label {
+            font-weight: 500;
+        }
+        #filtersForm input,
+        #filtersForm select {
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+        #filtersForm .btn-lg {
+            padding: 0.5rem 1.5rem;
+        }
+>>>>>>> dev
     </style>
 </head>
 <body>
@@ -22,6 +39,7 @@
         <div id="error-message" class="alert alert-danger d-none"></div>
 
         <h1>Product Catalog</h1>
+<<<<<<< HEAD
         <form id="filtersForm">
 
             <div class="form-group">
@@ -68,6 +86,80 @@
             </div>
 
             <button type="submit" class="btn btn-primary">Filter Products</button>
+=======
+
+        <form id="filtersForm" class="border p-4 rounded bg-light mb-4">
+            <h4 class="mb-3">Filter Products</h4>
+            <div class="row">
+                <!-- Price Range -->
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="price_min">Price from:</label>
+                        <input type="text" id="price_min" name="price_min" class="form-control" placeholder="e.g., 10">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="price_max">Price to:</label>
+                        <input type="text" id="price_max" name="price_max" class="form-control" placeholder="e.g., 100">
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <!-- Product Name -->
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="product_name">Product Name:</label>
+                        <input type="text" id="product_name" name="product_name" class="form-control" placeholder="e.g., LED Bulb">
+                    </div>
+                </div>
+                <!-- Products Per Page -->
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="products_per_page">Products per page:</label>
+                        <input type="number" id="products_per_page" name="products_per_page" class="form-control" min="1" value="10">
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <!-- Sorting Options -->
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="sort">Sort by:</label>
+                        <select name="sort" id="sort" class="form-control">
+                            <option value="price">Price</option>
+                            <option value="name">Name</option>
+                            <option value="category">Category</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label for="order">Order:</label>
+                        <select name="order" id="order" class="form-control">
+                            <option value="asc">Ascending</option>
+                            <option value="desc">Descending</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <!-- Category -->
+                <div class="col-12">
+                    <div class="form-group">
+                        <label for="category">Category:</label>
+                        <select name="category[]" id="category" class="form-control" multiple size="5">
+                        </select>
+                        <small class="form-text text-muted">Hold Ctrl to select multiple categories.</small>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-12 text-center">
+                    <button type="submit" class="btn btn-primary btn-lg">Filter Products</button>
+                </div>
+            </div>
+>>>>>>> dev
         </form>
 
         <!-- Products List -->
@@ -129,6 +221,7 @@
         });
 
         async function fetchProducts(page = 1) {
+<<<<<<< HEAD
             const formData = new FormData(document.getElementById('filtersForm'));
             const queryParams = new URLSearchParams(formData).toString();
 
@@ -145,6 +238,33 @@
 
             renderProducts(data.products);
             renderPagination(data.page, data.totalPages);
+=======
+            try {
+                if (!navigator.onLine) {
+                    alert("You are offline. Please check your internet connection.");
+                    return;
+                }
+                const formData = new FormData(document.getElementById('filtersForm'));
+                const queryParams = new URLSearchParams(formData).toString();
+
+                console.log(queryParams)
+
+                const response = await fetch(`/home/${page}?${queryParams}`);
+
+                console.log(response)
+
+                const data = await response.json();
+
+                console.log("response", response);
+                console.log("data", data);
+
+                renderProducts(data.products);
+                renderPagination(data.page, data.totalPages);
+            } catch (error) {
+                console.log(error);
+                alert(`Internal server error. Try again later.`);
+            }
+>>>>>>> dev
         }
         // <img class="card-img-top" src="/image/${product.id}" alt="${product.name}">
         function renderProducts(products) {
@@ -232,6 +352,7 @@
     }
 
     async function fetchProducts(page = 1) {
+<<<<<<< HEAD
         const formData = new FormData(document.getElementById('filtersForm'));
         const queryParams = new URLSearchParams(formData).toString();
 
@@ -263,12 +384,69 @@
 
             renderProducts(data.products);
             renderPagination(data.page, data.totalPages);
+=======
+        try {
+            if (!navigator.onLine) {
+              alert("You are offline. Please check your internet connection.");
+              return;
+            }
+
+            const formData = new FormData(document.getElementById('filtersForm'));
+
+            const selectedCategories = Array.from(document.getElementById('category').selectedOptions).map(option => option.value);
+            formData.set('category', selectedCategories.join(','));
+
+            const queryParams = new URLSearchParams(formData).toString();
+
+            const response = await fetch(`/home/${page}?${queryParams}`);
+            console.log("response", response);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.log(errorData);
+                let message = errorData.error_message;
+                let code = errorData.error_code;
+
+                console.log(message);
+                console.log(code);
+
+                if (code === undefined) {
+                    displayErrorMessage(message);
+                } else {
+                    displayErrorMessage(message + " code: " + code);
+                }
+
+                let delayInMilliseconds = 5000;
+
+                setTimeout(function() {
+                    clearErrorMessage();
+                }, delayInMilliseconds);
+                return;
+            } else {
+                const data = await response.json();
+                console.log("data", data);
+
+                renderProducts(data.products);
+                renderPagination(data.page, data.totalPages);
+            }
+
+        } catch (error) {
+            console.log(error);
+            alert(`Internal server error. Try again later`);
+>>>>>>> dev
         }
     }
 
     async function addToCart(event, productId) {
         event.preventDefault();
 
+<<<<<<< HEAD
+=======
+        if (!navigator.onLine) {
+            alert("You are offline. Please check your internet connection.");
+        }
+
+>>>>>>> dev
         // Find the quantity input field for this product
         const quantityInput = document.getElementById(`quantity-${productId}`);
         const quantity = quantityInput.value;
@@ -307,6 +485,12 @@
 
     async function handleLogout() {
         try {
+<<<<<<< HEAD
+=======
+            if (!navigator.onLine) {
+                alert("You are offline. Please check your internet connection.");
+            }
+>>>>>>> dev
             const response = await fetch('/logout', {
                 method: 'GET',
                 credentials: 'include'  // Ensure cookies are sent
@@ -332,9 +516,22 @@
         $('#error-message').addClass('d-none').text('');
     }
 
+<<<<<<< HEAD
         // Initial fetch on page load
         fetchHeaderData();
         fetchProducts();
+=======
+    try {
+        if (!navigator.onLine) {
+          alert("You are offline. Please check your internet connection.");
+        }
+        // Initial fetch on page load
+        fetchHeaderData();
+        fetchProducts();
+    } catch (error) {
+        alert(error);
+    }
+>>>>>>> dev
     </script>
 </body>
 </html>

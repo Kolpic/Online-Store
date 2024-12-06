@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "staff",
+  "description": "Schema for a user entity",
+  "type": "object",
+  "primaryKey": "id",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Unique identifier for the staff",
+      "readOnly": true,
+      "PK": true
+    },
+    "username": {
+      "type": "string",
+      "description": "Staff username",
+      "minLength": 5,
+      "maxLength": 50
+    },
+    "password": {
+      "type": "string",
+      "description": "Staff password",
+      "minLength": 5,
+      "maxLength": 50
+    },
+    "roles": {
+      "type": "array",
+      "description": "Roles associated with the staff",
+      "items": {
+        "type": "string"
+      },
+      "manyToMany": {
+        "joinTable": "staff_roles",
+        "joinColumnOnePK": "staff_id",
+        "joinColumnTwoPK": "role_id",
+        "targetTable": "roles",
+        "targetColumn": "role_name",
+        "targetColumnFilter": "role_id"
+      }
+    }
+  },
+  "filters": ["username", "password","id"],
+  "required": ["username", "password"],
+  "errorMessage": {
+    "required": {
+        "username": "Staff username is required",
+        "password": "Password is required"
+      },
+  "properties": {
+        "username": "Staff username should be between 5 and 50 characters",
+        "password": "Staff password should be between 5 and 50 characters"
+      }
+  },
+  "additionalProperties": false
+}

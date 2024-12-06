@@ -33,19 +33,23 @@
         <div class="list-group">
             <a href="/reports.html?entity=audits" class="list-group-item list-group-item-action">1. View Logs</a>
             <a href="/crud.html?entity=products" class="list-group-item list-group-item-action">2. Manage Products</a>
-            <a href="/update_captcha_settings" class="list-group-item list-group-item-action">3. Settings</a>
-            <a href="/report_sales" class="list-group-item list-group-item-action">4. Report Sales</a>
-            <a href="/crud_staff" class="list-group-item list-group-item-action">5. Assign a role to staff</a>
-            <a href="/role_permissions" class="list-group-item list-group-item-action">6. Assign a permission to role</a>
-            <a href="/crud.html?entity=orders" class="list-group-item list-group-item-action">7. Manage Orders</a>
-            <a href="/active_users" class="list-group-item list-group-item-action">8. See active users</a>
-            <a href="/crud.html?entity=users" class="list-group-item list-group-item-action">9. Manage Users</a>
-            <a href="/template_email" class="list-group-item list-group-item-action">10. Sending email template</a>
+            <a href="/reports.html?entity=order" class="list-group-item list-group-item-action">3. Report Sales</a>
+            <a href="/crud.html?entity=orders" class="list-group-item list-group-item-action">4. Manage Orders</a>
+            <a href="/crud.html?entity=users" class="list-group-item list-group-item-action">5. Manage Users</a>
+            <a href="/crud.html?entity=staff" class="list-group-item list-group-item-action">6. Manage Staff</a>
+            <a href="/crud.html?entity=roles" class="list-group-item list-group-item-action">7. Manage Roles</a>
+            <a href="/crud.html?entity=permissions" class="list-group-item list-group-item-action">8. Manage Permissions</a>
         </div>
     </div>
 </body>
 <script>
     async function fetchHeaderData() {
+        if (!navigator.onLine) {
+            alert("You are offline. Please check your internet connection.");
+            return;
+        }
+
+        try {
             const response = await fetch('/header');
             const responseData = await response.json();
             // const data = responseData.userInformation;
@@ -70,9 +74,16 @@
             if (logoutButton) {
                 logoutButton.addEventListener('click', handleLogout);
             }
+        } catch (error) {
+            alert('Internal server error. Try again later');
+        }
     }
     async function handleLogout() {
-        event.preventDefault()
+        event.preventDefault();
+        if (!navigator.onLine) {
+            alert("You are offline. Please check your internet connection.");
+            return;
+        }
         try {
             const response = await fetch('/logout', {
                 method: 'GET',
@@ -87,7 +98,7 @@
                 alert('Error logging out: ' + result.message);
             }
         } catch (error) {
-            console.error('Error:', error);
+            alert('Internal server error. Try again later');
         }
     }
         fetchHeaderData();

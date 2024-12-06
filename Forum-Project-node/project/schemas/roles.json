@@ -1,0 +1,30 @@
+{
+    "entity": "roles",
+    "fields": [
+        {
+            "name": "role_id",
+            "type": "integer",
+            "label": "Role ID",
+            "create": false,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "role_name",
+            "type": "string",
+            "label": "Role Name",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true
+        },
+        {
+            "name": "permissions",
+            "type": "permission",
+            "label": "Permissions",
+            "create": true,
+            "editable": false,
+            "show_in_filter": false,
+            "options_url": "/permissions"
+        }
+    ]
+}

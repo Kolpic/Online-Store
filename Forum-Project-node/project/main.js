@@ -290,7 +290,7 @@ async function getHeaderHandler(req, res, next, client) {
 }
 
 async function getHomeHandler(req, res, next, client) {
-    let result = await client.query(`SELECT DISTINCT(category) FROM products`);
+    let result = await client.query(`SELECT DISTINCT(name) FROM categories`);
 
     categories = result.rows.map(row => row.category);
 
