@@ -107,13 +107,11 @@
 
     // Fetch order details from the backend using the order ID
     function fetchOrderDetails(orderId) {
-<<<<<<< HEAD
-=======
         if (!navigator.onLine) {
             alert("You are offline. Please check your internet connection.");
             return;
         }
->>>>>>> dev
+
         const url = `/order?order_id=${orderId}`;
 
         fetch(url, {
@@ -134,12 +132,10 @@
 
     // On document load, get the order ID and fetch order details
     window.onload = function() {
-<<<<<<< HEAD
-=======
         if (!navigator.onLine) {
             alert("You are offline. Please check your internet connection.");
         }
->>>>>>> dev
+
         const orderIdFromUrl = getOrderIdFromUrl();
         let orderId = orderIdFromUrl;
 
@@ -155,7 +151,6 @@
             alert('Order ID is missing. Unable to load order details.');
         }
     };
-
 
         // Display alerts
         const displayAlert = (type, message) => {
@@ -174,15 +169,11 @@
         // Handle form submission for payment
         document.getElementById('payment-form').addEventListener('submit', function(event) {
             event.preventDefault();
-<<<<<<< HEAD
-=======
 
             if (!navigator.onLine) {
                 alert("You are offline. Please check your internet connection.");
                 return;
             }
-
->>>>>>> dev
             const paymentAmount = document.getElementById('payment_amount').value;
 
             fetch('/finish_payment', {
@@ -210,13 +201,10 @@
                     }
                 }
             })
-<<<<<<< HEAD
-=======
             .catch(error => {
                 console.error('Error post payment:', error);
                 alert(`Internal server error. Try again later.`);
             })
->>>>>>> dev
         });
 
     // Function to display error message dynamically

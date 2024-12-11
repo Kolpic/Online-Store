@@ -42,6 +42,8 @@ const urlToFunctionMapBackOffice = {
         '/permissions': getPermissions,
         '/permissions_for_create': getPermissionsForCreate,
         '/get_staff_permissions': getStaffPermissions,
+        '/email_templates': getEmailTemplatesHandler,
+        '/email_by_id': getEmailByIdHnadler,
     },
     POST: {
         '/login': postLoginHandler,
@@ -1095,6 +1097,31 @@ async function auditRolePermissionChanges(client, beforeHookObj) {
     console.log("Audit Log Message:", message);
 
     await logEvent(beforeHookObj.formData.user, "", message);
+}
+
+async function getEmailTemplatesHandler(req, res, next, client) {
+    let sessionId = req.cookies['session_id']
+    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+    AssertUser(authenticatedUser != null, "You have to login to access this page");
+
+    // await backOfficeService.checkStaffPermissions(client, authenticatedUser.userRow.data, schema.title, "update");
+
+    const templatesData = await backOfficeService.getTemplatesData(client);
+
+    console.log("templatesData", templatesData);
+
+    return res.json({ emails: templatesData});
+}
+
+async function getEmailByIdHnadler(req, res, next, client) {
+    let templateId = req.path.split("/")[2];
+
+    const templateRow = await backOfficeService.getTemplateById(client, templateId);
+
+    console.log("templateRow", templateRow.rows);
+
+    return res.json({ template: templateRow.rows});
 }
 
 process.on('uncaughtException', async (error) => {

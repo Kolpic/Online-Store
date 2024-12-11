@@ -781,8 +781,8 @@ async function getOrder(orderId, client) {
 }
 
 async function payOrder(orderId, paymentAmount, client) {
-    console.log(orderId);
-    console.log(paymentAmount);
+    console.log("orderId", orderId);
+    console.log("paymentAmount", paymentAmount);
 
     AssertDev(orderId != undefined, "orderId is undefined");
     AssertDev(paymentAmount != undefined, "paymentAmount is undefined");
@@ -795,8 +795,24 @@ async function payOrder(orderId, paymentAmount, client) {
 
     AssertDev(orderRow.length == 1, "There can't be more than one row with same order id");
 
-    let orderItems = await client.query(`SELECT * FROM order_items WHERE order_id = $1`, [orderId]);
+    let orderItems = await client.query(`SELECT 
+                                                order_items.id, 
+                                                order_items.order_id, 
+                                                order_items.product_id, 
+                                                order_items.quantity          AS cart_quantity, 
+                                                order_items.price, 
+                                                order_items.vat,
+                                                products.name                 AS name,
+                                                currencies.symbol             AS symbol
+                                        FROM order_items
+                                            JOIN products   ON products.id          = order_items.product_id
+                                            JOIN currencies ON products.currency_id = currencies.id
+                                        WHERE order_id = $1
+                                        `,[orderId]);
+
     let orderItemsRows = orderItems.rows;
+
+    console.log("orderItemsRows", orderItemsRows);
 
     AssertUser(orderRow[0].status == 'Ready for Paying', "This order can't be payed, due to it's status");
 
@@ -806,8 +822,8 @@ async function payOrder(orderId, paymentAmount, client) {
     orderItemsRows.forEach(row => {
         console.log("row");
         console.log(row);
-        total += parseInt(row.quantity) * parseFloat(row.price);
-        totalWithVat += parseInt(row.quantity) * parseFloat(row.price) + (parseFloat((row.vat / 100)) * (parseInt(row.quantity) * parseFloat(row.price)));
+        total += parseInt(row.cart_quantity) * parseFloat(row.price);
+        totalWithVat += parseInt(row.cart_quantity) * parseFloat(row.price) + (parseFloat((row.vat / 100)) * (parseInt(row.cart_quantity) * parseFloat(row.price)));
     })
 
     let totalWithVatToFixed = totalWithVat.toFixed(2)
@@ -815,23 +831,23 @@ async function payOrder(orderId, paymentAmount, client) {
     AssertUser(!(roundedPaymentAmount < totalWithVatToFixed), "You entered amout, which is less than the order you have");
     AssertUser(!(roundedPaymentAmount > totalWithVatToFixed), "You entered amout, which is bigger than the order you have");
 
-    const paymentResult = await fetch("http://10.20.3.224:5002/api/payments", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-            client_id: orderId,
-            amount: totalWithVatToFixed,
-        }),
-    });
+    // const paymentResult = await fetch("http://10.20.3.224:5002/api/payments", {
+    //     method: "POST",
+    //     headers: {
+    //         "Content-Type": "application/json",
+    //     },
+    //     body: JSON.stringify({
+    //         client_id: orderId,
+    //         amount: totalWithVatToFixed,
+    //     }),
+    // });
 
-    console.log(paymentResult);
-    AssertUser(paymentResult.ok, "Payment method failed, try again", errors.PAYMENT_METHOD_FAILED);  
+    // console.log(paymentResult);
+    // AssertUser(paymentResult.ok, "Payment method failed, try again", errors.PAYMENT_METHOD_FAILED);  
 
     await client.query(`UPDATE orders SET status = 'Paid' WHERE order_id = $1`, [orderId]);
 
-    return "You paid the order successful";
+    return { message: "You paid the order successful", orderRow: orderRow, cart_items: orderItemsRows, total_sum: total, total_sum_with_vat: totalWithVatToFixed, vat_in_persent: 20};
 }
 
 async function postProfile(userDetails, authenticatedUser, client) {

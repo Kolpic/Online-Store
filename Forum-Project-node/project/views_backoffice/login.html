@@ -50,6 +50,7 @@
         // Handle form submission
          $('#staffForm').submit(function(event) {
             event.preventDefault();
+
             if (!navigator.onLine) {
                 alert("You are offline. Please check your internet connection.");
                 return;

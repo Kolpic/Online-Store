@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Template Editor</title>
+    <script src="https://cdn.ckeditor.com/4.21.0/standard/ckeditor.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        /* Sidebar styles */
+        .sidebar {
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 200px;
+            background-color: #007BFF;
+            padding-top: 20px;
+            color: white;
+            overflow-y: auto;
+        }
+
+        .sidebar .list-group-item {
+            background-color: transparent;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            text-decoration: none;
+            display: block;
+            transition: background-color 0.3s;
+        }
+
+        .sidebar .list-group-item:hover {
+            background-color: #0056b3;
+            color: white;
+        }
+
+        /* Main content styles */
+        .main-content {
+            margin-left: 250px;
+            padding: 20px;
+            background-color: #f4f4f4;
+            min-height: 100vh;
+        }
+
+        form {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        label {
+            font-weight: bold;
+            display: block;
+            margin-top: 10px;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            margin-bottom: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            background-color: #19bcc8;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+
+        button:hover {
+            background-color: #139ba6;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar -->
+    <div class="sidebar">
+        <div class="list-group">
+            <a href="/login.html" class="list-group-item list-group-item-action">0. Login</a>
+            <a href="/reports.html?entity=audits" class="list-group-item list-group-item-action">1. View Logs</a>
+            <a href="/crud.html?entity=products" class="list-group-item list-group-item-action">2. Manage Products</a>
+            <a href="/reports.html?entity=order" class="list-group-item list-group-item-action">3. Report Sales</a>
+            <a href="/crud.html?entity=orders" class="list-group-item list-group-item-action">4. Manage Orders</a>
+            <a href="/crud.html?entity=users" class="list-group-item list-group-item-action">5. Manage Users</a>
+            <a href="/crud.html?entity=staff" class="list-group-item list-group-item-action">6. Manage Staff</a>
+            <a href="/crud.html?entity=roles" class="list-group-item list-group-item-action">7. Manage Roles</a>
+            <a href="/mail_templates.html" class="list-group-item list-group-item-action">8. Mail Templates</a>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <h1>Email Template Editor</h1>
+        <form id="email-template-form">
+            <label for="template-name">Template Name</label>
+            <select id="template-name" name="name"></select>
+
+            <label for="template-subject">Subject</label>
+            <input type="text" id="template-subject" name="subject" required>
+
+            <label for="template-body">Body</label>
+            <textarea id="template-body" name="body"></textarea>
+
+            <label for="template-sender">Sender</label>
+            <input type="email" id="template-sender" name="sender" required>
+
+            <h2>Settings</h2>
+            <label for="text-align">Text Align</label>
+            <select id="text-align" name="text-align">
+                <option value="left">Left</option>
+                <option value="center">Center</option>
+                <option value="right">Right</option>
+            </select>
+
+            <label for="border">Border (px)</label>
+            <input type="number" id="border" name="border" required>
+
+            <label for="border-collapse">Border Collapse</label>
+            <select id="border-collapse" name="border-collapse">
+                <option value="collapse">Collapse</option>
+                <option value="separate">Separate</option>
+            </select>
+
+            <button type="button" id="save-btn">Save Changes</button>
+        </form>
+    </div>
+
+    <script>
+        // Fetch data and populate the form
+        async function fetchData() {
+            try {
+                if (!navigator.onLine) {
+                    alert("You are offline. Please check your internet connection.");
+                    return;
+                }
+                const [templatesResponse] = await Promise.all([
+                    fetch('/email_templates'),
+                ]);
+
+                console.log("templatesResponse", templatesResponse);
+
+                if (!templatesResponse.ok) {
+                    const errorData = await templatesResponse.json();
+                    console.log("errorData");
+                    console.log(errorData);
+                    // alert(errorData.error_message);
+                    let errorMessage = `${errorData.error_message}`;
+                    console.log("errorMessage", errorMessage, errorMessage === 'You have to login to access this page', "errorMessage === 'You have to login to access this page'");
+                    if (errorMessage === 'You have to login to access this page') {
+                        errorMessage += ` <a href="/login.html" style="color: blue; text-decoration: underline;">Click here to login</a>`;
+                        console.log("errorMessage", errorMessage);
+                        showCustomAlert(errorMessage);
+                        return;
+                    } else {
+                        alert(errorData.error_message);
+                        return;
+                    }
+                }
+
+                const data = await templatesResponse.json();
+                console.log("data", data);
+
+                const templateSelect = document.getElementById('template-name');
+                data.emails.templates.forEach(template => {
+                    console.log("template", template)
+                    const option = document.createElement('option');
+                    option.value = template.id;
+                    option.textContent = template.name;
+                    templateSelect.appendChild(option);
+                });
+
+                let settingsMail = data.emails.settings[0];
+                document.getElementById('text-align').value = settingsMail.send_email_template_text_align;
+                document.getElementById('border').value = settingsMail.send_email_template_border;
+                document.getElementById('border-collapse').value = settingsMail.send_email_template_border_collapse;
+
+                await loadTemplate(data.emails.templates[0].id);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                alert(`Internal server error`);
+            }
+        }
+
+        // Load selected template
+        async function loadTemplate(id) {
+            try {
+                const response = await fetch(`/email_by_id/${id}`);
+                const resp = await response.json();
+                const template = resp.template[0];
+                console.log("loadTemplate loadTemplate", template);
+                document.getElementById('template-subject').value = template.subject;
+                CKEDITOR.instances['template-body'].setData(template.body);
+                document.getElementById('template-sender').value = template.sender;
+            } catch (error) {
+                console.error('Error loading template:', error);
+                alert(`Internal server error, while trying to fetch current template`);
+            }
+        }
+
+        // Save changes
+        async function saveChanges() {
+            if (!navigator.onLine) {
+                alert("You are offline. Please check your internet connection.");
+                return;
+            }
+            try {
+                const templateId = document.getElementById('template-name').value;
+                const body = CKEDITOR.instances['template-body'].getData();
+
+                const formData = new FormData();
+
+                formData.append('id', document.getElementById('template-name').value);
+                formData.append('subject', document.getElementById('template-subject').value);
+                formData.append('body', body);
+                formData.append('sender', document.getElementById('template-sender').value);
+
+                console.log('FormData:', Array.from(formData.entries()));
+
+                // const formDataObj = {};
+                // formData.forEach((value, key) => {
+                //     formDataObj[key] = value;
+                // });
+
+                // console.log('formDataObj:', formDataObj);
+
+                // const templateData = {
+                //     subject: document.getElementById('template-subject').value,
+                //     body,
+                //     sender: document.getElementById('template-sender').value
+                // };
+                // const settingsData = {
+                //     text_align: document.getElementById('text-align').value,
+                //     border: document.getElementById('border').value,
+                //     border_collapse: document.getElementById('border-collapse').value
+                // };
+                // console.log("templateData", templateData);
+                // console.log("settingsData", settingsData);
+
+                const result = await fetch(`/update/email_templates`, {
+                    method: 'PUT',
+                    body: formData,
+                });
+
+                if (!result.ok) {
+                    const errorData = await result.json();
+                    console.log("errorData");
+                    console.log(errorData);
+                    // alert(errorData.error_message);
+                    let errorMessage = `${errorData.error_message}`;
+                    console.log("errorMessage", errorMessage, errorMessage === 'You have to login to access this page', "errorMessage === 'You have to login to access this page'");
+                    if (errorMessage === 'You have to login to access this page') {
+                        errorMessage += ` <a href="/login.html" style="color: blue; text-decoration: underline;">Click here to login</a>`;
+                        console.log("errorMessage", errorMessage);
+                        showCustomAlert(errorMessage);
+                        return;
+                    } else {
+                        alert(errorData.error_message);
+                        return;
+                    }
+                }
+
+                const formDataForEmailSettings = new FormData();
+                formDataForEmailSettings.append('id', 1);
+                formDataForEmailSettings.append('send_email_template_text_align', document.getElementById('text-align').value);
+                formDataForEmailSettings.append('send_email_template_border', document.getElementById('border').value);
+                formDataForEmailSettings.append('send_email_template_border_collapse', document.getElementById('border-collapse').value);
+
+                console.log('formDataForEmailSettings:', Array.from(formDataForEmailSettings.entries()));
+
+                const resultSettings = await fetch('/update/email_settings_template', {
+                    method: 'PUT',
+                    body: formDataForEmailSettings
+                });
+
+                if (!resultSettings.ok) {
+                    const errorData = await resultSettings.json();
+                    console.log("errorData");
+                    console.log(errorData);
+                    // alert(errorData.error_message);
+                    let errorMessage = `${errorData.error_message}`;
+                    console.log("errorMessage", errorMessage, errorMessage === 'You have to login to access this page', "errorMessage === 'You have to login to access this page'");
+                    if (errorMessage === 'You have to login to access this page') {
+                        errorMessage += ` <a href="/login.html" style="color: blue; text-decoration: underline;">Click here to login</a>`;
+                        console.log("errorMessage", errorMessage);
+                        showCustomAlert(errorMessage);
+                        return;
+                    } else {
+                        alert(errorData.error_message);
+                        return;
+                    }
+                }
+
+                alert('Changes saved successfully!');
+                await loadTemplate(document.getElementById('template-name').value);
+            } catch (error) {
+                console.error('Error saving changes:', error);
+                alert('Failed to save changes.');
+            }
+        }
+
+        function showCustomAlert(message) {
+            const alertContainer = document.createElement('div');
+            alertContainer.style.position = 'fixed';
+            alertContainer.style.top = '20px';
+            alertContainer.style.right = '20px';
+            alertContainer.style.backgroundColor = 'white';
+            alertContainer.style.border = '1px solid red';
+            alertContainer.style.padding = '10px';
+            alertContainer.style.zIndex = '1000';
+            alertContainer.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+
+            alertContainer.innerHTML = `
+                <div>
+                    <span>${message}</span>
+                    <button style="margin-left: 10px; background-color: red; color: white; border: none; cursor: pointer;" onclick="this.parentElement.parentElement.remove()">Close</button>
+                </div>
+            `;
+
+            document.body.appendChild(alertContainer);
+        }
+
+        // Event listeners
+        document.getElementById('template-name').addEventListener('change', event => {
+            loadTemplate(event.target.value);
+        });
+
+        document.getElementById('save-btn').addEventListener('click', saveChanges);
+
+        // Initialize CKEditor
+        CKEDITOR.replace('template-body');
+
+        // Fetch initial data
+        fetchData();
+    </script>
+</body>
+</html>
