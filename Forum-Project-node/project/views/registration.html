@@ -145,12 +145,9 @@
     });
 
     $(document).ready(function() {
-<<<<<<< HEAD
-=======
         if (!navigator.onLine) {
             alert('You are offline. Please check your internet connection and try again.');
         }
->>>>>>> dev
         // Fetch the data from the backend on page load
         $.getJSON('/registration', function(data) {
 
@@ -192,13 +189,9 @@
             // Clear any existing error message
             clearErrorMessage();
 
-<<<<<<< HEAD
-=======
             if (!navigator.onLine) {
                 alert('You are offline. Please check your internet connection and try again.');
             }
-
->>>>>>> dev
             // Serialize form data into a JSON object
             const formData = {
                 first_name: $('#first_name').val(),
@@ -220,10 +213,6 @@
                 alert(validate.errors[0].message);
                 return;
             }
-<<<<<<< HEAD
-
-=======
->>>>>>> dev
             fetch('/registration', {
                 method: 'POST',
                 headers: {
@@ -250,11 +239,7 @@
             })
             .catch(error => {
                 console.error('Error:', error);
-<<<<<<< HEAD
-                displayErrorMessage('Error: Unable to register.');
-=======
                 displayErrorMessage('Internal server error. Try again later');
->>>>>>> dev
             });
         });
 

@@ -8,6 +8,9 @@ MAIL_USE_SSL = true;
 //cache = []
 CACHE_TIMEOUT = 60000;
 
+// urls for sending emails
+urlVerifyEmail = "http://10.20.3.101:5002/verify.html?token=";
+
 // TODO: work database -> user_registration, laptop database -> users_registration
 database = "users_registration";
 user = "myuser";
@@ -42,4 +45,5 @@ module.exports = {
   test_database: "users_registration_database_for_pytest",
   test_qa_database: "user_registration_qa_testing",
   test_database_js: test_database_js,
+  urlVerifyEmail: urlVerifyEmail,
 };

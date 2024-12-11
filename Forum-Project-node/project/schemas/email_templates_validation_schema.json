@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "email_template",
+  "description": "Schema for a email template",
+  "type": "object",
+  "primaryKey": "id",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Unique identifier for the staff",
+      "readOnly": true,
+      "PK": true
+    },
+    "subject": {
+      "type": "string",
+      "description": "Email template subject",
+      "minLength": 5,
+      "maxLength": 50
+    },
+    "body": {
+      "type": "string",
+      "description": "Email template body",
+      "minLength": 5,
+      "maxLength": 100
+    },
+    "sender": {
+      "type": "string",
+      "description": "Email template sender",
+      "minLength": 5,
+      "maxLength": 50
+    }
+  },
+  "filters": ["id"],
+  "required": ["subject", "body", "sender"],
+  "errorMessage": {
+    "required": {
+        "subject": "Email template subject is required",
+        "body": "Email template body is required",
+        "sender": "Email template sender is required"
+      },
+  "properties": {
+        "subject": "Email template subject should be between 5 and 50 characters",
+        "body": "Email template body should be between 5 and 100 characters",
+        "sender": "Email template sender should be between 5 and 50 characters"
+      }
+  },
+  "additionalProperties": false
+}

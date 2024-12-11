@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "settings",
+  "description": "Schema for settings email template",
+  "type": "object",
+  "primaryKey": "id",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Unique identifier for the staff",
+      "readOnly": true,
+      "PK": true
+    },
+    "send_email_template_text_align": {
+      "type": "string",
+      "description": "Email template subject",
+      "minLength": 5,
+      "maxLength": 50
+    },
+    "send_email_template_border": {
+      "type": "number",
+      "description": "Email template body",
+      "minimum": 1,
+      "maximum": 20
+    },
+    "send_email_template_border_collapse": {
+      "type": "string",
+      "description": "Email template sender",
+      "minLength": 5,
+      "maxLength": 50
+    }
+  },
+  "filters": ["id"],
+  "required": ["send_email_template_text_align", "send_email_template_border", "send_email_template_border_collapse"],
+  "errorMessage": {
+    "required": {
+        "send_email_template_text_align": "Text align is required",
+        "send_email_template_border": "Border is required",
+        "send_email_template_border_collapse": "Border collapse is required"
+      },
+  "properties": {
+        "send_email_template_text_align": "Text align should be between 5 and 50 characters",
+        "send_email_template_border": "Border should be between 1 and 20",
+        "send_email_template_border_collapse": "Border collapse should be between 5 and 50 characters"
+      }
+  },
+  "additionalProperties": false
+}

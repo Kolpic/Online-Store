@@ -1,6 +1,6 @@
 const frontOffice = require('../../front_office');
-const utils = require('../../utils');
-const { WrongUserInputException } = require('../../exceptions');
+const backOfficeService = require('../../backOfficeService');
+const { WrongUserInputException, DevException } = require('../../exceptions');
 
 describe('Registration functions', () => {
   let client;
@@ -368,4 +368,144 @@ describe('Registration functions for invalid captcha and timeout', () => {
   // Ensure that no INSERT or UPDATE queries were called after timeout
   expect(client.query).toHaveBeenCalledTimes(3); // Only the SELECT queries were called
   });
+
+  describe('getTemplatesData', () => {
+        test('should return templates and settings data', async () => {
+            client.query
+                .mockResolvedValueOnce({ rows: [{ id: 1, name: 'Template1' }] })
+                .mockResolvedValueOnce({ rows: [{ id: 1, key: 'setting1', value: 'value1' }] });
+
+            const data = await backOfficeService.getTemplatesData(client);
+
+            expect(data).toEqual({
+                templates: [{ id: 1, name: 'Template1' }],
+                settings: [{ id: 1, key: 'setting1', value: 'value1' }],
+            });
+
+            expect(client.query).toHaveBeenCalledWith(`
+                                    SELECT
+                                        *
+                                    FROM email_template
+                                    `);
+            expect(client.query).toHaveBeenCalledWith(`
+                                    SELECT
+                                        *
+                                    FROM settings
+                                    `);
+        });
+    });
+
+  describe('getTemplateById', () => {
+        test('should return template by ID', async () => {
+            client.query.mockResolvedValueOnce({
+                rows: [{ id: 1, name: 'Template1' }],
+            });
+
+            const template = await backOfficeService.getTemplateById(client, 1);
+
+            expect(template).toEqual({
+                rows: [{ id: 1, name: 'Template1' }],
+            });
+
+            expect(client.query).toHaveBeenCalledWith(
+                `
+                                    SELECT
+                                        *
+                                    FROM email_template
+                                    WHERE id = $1
+                                    `,
+                [1]
+            );
+        });
+
+        test('should throw an error if no template is found', async () => {
+            client.query.mockResolvedValueOnce({ rows: [] });
+
+            await expect(backOfficeService.getTemplateById(client, 999))
+                .rejects.toThrow(new DevException('Expect one on fetch email by id'));
+        });
+    });
+
+  describe('mapEmailData', () => {
+        test('should map email data for verification email', async () => {
+            client.query.mockResolvedValueOnce({
+                rows: [{ id: 1, send_email_template_text_align: 'center' }],
+            });
+
+            const emailData = await backOfficeService.mapEmailData(
+                client,
+                'test@example.com',
+                'Verification Email',
+                { body: 'Hello {first_name} {last_name}, click {url}' },
+                { first_name: 'Vankata', last_name: 'Balabanov', verification_code: '123456' }
+            );
+
+            expect(emailData).toEqual({
+                from: 'no-reply@pascal.com',
+                to: 'test@example.com',
+                subject: 'Verification Email',
+                html: expect.stringContaining('Click here to verify your account'),
+            });
+
+            expect(client.query).toHaveBeenCalledWith('SELECT * FROM settings');
+        });
+
+        test('should map email data for purchase email with products', async () => {
+            client.query.mockResolvedValueOnce({
+                rows: [
+                    {
+                        send_email_template_text_align: 'left',
+                        send_email_template_border: '1',
+                        send_email_template_border_collapse: 'collapse',
+                        send_email_template_background_color: '#f9f9f9',
+                    },
+                ],
+            });
+
+            const emailData = await backOfficeService.mapEmailData(
+                client,
+                'test@example.com',
+                'Purchase Email',
+                { body: 'Order Details: {cart} Shipping Info: {shipping_details}' },
+                {
+                    cart_items: [
+                        { name: 'Product1', cart_quantity: 2, price: '50.00', symbol: '$', vat: '10' },
+                    ],
+                    total_sum: '100.00',
+                    total_sum_with_vat: '110.00',
+                    vat_in_persent: '10',
+                    shipping_details: [
+                        {
+                            order_id: '1234',
+                            first_name: 'John',
+                            last_name: 'Doe',
+                            email: 'john@example.com',
+                            address: '123 Main St',
+                            town: 'Springfield',
+                            phone: '123456789',
+                        },
+                    ],
+                }
+            );
+
+            expect(emailData).toEqual({
+                from: 'no-reply@pascal.com',
+                to: 'test@example.com',
+                subject: 'Purchase Email',
+                html: expect.stringContaining('Order ID'),
+            });
+
+            expect(client.query).toHaveBeenCalledWith('SELECT * FROM settings');
+        });
+
+        test('should throw an error for unsupported email subjects', async () => {
+            client.query.mockResolvedValueOnce({
+                rows: [{ id: 1, send_email_template_text_align: 'center' }],
+            });
+
+            await expect(
+                backOfficeService.mapEmailData(client, 'test@example.com', 'Unknown Subject', {}, {})
+            ).rejects.toThrow(new DevException('No more options'));
+        });
+    });
 });

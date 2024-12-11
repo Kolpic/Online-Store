@@ -75,13 +75,10 @@
             // Clear any existing error message
             clearErrorMessage();
 
-<<<<<<< HEAD
-=======
             if (!navigator.onLine) {
                 displayErrorMessage('You are offline. Please check your internet connection and try again.');
             }
 
->>>>>>> dev
             // Serialize form data into a JSON object
             const formData = {
                 email: $('#email').val(),
@@ -113,11 +110,7 @@
             })
             .catch(error => {
                 console.error('Error:', error);
-<<<<<<< HEAD
-                displayErrorMessage('Error: Unable to login.');
-=======
                 displayErrorMessage('Internal server error. Try again later');
->>>>>>> dev
             });
         });
 
@@ -133,4 +126,3 @@
     });
 </script>
 </html>
-

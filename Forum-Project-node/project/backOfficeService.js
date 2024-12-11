@@ -9,6 +9,7 @@ const { v4: uuidv4 } = require('uuid');
 const bufferSplit = require('buffer-split');
 const Cursor = require('pg-cursor');
 const axios = require('axios');
+const config = require('./config');
 
 async function login(username, password, client) {
 	AssertDev(username != undefined, "username is undefined");
@@ -90,6 +91,7 @@ async function parseMultipartFormData(req, client) {
             } else {
                 const fieldName = nameMatch[1];
                 const fieldValue = content.toString().trim();
+
                 console.log("fieldName", fieldName, "fieldValue", fieldValue)
 
                 if (fieldName === 'categories') {
@@ -715,30 +717,197 @@ async function getStaffPermissions(client, staffUsername) {
     return permissions.rows;
 }
 
-async function checkStaffPermissions(client, staffUsername, interface, permission) {
+async function checkStaffPermissions(client, staffUsername, interfaceI, permission) {
     console.log(`Entered checkStaffPermissions`);
-    if (interface == "staff") {
-        interface = "CRUD Staff";
-    } else if (interface == "roles") {
-        interface = "Staff roles";
-    } else if (interface == "users") {
-        interface = "CRUD Users";
-    } else if (interface == "orders") {
-        interface = "CRUD Orders";
-    } else if (interface == "products") {
-        interface = "CRUD Orders";
+    if (interfaceI == "staff") {
+        interfaceI = "CRUD Staff";
+    } else if (interfaceI == "roles") {
+        interfaceI = "Staff roles";
+    } else if (interfaceI == "users") {
+        interfaceI = "CRUD Users";
+    } else if (interfaceI == "orders") {
+        interfaceI = "CRUD Orders";
+    } else if (interfaceI == "products") {
+        interfaceI = "CRUD Orders";
+    } else if (interfaceI == "email_template") {
+        interfaceI = "CRUD Email";
+    } else if (interfaceI == "settings") {
+        interfaceI = "CRUD Email";
     }
 
     const permissions = await getStaffPermissions(client, staffUsername);
     const allowedPermissions = permissions
-        .filter(p => p.interface === interface)
+        .filter(p => p.interfaceI === interfaceI)
         .map(p => p.permission_name);
-    console.log("interface", interface);
+    console.log("interfaceI", interfaceI);
     console.log("allowedPermissions", allowedPermissions);
 
     AssertUser(allowedPermissions.includes(permission), `Permission denied: Missing required permission '${permission}'`)
 
     console.log(`Staff '${staffUsername}' has permission '${permission}'`);
+}
+
+async function getTemplatesData(client) {
+    const emailTemplates = await client.query(`
+                                    SELECT
+                                        *
+                                    FROM email_template
+                                    `)
+
+    const settings = await client.query(`
+                                    SELECT
+                                        *
+                                    FROM settings
+                                    `)
+
+    return {templates: emailTemplates.rows, settings: settings.rows}
+}
+
+async function getTemplateById(client, id) {
+    const emailTemplates = await client.query(`
+                                    SELECT
+                                        *
+                                    FROM email_template
+                                    WHERE id = $1
+                                    `, [id])
+
+    AssertDev(emailTemplates.rows.length == 1, "Expect one on fetch email by id");
+
+    return emailTemplates;
+}
+
+async function mapEmailData(client, email, subject, bodyData, informationToMap) {
+    const settingsRow = await client.query(`SELECT * FROM settings`);
+    const settings = settingsRow.rows[0];
+    console.log("settings", settingsRow.rows);
+    AssertDev(settingsRow.rows.length == 1, "Expect one settings");
+
+    console.log("body", bodyData, "informationToMap", informationToMap);
+
+    let body = bodyData.body;
+
+    if (subject == "Verification Email") {
+        const verificationURL = `${config.urlVerifyEmail}${informationToMap.verification_code}`;
+        const clickableLink = `<a href="${verificationURL}">Click here to verify your account</a>`;
+
+        body = body.replace("{first_name}", informationToMap.first_name);
+        body = body.replace("{last_name}", informationToMap.last_name);
+        body = body.replace("{url}", clickableLink);
+
+    } else if (subject == "Purchase Email" || subject == "Payment Email") {
+        body = body.replace("{first_name}", informationToMap.user_first_name);
+        body = body.replace("{last_name}", informationToMap.user_last_name);
+
+        html = `
+        <table border="${settings.send_email_template_border}" cellpadding="5" cellspacing="3" style="border-collapse: ${settings.send_email_template_border_collapse};">
+            <tr>
+                <th style="background-color: ${settings.send_email_template_background_color};">Product</th>
+                <th style="background-color: ${settings.send_email_template_background_color};">Quantity</th>
+                <th style="background-color: ${settings.send_email_template_background_color};">Price (Per item without VAT)</th>
+                <th style="background-color: ${settings.send_email_template_background_color};">Total Product Price With VAT</th>
+            </tr>
+            `
+            
+        let totalPrice = 0;
+        let totalPriceWithVAT = 0;
+        let currency_sumbol = "";
+
+        for (const product of informationToMap.cart_items) {
+
+            console.log("product", product);
+            
+            let productName = product.name;
+            let quantity = product.cart_quantity; 
+            let price = product.price;
+            currency_sumbol = product.symbol;
+            let vat = product.vat;
+
+            let floatVat = parseFloat(vat);
+
+            let priceTotal = parseFloat(price) * parseInt(quantity); // 250
+
+            totalPrice += priceTotal;
+
+            let vatCurrentProduct = priceTotal * (floatVat / 100); // 62,5
+
+            totalPriceWithVAT += vatCurrentProduct;
+
+            let totalProductPriceWithVat = Math.round((priceTotal + vatCurrentProduct) * 100) / 100;
+
+            html += `
+            <tr>
+                <td>${productName}</td>
+                <td style="text-align: ${settings.send_email_template_text_align};">${quantity}</td>
+                <td style="text-align: ${settings.send_email_template_text_align};">${price} ${currency_sumbol}</td>
+                <td style="text-align: ${settings.send_email_template_text_align};">${totalProductPriceWithVat} ${currency_sumbol}</td>
+            </tr>
+            `
+        }
+        let totalSumRounded = parseFloat(informationToMap.total_sum);
+        let totalVatRounded = Math.round(parseFloat(totalPriceWithVAT) * 100) / 100;
+        let totalWithVatRounded = Math.round(parseFloat(informationToMap.total_sum_with_vat) * 100) / 100;
+        // let providedSumRounded = Math.round(parseFloat(provided_sum));
+
+        html +=`<tr>
+                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">Total Order Price Without VAT:</td>
+                <td style="text-align: ${settings.send_email_template_text_align};">${totalSumRounded} ${currency_sumbol}</td>
+            </tr>
+            <tr>
+                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">VAT:</td>
+                <td style="text-align: ${settings.send_email_template_text_align};">${totalVatRounded} ${currency_sumbol}</td>
+            </tr>
+            <tr>
+                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">VAT %:</td>
+                <td style="text-align: ${settings.send_email_template_text_align};">${informationToMap.vat_in_persent} %</td>
+            </tr>
+            <tr>
+                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">Total Order Price With VAT:</td>
+                <td style="text-align: ${settings.send_email_template_text_align};">${totalWithVatRounded} ${currency_sumbol}</td>
+            </tr>
+            <tr>
+                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">You paid:</td>
+                <td style="text-align: ${settings.send_email_template_text_align};">${totalWithVatRounded} ${currency_sumbol}</td>
+            </tr>
+        </table>
+        `
+
+        let shippingHtml = `
+            <table border="${settings.send_email_template_border}" cellpadding="5" cellspacing="3" style="border-collapse: ${settings.send_email_template_border_collapse};">
+                <tr>
+                    <th style="background-color: ${settings.send_email_template_background_color};">Order ID</th><td>${informationToMap.shipping_details[0].order_id}</td>
+                </tr>
+                <tr>
+                    <th style="background-color: ${settings.send_email_template_background_color};">Recipient</th><td>${informationToMap.shipping_details[0].first_name} ${informationToMap.shipping_details[0].last_name}</td>
+                </tr>
+                <tr>
+                    <th style="background-color: ${settings.send_email_template_background_color};">Email</th><td>${informationToMap.shipping_details[0].email}</td>
+                </tr>
+                <tr>
+                    <th style="background-color: ${settings.send_email_template_background_color};">Address</th><td>${informationToMap.shipping_details[0].address}, ${informationToMap.shipping_details[0].town}</td>
+                </tr>
+                <tr>
+                    <th style="background-color: ${settings.send_email_template_background_color};">Phone</th><td>${informationToMap.shipping_details[0].phone}</td>
+                </tr>
+            </table>
+        `
+        if (subject == "Purchase Email") {
+            body = body.replace("{cart}", html);
+            body = body.replace("{shipping_details}", shippingHtml);
+        } else {
+            body = body.replace("{products}", html);
+            body = body.replace("{shipping_details}", shippingHtml);
+        }
+
+    } else {
+        AssertDev(false, "No more options");
+    }
+
+    return {
+        from: "no-reply@pascal.com",
+        to: email,
+        subject: subject,
+        html: body,
+    };
 }
 
 module.exports = {
@@ -752,4 +921,7 @@ module.exports = {
     parseMultipartFormDataGenerator,
     getStaffPermissions,
     checkStaffPermissions,
+    getTemplatesData,
+    getTemplateById,
+    mapEmailData,
 }

@@ -12,8 +12,6 @@
             padding: 0.25em 0.4em;
             transform: translate(-20%, -20%) scale(0.8);
         }
-<<<<<<< HEAD
-=======
         #filtersForm h4 {
             font-size: 1.5rem;
             font-weight: 600;
@@ -28,7 +26,6 @@
         #filtersForm .btn-lg {
             padding: 0.5rem 1.5rem;
         }
->>>>>>> dev
     </style>
 </head>
 <body>
@@ -39,55 +36,6 @@
         <div id="error-message" class="alert alert-danger d-none"></div>
 
         <h1>Product Catalog</h1>
-<<<<<<< HEAD
-        <form id="filtersForm">
-
-            <div class="form-group">
-                <label for="price_min">Price from:</label>
-                <input type="text" id="price_min" name="price_min" placeholder="Min Price">
-            </div>
-
-            <div class="form-group">
-                <label for="price_max">Price to:</label>
-                <input type="text" id="price_max" name="price_max" placeholder="Max Price">
-            </div>
-
-            <div class="form-group">
-                <label for="product_name">Product Name:</label>
-                <input type="text" id="product_name" name="product_name" placeholder="E.g. LED Bulb">
-            </div>
-
-            <div class="form-group">
-                <label for="products_per_page">Products per page:</label>
-                <input type="number" id="products_per_page" name="products_per_page" min="1" value="10">
-            </div>
-
-            <div class="form-group">
-                <label for="sort">Sort by:</label>
-                <select name="sort" id="sort">
-                    <option value="price">Price</option>
-                    <option value="name">Name</option>
-                    <option value="category">Category</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="order">Order:</label>
-                <select name="order" id="order">
-                    <option value="asc">Ascending</option>
-                    <option value="desc">Descending</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label for="category">Category:</label>
-                <select name="category" id="category">
-                </select>
-            </div>
-
-            <button type="submit" class="btn btn-primary">Filter Products</button>
-=======
-
         <form id="filtersForm" class="border p-4 rounded bg-light mb-4">
             <h4 class="mb-3">Filter Products</h4>
             <div class="row">
@@ -159,7 +107,6 @@
                     <button type="submit" class="btn btn-primary btn-lg">Filter Products</button>
                 </div>
             </div>
->>>>>>> dev
         </form>
 
         <!-- Products List -->
@@ -221,24 +168,6 @@
         });
 
         async function fetchProducts(page = 1) {
-<<<<<<< HEAD
-            const formData = new FormData(document.getElementById('filtersForm'));
-            const queryParams = new URLSearchParams(formData).toString();
-
-            console.log(queryParams)
-
-            const response = await fetch(`/home/${page}?${queryParams}`);
-
-            console.log(response)
-
-            const data = await response.json();
-
-            console.log(response)
-            console.log(data)
-
-            renderProducts(data.products);
-            renderPagination(data.page, data.totalPages);
-=======
             try {
                 if (!navigator.onLine) {
                     alert("You are offline. Please check your internet connection.");
@@ -264,7 +193,6 @@
                 console.log(error);
                 alert(`Internal server error. Try again later.`);
             }
->>>>>>> dev
         }
         // <img class="card-img-top" src="/image/${product.id}" alt="${product.name}">
         function renderProducts(products) {
@@ -352,39 +280,6 @@
     }
 
     async function fetchProducts(page = 1) {
-<<<<<<< HEAD
-        const formData = new FormData(document.getElementById('filtersForm'));
-        const queryParams = new URLSearchParams(formData).toString();
-
-        const response = await fetch(`/home/${page}?${queryParams}`);
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            console.log(errorData);
-            let message = errorData.error_message;
-            let code = errorData.error_code;
-
-            console.log(message);
-            console.log(code);
-
-            if (code === undefined) {
-                displayErrorMessage(message);
-            } else {
-                displayErrorMessage(message + " code: " + code);
-            }
-
-            let delayInMilliseconds = 5000;
-
-            setTimeout(function() {
-                clearErrorMessage();
-            }, delayInMilliseconds);
-            return;
-        } else {
-            const data = await response.json();
-
-            renderProducts(data.products);
-            renderPagination(data.page, data.totalPages);
-=======
         try {
             if (!navigator.onLine) {
               alert("You are offline. Please check your internet connection.");
@@ -433,20 +328,16 @@
         } catch (error) {
             console.log(error);
             alert(`Internal server error. Try again later`);
->>>>>>> dev
         }
     }
 
     async function addToCart(event, productId) {
         event.preventDefault();
 
-<<<<<<< HEAD
-=======
         if (!navigator.onLine) {
             alert("You are offline. Please check your internet connection.");
         }
 
->>>>>>> dev
         // Find the quantity input field for this product
         const quantityInput = document.getElementById(`quantity-${productId}`);
         const quantity = quantityInput.value;
@@ -485,12 +376,10 @@
 
     async function handleLogout() {
         try {
-<<<<<<< HEAD
-=======
             if (!navigator.onLine) {
                 alert("You are offline. Please check your internet connection.");
             }
->>>>>>> dev
+
             const response = await fetch('/logout', {
                 method: 'GET',
                 credentials: 'include'  // Ensure cookies are sent
@@ -516,11 +405,6 @@
         $('#error-message').addClass('d-none').text('');
     }
 
-<<<<<<< HEAD
-        // Initial fetch on page load
-        fetchHeaderData();
-        fetchProducts();
-=======
     try {
         if (!navigator.onLine) {
           alert("You are offline. Please check your internet connection.");
@@ -531,7 +415,6 @@
     } catch (error) {
         alert(error);
     }
->>>>>>> dev
     </script>
 </body>
 </html>

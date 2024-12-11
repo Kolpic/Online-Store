@@ -8,6 +8,7 @@ const { AssertUser, AssertDev, WrongUserInputException } = require('./exceptions
 const front_office = require('./front_office')
 const bcrypt = require('bcryptjs');
 const router = express.Router();
+const backOfficeService = require('./backOfficeService')
 
 console.log("Pool imported in main.js:");  
 
@@ -174,7 +175,17 @@ async function postRegistrationHandler(req, res, next, client) {
 
     await logEvent(email, "", "User just registered in site");
 
-    let resultEmail = await mailer.sendEmail(email, verification_code);
+    const bodyTemplateRow = await client.query(`SELECT body FROM email_template WHERE name = $1`, ["Verification Email"]);
+    const body = bodyTemplateRow.rows[0];
+
+    const emailData = await backOfficeService.mapEmailData(client, email, "Verification Email", body, user);
+
+    await client.query(`INSERT INTO email_queue (name, data, status) VALUES ($1, $2, $3)`,
+        [
+            'Verification Email', 
+            JSON.stringify(emailData),
+            'pending'
+        ]);
 
     return res.status(201).json({
         success: true,
@@ -475,6 +486,18 @@ async function postCartHandler(req, res, next, client) {
 
     let responsePostCart = await front_office.cart(deliveryInformation, authenticatedUser, client);
 
+    const bodyTemplateRow = await client.query(`SELECT body FROM email_template WHERE name = $1`, ["Purchase Email"]);
+    const body = bodyTemplateRow.rows[0];
+
+    const emailData = await backOfficeService.mapEmailData(client, email, "Purchase Email", body, responsePostCart);
+
+    await client.query(`INSERT INTO email_queue (name, data, status) VALUES ($1, $2, $3)`,
+        [
+            'Purchase Email', 
+            JSON.stringify(emailData),
+            'pending'
+        ]);
+
     return res.json({
         success: true,
         responsePostCart,
@@ -508,9 +531,51 @@ async function postPaymentHandler(req, res, next, client) {
 
     let response = await front_office.payOrder(orderId, paymentAmount, client);
 
+    console.log("response in postPaymentHandler", response);
+
+    shippingDetailsRow = await client.query(`
+                                            SELECT 
+                                                shipping_id, 
+                                                order_id,
+                                                email,
+                                                first_name,
+                                                last_name,
+                                                town,
+                                                phone,
+                                                address,
+                                                country_code_id, 
+                                                code 
+                                            FROM shipping_details 
+                                                JOIN country_codes ON country_code_id = country_codes.id 
+                                            WHERE shipping_details.order_id = $1
+                                            `, [orderId]);
+
+    console.log("shippingDetailsRow.rows[0]", shippingDetailsRow.rows[0]);
+
+    response.shipping_details = shippingDetailsRow.rows;
+
+    const bodyTemplateRow = await client.query(`SELECT body FROM email_template WHERE name = $1`, ["Payment Email"]);
+    const body = bodyTemplateRow.rows[0];
+
+    const userRow = await client.query(`SELECT * FROM users WHERE email = $1`, [authenticatedUser.userRow.data]);
+    const user = userRow.rows[0];
+    AssertDev(userRow.rows.length == 1, "Expect one on user");
+
+    response.user_first_name = user.first_name;
+    response.user_last_name = user.last_name;
+
+    const emailData = await backOfficeService.mapEmailData(client, authenticatedUser.userRow.data, "Payment Email", body, response);
+
+    await client.query(`INSERT INTO email_queue (name, data, status) VALUES ($1, $2, $3)`,
+        [
+            'Payment Email', 
+            JSON.stringify(emailData),
+            'pending'
+        ]);
+
     return res.json({
         success: true,
-        message: response,
+        message: response.message,
     });
 }
 

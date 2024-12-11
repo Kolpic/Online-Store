@@ -138,36 +138,6 @@
 </body>
 <script>
     async function fetchHeaderData() {
-<<<<<<< HEAD
-        const response = await fetch('/header');
-        const responseData = await response.json();
-        const data = responseData.userInformation;
-
-        const headerHtml = `
-            <div class="d-flex justify-content-between align-items-center">
-                <p class="mb-0">${data.email || ''}</p>
-                <div class="d-flex align-items-center">
-                    <a href="/home.html" class="btn btn-primary mr-3">Home</a>
-                    ${data.email ? `
-                        <a id="logoutButton" href="/logout" class="btn btn-danger mr-3">Logout</a>
-                        <a href="/profile.html" class="mr-3"><i class="bi bi-gear" style="font-size: 2rem; color: black;"></i></a>
-                        <a href="/user_orders" class="mr-3" style="font-size: 2rem; color: black;"><i class="bi bi-clipboard-check"></i></a>
-                    ` : `
-                        <a href="/login.html" class="btn btn-primary mr-3">Login</a>
-                    `}
-                    <a href="/cart" class="position-relative" style="font-size: 2rem; color: black;">
-                        <i class="bi bi-cart3"></i>
-                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-success cart-badge">${data.cartCount}</span>
-                    </a>
-                </div>
-            </div>`;
-        document.getElementById('header').innerHTML = headerHtml;
-
-        // Bind the event listener after the content is loaded
-        const logoutButton = document.querySelector('#logoutButton');
-        if (logoutButton) {
-            logoutButton.addEventListener('click', handleLogout);
-=======
         if (!navigator.onLine) {
             alert("You are offline. Please check your internet connection.");
             return;
@@ -206,7 +176,6 @@
         } catch (error) {
             console.log(error);
             alert(`Internal server error. Try again later.`);
->>>>>>> dev
         }
     }
 
@@ -249,13 +218,10 @@
     populateForm();
 
     async function handleLogout() {
-<<<<<<< HEAD
-=======
         if (!navigator.onLine) {
             alert("You are offline. Please check your internet connection.");
             return;
         }
->>>>>>> dev
         try {
             const response = await fetch('/logout', {
                 method: 'GET',
@@ -270,65 +236,13 @@
                 alert('Error logging out: ' + result.message);
             }
         } catch (error) {
-<<<<<<< HEAD
-            console.error('Error:', error);
-=======
             console.error('Internal server error. Try again later:');
->>>>>>> dev
         }
     }
 
     fetchHeaderData();
 
     document.getElementById('updateProfileForm').addEventListener('submit', async function(event) {
-<<<<<<< HEAD
-    event.preventDefault(); 
-
-    const formData = {
-        first_name: document.getElementById('first-name').value,
-        last_name: document.getElementById('last-name').value,
-        email: document.getElementById('email').value,
-        old_password: sanitizeField(document.getElementById('old_password').value),
-        new_password: sanitizeField(document.getElementById('new_password').value),
-        address: document.getElementById('address').value,
-        phone: document.getElementById('phone').value,
-        country_code: document.getElementById('country_code').value
-    };
-
-    fetch('/profile', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-    })
-    .then(response => response.json())
-    .then(response => {
-        if (response.success === true) {
-            alert("Profile updated successful");
-            location.reload();
-        } else {
-            console.log(response);
-            if (response.error_message === undefined) {
-                displayErrorMessage(response.error_message);
-            } else {
-                displayErrorMessage(response.error_message + " code: " + response.error_code);
-            }
-        }
-    })
-    .catch(error => {
-        console.error('Error:', error);
-        displayErrorMessage('Error: Unable to register.');
-    });
-
-    function displayErrorMessage(message) {
-        $('#error-message').removeClass('d-none').text(message);
-    }
-
-    function clearErrorMessage() {
-        $('#error-message').addClass('d-none').text('');
-    }
-=======
         event.preventDefault();
         
         if (!navigator.onLine) {
@@ -380,7 +294,6 @@
         function clearErrorMessage() {
             $('#error-message').addClass('d-none').text('');
         }
->>>>>>> dev
     });
 
     function sanitizeField(value) {
