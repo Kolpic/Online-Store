@@ -894,13 +894,15 @@ async function exportEntityHandler(req, res, next, client) {
     console.log("sqlTemplate", sqlTemplate);
     console.log("queryParams", queryParams);
 
-     const metadata = [
+    const metadata = [
         ['Filters Applied'],
         ...Object.entries(filters).map(([key, details]) => 
-            [`${key}`, JSON.stringify(details)]
+            [formatKey(key), JSON.stringify(details)]
         ),
         ['Generated On', new Date().toLocaleString()]
     ];
+
+     console.log("metadata", metadata);
 
     if (format === 'csv') {
         await exportCsv(res, client, sqlTemplate, queryParams, metadata);
@@ -909,6 +911,13 @@ async function exportEntityHandler(req, res, next, client) {
     } else {
         AssertUser(false, "Invalid format");
     }
+}
+
+function formatKey(key) {
+    return key
+        .split('_')
+        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' '); // Join back with spaces
 }
 
 async function exportCsv(res, client, sqlTemplate, queryParams, metadata) {
