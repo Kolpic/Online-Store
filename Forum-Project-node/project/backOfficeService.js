@@ -737,7 +737,7 @@ async function checkStaffPermissions(client, staffUsername, interfaceI, permissi
 
     const permissions = await getStaffPermissions(client, staffUsername);
     const allowedPermissions = permissions
-        .filter(p => p.interfaceI === interfaceI)
+        .filter(p => p.interface === interfaceI)
         .map(p => p.permission_name);
     console.log("interfaceI", interfaceI);
     console.log("allowedPermissions", allowedPermissions);
