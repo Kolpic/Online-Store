@@ -105,7 +105,7 @@ async function registration(client, user) {
     const expectedCaptcha = captchaRes.rows[0].result;
 
     if (parseInt(captcha) !== expectedCaptcha) {
-        let clientForCaptcha = await pool.connect();
+        // let clientForCaptcha = await pool.connect();
 
         const newAttempts = attempts + 1;
 
