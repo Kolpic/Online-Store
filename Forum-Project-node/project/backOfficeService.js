@@ -368,6 +368,7 @@ async function makeTableJoins(schema) {
 	        let joinColumnTwoPK = details.manyToMany.joinColumnTwoPK;
 	        let targetTable = details.manyToMany.targetTable;
 	        let targetColumn = details.manyToMany.targetColumn;
+            let targetColumnFilter = details.manyToMany.targetColumnFilter;
 
             console.log("joinTable", joinTable, "joinColumnOnePK", joinColumnOnePK, "joinColumnTwoPK", joinColumnTwoPK, "targetTable", targetTable, "targetColumn", targetColumn);
 
@@ -375,7 +376,7 @@ async function makeTableJoins(schema) {
             joins.push(`JOIN ${joinTable} ON ${tableName}.${schema.primaryKey} = ${joinTable}.${joinColumnOnePK}`);
 	        // joins.push(`JOIN ${targetTable} ON ${joinTable}.${joinColumnTwoPK} = ${targetTable}.id`);
             // if (schema.title == "roles") {
-            joins.push(`JOIN ${targetTable} ON ${joinTable}.${joinColumnTwoPK} = ${targetTable}.${joinColumnTwoPK}`);
+            joins.push(`JOIN ${targetTable} ON ${joinTable}.${joinColumnTwoPK} = ${targetTable}.${targetColumnFilter}`);
             // } else {
             //     joins.push(`JOIN ${targetTable} ON ${joinTable}.${joinColumnTwoPK} = ${targetTable}.id`);
             // }
