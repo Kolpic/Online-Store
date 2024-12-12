@@ -31,5 +31,5 @@ jobs:
       working-directory: Forum-Project-node
     - run: npm run build --if-present
       working-directory: Forum-Project-node
-    - run: npm test
+    - run: npm run test:unit
       working-directory: Forum-Project-node
