@@ -370,7 +370,7 @@
             // Show a success message or handle any errors
             if (result.success == true) {
                 alert(result.message);
-                location.reload();
+                fetchHeaderData();
                 //updateCartCount(result.newCartCount);  // Update the cart badge count
             } else {
                 alert('Error adding product to cart: ' + result.message);
