@@ -317,6 +317,17 @@ async function getHomeHandler(req, res, next, client) {
     let priceMin = req.query.price_min || null;
     let priceMax = req.query.price_max || null;
 
+    console.log("priceMin", priceMin, "Number(priceMin) > 0", Number(priceMin) > 0, "priceMin !== null", priceMin !== null);
+
+    AssertUser(sortOrder != "asc" || sortOrder != "desc", "Invalid sort order", errors.INVALID_SORT_ORDER);
+
+    if (priceMin !== null) {
+        AssertUser(Number(priceMin) > 0, "Price min can't be negative", errors.NEGATIVE_MIN_PRICE_ERROR);
+    }
+    if (priceMax !== null) {
+        AssertUser(Number(priceMax) > 0, "Price max can't be negative", errors.NEGATIVE_MAX_PRICE_ERROR);
+    }
+
     let productsData = await front_office.prepareHomeData(client, {sortBy, sortOrder, productsPerPage, page, offset, productName, productCategory, priceMin, priceMax})
 
     res.json({
