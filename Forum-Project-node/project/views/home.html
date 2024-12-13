@@ -180,6 +180,12 @@
 
                 const response = await fetch(`/home/${page}?${queryParams}`);
 
+                if (!response.ok) {
+                    const responseJson = await response.json();
+                    alert(responseJson.message);
+                    return;
+                }
+
                 console.log(response)
 
                 const data = await response.json();
