@@ -95,6 +95,38 @@
     button:hover {
         background-color: #0056b3;
     }
+    /* Style for filter rows */
+    .filter-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 15px;
+        background: #fff;
+        padding: 10px;
+        border-radius: 5px;
+        box-shadow: 0 0 5px rgba(0, 0, 0, 0.1);
+    }
+
+    /* Adjust spacing between elements within a row */
+    .filter-row label {
+        margin-right: 10px;
+        font-weight: bold;
+        min-width: 150px;
+    }
+
+    /* Ensure inputs and selects fit nicely */
+    .filter-row input,
+    .filter-row select {
+        margin-right: 15px;
+        flex: 1 1 auto;
+        min-width: 70px;
+    }
+
+    /* Optional: Add hover effect for rows */
+    .filter-row:hover {
+        background: #f9f9f9;
+        box-shadow: 0 0 7px rgba(0, 0, 0, 0.2);
 </style>
 <body>
     <div class="sidebar">
@@ -201,6 +233,10 @@
                 let inputHtml = '';
                 const labelText = filter.display_name.replace(/_/g, ' '); // Replace underscores with spaces
 
+                // Create a row for the filter
+                const rowDiv = document.createElement('div');
+                rowDiv.className = 'filter-row';
+
                 // Filters
                 switch (filter.type) {
                     case 'timestamp':
@@ -274,7 +310,9 @@
                     // `;
                 }
 
-                container.innerHTML += inputHtml;
+                // container.innerHTML += inputHtml;
+                rowDiv.innerHTML = inputHtml;
+                container.appendChild(rowDiv);
             });
         }
 
