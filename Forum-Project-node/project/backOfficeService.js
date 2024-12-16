@@ -804,7 +804,7 @@ async function mapEmailData(client, email, subject, bodyData, informationToMap) 
             <tr>
                 <th style="background-color: ${settings.send_email_template_background_color};">Product</th>
                 <th style="background-color: ${settings.send_email_template_background_color};">Quantity</th>
-                <th style="background-color: ${settings.send_email_template_background_color};">Price (Per item without VAT)</th>
+                <th style="background-color: ${settings.send_email_template_background_color};">Price (Per item with VAT)</th>
                 <th style="background-color: ${settings.send_email_template_background_color};">Total Product Price With VAT</th>
             </tr>
             `
@@ -835,11 +835,13 @@ async function mapEmailData(client, email, subject, bodyData, informationToMap) 
 
             let totalProductPriceWithVat = Math.round((priceTotal + vatCurrentProduct) * 100) / 100;
 
+            let singleProductWithVAT = Math.round((vatCurrentProduct + parseFloat(price)) * 100) / 100;
+
             html += `
             <tr>
                 <td>${productName}</td>
                 <td style="text-align: ${settings.send_email_template_text_align};">${quantity}</td>
-                <td style="text-align: ${settings.send_email_template_text_align};">${price} ${currency_sumbol}</td>
+                <td style="text-align: ${settings.send_email_template_text_align};">${singleProductWithVAT} ${currency_sumbol}</td>
                 <td style="text-align: ${settings.send_email_template_text_align};">${totalProductPriceWithVat} ${currency_sumbol}</td>
             </tr>
             `
