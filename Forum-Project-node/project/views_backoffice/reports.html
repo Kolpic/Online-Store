@@ -329,6 +329,14 @@
             showLoadingSpinner();
             try {
                 const response = await fetch(`/reports/${entityType}?${queryString}`);
+                console.log("response", response);
+
+                if (!response.ok) {
+                    let responceJson = await response.json();
+                    console.log("responceJson", responceJson);
+                    alert(responceJson.error_message);
+                    return;
+                }
                 const {resultRows, totalRows} = await response.json();
 
                 // Generate HTML table headers and rows dynamically
