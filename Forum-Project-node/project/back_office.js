@@ -21,6 +21,7 @@ const { stringify } = require('csv-stringify');
 const ExcelJS = require('exceljs');
 const { Transform } = require('stream');
 const { PassThrough } = require('stream');
+const timeout = require('express-timeout-handler');
 
 console.log("Pool imported in back_office.js:"); 
 
@@ -55,6 +56,12 @@ const urlToFunctionMapBackOffice = {
     PUT: {
         '/update/:schema': updateEntity,
     }
+};
+
+const TIMEOUT_CONFIG = {
+    '/export/:entity': 5 * 60 * 1000,     // 5 min
+    '/upload/:schema/csv': 5 * 60 * 1000, // 5 min
+    default: 20 * 1000,                   // 20 sec
 };
 
 const crudHooks = {
@@ -152,6 +159,20 @@ const crudHooks = {
     }
 }
 
+function getTimeoutForPath(path) {
+    for (const [key, value] of Object.entries(TIMEOUT_CONFIG)) {
+        if (key.includes('/:')) {
+            const regex = new RegExp(key.replace(/:[^\s/]+/, '([\\w-]+)'));
+            if (path.match(regex)) {
+                return value;
+            }
+        } else if (key === path) {
+            return value;
+        }
+    }
+    return TIMEOUT_CONFIG.default;
+}
+
 function mapUrlToFunction(req) {
     const methodMap = urlToFunctionMapBackOffice[req.method];
 
@@ -182,43 +203,86 @@ function mapUrlToFunction(req) {
     return matchedHandler;
 }
 
+function createCancellablePromise(executor) {
+    let cancel;
+    const cancelToken = {cancel: false};
+
+    const promise = new Promise((resolve, reject) => {
+        cancel = () => {
+            if (!cancelToken.cancelled) {
+                cancelToken.cancelled = true;
+                reject(new Error("Promise cancelled"));
+            }
+        };
+        executor(resolve, reject, cancelToken);
+    });
+    return { promise, cancel, cancelToken };
+}
+
 router.use(async (req, res, next) => {
     console.log("Pool inside router.use in back_office.js:");
+    const TIMEOUT_MS = getTimeoutForPath(req.path);
 
     let client;
     let cookieObj = {};
+    let timeoutHandle;
+    let cancelHandler;
+
     try {
-        let cookieString = req.headers.cookie;
+        // Create a timeout promise
+        const timeoutPromise = new Promise((_, reject) => {
+            timeoutHandle = setTimeout(() => {
+                reject(new Error('Request timed out'));
+            }, TIMEOUT_MS);
+        });
 
-        if (cookieString) {
-            // Split cookie into individual key-value pairs
-            cookieString.split(';').forEach(cookie => {
-                let [name, value] = cookie.split('=');
-                name = name.trim();
-                cookieObj[name] = value;
-            });
-        }
+        // Create a cancellable handler promise
+        const cancellableHandler = createCancellablePromise(async (resolve, reject, cancelToken) => {
+            try {
+                console.log("Pool inside router.use in back_office.js:");
+                let cookieObj = {};
+                let cookieString = req.headers.cookie;
 
-        // Assign the parsed cookie object to req.cookies
-        req.cookies = cookieObj
-        console.log("Parsed cookies:", req.cookies);
+                if (cookieString) {
+                    cookieString.split(";").forEach(cookie => {
+                        let [name, value] = cookie.split("=");
+                        name = name.trim();
+                        cookieObj[name] = value;
+                    });
+                }
 
-        console.log(req.path);
+                req.cookies = cookieObj;
+                console.log("Parsed cookies:", req.cookies);
+                console.log(req.path);
 
-        client = await pool.connect();
-        await client.query('BEGIN');
+                client = await pool.connect();
+                await client.query("BEGIN");
 
-        let handler = mapUrlToFunction(req);
-        AssertUser(handler != undefined, "Invalid url", errors.INVALID_URL);
+                let handler = mapUrlToFunction(req);
+                AssertUser(handler !== undefined, "Invalid url", errors.INVALID_URL);
 
-        await handler(req, res, next, client);
+                await handler(req, res, next, client);
+                await client.query("COMMIT");
 
-        await client.query('COMMIT');
+                resolve(); // Mark handler as resolved
+            } catch (err) {
+                reject(err); // Reject on error
+            }
+        });
+
+        const handlerPromise = cancellableHandler.promise;
+        cancelHandler = cancellableHandler.cancel;
+
+        // Race between the handler and timeout
+        await Promise.race([handlerPromise, timeoutPromise]);
+
     } catch (error) {
-        console.log("error");
+        if (timeoutHandle) clearTimeout(timeoutHandle);
+
+        console.log("error in server catch block");
         console.log(error);
 
-        if (client) await client.query('ROLLBACK');
+        // if (client) await client.query('ROLLBACK');
 
         let clientCatch = await pool.connect();
         await clientCatch.query('BEGIN');
@@ -234,6 +298,20 @@ router.use(async (req, res, next) => {
 
         await logException(userData, error.name, error.message, "back office");
 
+        if (error.message === "Request timed out") {
+            cancelHandler();
+            console.log("res.headersSent", res.headersSent)
+            if (!res.headersSent) {
+                console.log("ENTERED in server try catch !res.headersSent");
+
+                return res.status(503).json({
+                    error_message: "Request timed out. Please try again later.",
+                });
+            } else {
+                console.log('Response already sent. Ending...');
+                res.end();
+            }
+        } else 
         if (error instanceof WrongUserInputException) {
             return res.status(400).json({ 
                 error_message: error.message, 
@@ -258,7 +336,9 @@ router.use(async (req, res, next) => {
         }
 
     } finally {
+        if (timeoutHandle) clearTimeout(timeoutHandle);
         if (client) {
+            await client.query('ROLLBACK');
             client.release();
         }
     }
@@ -902,7 +982,7 @@ async function exportEntityHandler(req, res, next, client) {
         ['Generated On', new Date().toLocaleString()]
     ];
 
-     console.log("metadata", metadata);
+    console.log("metadata", metadata);
 
     if (format === 'csv') {
         await exportCsv(res, client, sqlTemplate, queryParams, metadata);
@@ -921,35 +1001,38 @@ function formatKey(key) {
 }
 
 async function exportCsv(res, client, sqlTemplate, queryParams, metadata) {
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', 'attachment; filename="report.csv"');
-
     const csvStream = stringify();
-    csvStream.pipe(res);
+    try {
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="report.csv"');
 
-    metadata.forEach((meta) => csvStream.write(meta));
+        csvStream.pipe(res);
 
-    const reportHeaders = await getReportHeaders(client, sqlTemplate, queryParams);
-    csvStream.write(reportHeaders);
+        metadata.forEach((meta) => csvStream.write(meta));
 
-    for await (const rows of backOfficeService.fetchReportData(client, sqlTemplate, queryParams)) {
-        rows.forEach((row) => {
-            // {} -> [] 
-            const formattedRow = Object.entries(row).reduce((acc, [key, value]) => {
-                if (key.includes('Inserted At') && value) {
-                    acc[key] = formatTimestamp(value);
-                } else {
-                    acc[key] = value;
-                }
-                return acc;
-            }, {});
+        const reportHeaders = await getReportHeaders(client, sqlTemplate, queryParams);
+        csvStream.write(reportHeaders);
 
-            // taking only the values from the key, value pairs and write
-            csvStream.write(Object.values(formattedRow));
-        });
+        for await (const rows of backOfficeService.fetchReportData(client, sqlTemplate, queryParams)) {
+            // await client.query("BEGIN");
+            console.log("rows -> ", rows)
+            for (let row of rows) {
+                const formattedRow = Object.entries(row).reduce((acc, [key, value]) => {
+                    if (key.includes('Inserted At') && value) {
+                        acc[key] = formatTimestamp(value);
+                    } else {
+                        acc[key] = value;
+                    }
+                    return acc;
+                }, {});
+                csvStream.write(Object.values(formattedRow));
+            }
+        }
+    } catch (error) {
+        throw error;
+    } finally {
+        csvStream.end();
     }
-
-    csvStream.end();
 }
 
 async function getReportHeaders(client, sqlTemplate, queryParams) {
@@ -959,38 +1042,43 @@ async function getReportHeaders(client, sqlTemplate, queryParams) {
 }
 
 async function exportExcel(res, client, sqlTemplate, queryParams, metadata) {
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', 'attachment; filename="report.xlsx"');
-
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Report');
+    try {
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+        res.setHeader('Content-Disposition', 'attachment; filename="report.xlsx"');
 
-    metadata.forEach((metaRow) => {
-        worksheet.addRow(metaRow);
-    });
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Report');
 
-    worksheet.addRow([]);
-
-    const reportHeaders = await getReportHeaders(client, sqlTemplate, queryParams);
-    worksheet.addRow(reportHeaders);
-
-    for await (const rows of backOfficeService.fetchReportData(client, sqlTemplate, queryParams)) {
-        rows.forEach((row) => {
-            const formattedRow = Object.entries(row).map(([key, value]) => {
-                if (key.includes('Inserted At') && value) {
-                    return formatTimestamp(value);
-                }
-                return value;
-            });
-
-            worksheet.addRow(formattedRow);
+        metadata.forEach((metaRow) => {
+            worksheet.addRow(metaRow);
         });
 
-        await streamWorkbookToResponse(workbook, res);
-    }
+        worksheet.addRow([]);
 
-    await workbook.xlsx.write(res);
-    res.end();
+        const reportHeaders = await getReportHeaders(client, sqlTemplate, queryParams);
+        worksheet.addRow(reportHeaders);
+
+        for await (const rows of backOfficeService.fetchReportData(client, sqlTemplate, queryParams)) {
+            rows.forEach((row) => {
+                const formattedRow = Object.entries(row).map(([key, value]) => {
+                    if (key.includes('Inserted At') && value) {
+                        return formatTimestamp(value);
+                    }
+                    return value;
+                });
+
+                worksheet.addRow(formattedRow);
+            });
+
+            await streamWorkbookToResponse(workbook, res);
+        }
+    } catch (error) {
+        throw error;
+    } finally {
+        await workbook.xlsx.write(res);
+        res.end();
+    }
 }
 async function streamWorkbookToResponse(workbook, res) {
     const tempStream = new PassThrough();
@@ -1144,6 +1232,10 @@ process.on('uncaughtException', async (error) => {
 });
 
 process.on('unhandledRejection', async (error) => {
+    if (error.message === 'Request timed out') {
+        console.log('Ignored timeout error:', error);
+        return;
+    }
     console.error("error in unhandledRejection >>>");
     console.error(error);
     try {
