@@ -4,12 +4,16 @@
     <meta charset="UTF-8">
     <title>Staff Portal</title>
     <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .container {
             margin-top: 50px;
         }
         .list-group-item {
             font-size: 1.2rem; 
+        }
+        .chart-container {
+            margin-top: 20px;
         }
         .header {
             display: flex;
@@ -23,14 +27,37 @@
         .nav .btn {
             margin-left: 10px;
         }
+        .sidebar {
+            height: 100vh;
+            position: fixed;
+            top: 0;
+            left: 0;
+            background-color: #007BFF;
+            padding-top: 20px;
+            color: white;
+        }
+
+        .sidebar .list-group-item {
+            background-color: transparent;
+            color: white;
+            border: none;
+        }
+
+        .sidebar .list-group-item:hover {
+            background-color: #0056b3;
+            color: white;
+        }
     </style>
 </head>
 <body>
+
     <div class="container">
-
         <div id="header"></div>
+    </div>
 
+    <div class="sidebar">
         <div class="list-group">
+            <a href="/login.html" class="list-group-item list-group-item-action">0. Login</a>
             <a href="/reports.html?entity=audits" class="list-group-item list-group-item-action">1. View Logs</a>
             <a href="/crud.html?entity=products" class="list-group-item list-group-item-action">2. Manage Products</a>
             <a href="/reports.html?entity=order" class="list-group-item list-group-item-action">3. Report Sales</a>
@@ -41,8 +68,242 @@
             <a href="/mail_templates.html" class="list-group-item list-group-item-action">8. Mail Templates</a>
         </div>
     </div>
+
+    <div class="container">
+        <div id="header"></div>
+
+        <div class="chart-container">
+            <div id="loading-overlay" class="d-none">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="sr-only">Loading...</span>
+            </div>
+        </div>
+            <h3>Last 6 Months Purchases</h3>
+            <canvas id="chart6Months"></canvas>
+        </div>
+
+        <div class="chart-container">
+            <h3>Orders Last Two Days</h3>
+            <canvas id="chartToday"></canvas>
+        </div>
+
+    </div>
 </body>
 <script>
+    const chart6MonthsCtx = document.getElementById('chart6Months').getContext('2d');
+    const chartTodayCtx = document.getElementById('chartToday').getContext('2d');
+
+    const chart6Months = new Chart(chart6MonthsCtx, {
+        type: 'bar',
+        data: {
+            labels: [], // Filled dynamically
+            datasets: [
+                {
+                    label: 'Orders count',
+                    data: [],
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderWidth: 1,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Total price',
+                    data: [],
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    borderWidth: 1,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Orders and Prices in Last 6 Months'
+                },
+                legend: {
+                    position: 'top'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    type: 'linear',
+                    position: 'left',
+                    title: {
+                        display: true,
+                        text: 'Orders count'
+                    }
+                },
+                y1: {
+                    beginAtZero: true,
+                    type: 'linear',
+                    position: 'right',
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Total price'
+                    }
+                }
+            }
+        }
+    });
+
+    const chartToday = new Chart(chartTodayCtx, {
+        type: 'bar',
+        data: {
+            labels: [],
+            datasets: [
+                {
+                    label: 'Orders count',
+                    data: [],
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    borderWidth: 1,
+                    yAxisID: 'y'
+                },
+                {
+                    label: 'Total price',
+                    data: [],
+                    borderColor: 'rgba(255, 99, 132, 1)',
+                    backgroundColor: 'rgba(255, 99, 132, 0.2)',
+                    borderWidth: 1,
+                    yAxisID: 'y1'
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                title: {
+                    display: true,
+                    text: 'Orders and Prices Last Two Days'
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    type: 'linear',
+                    position: 'right',
+                    title: {
+                        display: true,
+                        text: 'Orders count'
+                    }
+                },
+                y1: {
+                    beginAtZero: true,
+                    type: 'linear',
+                    position: 'left',
+                    grid: {
+                        drawOnChartArea: false
+                    },
+                    title: {
+                        display: true,
+                        text: 'Total price'
+                    }
+                }
+            }
+        }
+    });
+
+    async function fetchReportData(timeFilterBegin, timeFilterEnd, timeGrouping = 'month') {
+        try {
+            let formData = new FormData();
+            formData.append(`time_filter_value_begin`, timeFilterBegin);
+            formData.append(`time_filter_value_end`, timeFilterEnd);
+            formData.append(`time_grouping_select_value`, timeGrouping);
+            formData.append(`time_order`, '');
+            formData.append(`order_id_filter_value`, '');
+            formData.append(`order_id_order`, '');
+            formData.append(`order_id_grouping_select_value`, 'all');
+            formData.append(`status_filter_value`, '');
+            formData.append(`status_order`, '');
+            formData.append(`status_grouping_select_value`,'all');
+
+            const queryString = new URLSearchParams(formData).toString();
+
+            const response = await fetch(`/reports/order?${queryString}`);
+            const data = await response.json();
+            console.log("data.resultRows", data.resultRows);
+            return data.resultRows;
+        } catch (error) {
+            console.error('Error fetching report data:', error);
+            alert('Error fetching information about the carts');
+        }
+    }
+
+    async function updateChart6Months() {
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        const now = new Date();
+
+        showLoadingSpinner();
+
+        const rows = await fetchReportData(sixMonthsAgo.toISOString(), now.toISOString(), 'month');
+
+        const processedData = [];
+
+        for (const row of rows) {
+            if (!row['Order Inserted At']) {
+                continue; // Skip this iteration if 'Order Inserted At' is null
+            }
+
+            processedData.push({
+                month: new Date(row['Order Inserted At']).toLocaleString('default', { month: 'short' }),
+                orders: parseInt(row['Number of orders items']) || 0,
+                totalPrice: parseFloat(row['Total With VAT']) || 0
+            });
+        }
+
+        console.log("processedData", processedData);
+
+        chart6Months.data.labels = processedData.map(item => item.month);
+        chart6Months.data.datasets[0].data = processedData.map(item => item.orders); // Orders count
+        chart6Months.data.datasets[1].data = processedData.map(item => item.totalPrice); // Total price
+        chart6Months.update();
+
+        hideLoadingSpinner();
+    }
+
+    async function updateChartToday() {
+        const today = new Date();
+        today.setDate(today.getDate() + 1);
+        today.setHours(0, 0, 0, 0);
+
+        const yesterday = new Date();
+        yesterday.setDate(today.getDate() - 2);
+        yesterday.setHours(0, 0, 0, 0);
+
+        const rows = await fetchReportData(yesterday.toISOString(), today.toISOString(), 'day');
+
+        const processedData = [];
+
+        for (const row of rows) {
+            if (!row['Order Inserted At']) {
+                continue;
+            }
+
+            const day = new Date(row['Order Inserted At']).toLocaleDateString('default', { weekday: 'short', day: 'numeric' });
+
+            processedData.push({
+                day: day,
+                orders: parseInt(row['Number of orders items']) || 0,
+                totalPrice: parseFloat(row['Total With VAT']) || 0
+            });
+        }
+
+        console.log("processedData", processedData);
+
+        chartToday.data.labels = processedData.map(item => item.day);
+        chartToday.data.datasets[0].data = processedData.map(item => item.orders);
+        chartToday.data.datasets[1].data = processedData.map(item => item.totalPrice);
+        chartToday.update();
+    }
+
     async function fetchHeaderData() {
         if (!navigator.onLine) {
             alert("You are offline. Please check your internet connection.");
@@ -51,6 +312,27 @@
 
         try {
             const response = await fetch('/header');
+            console.log("response", response);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.log("errorData");
+                console.log(errorData);
+                // alert(errorData.error_message);
+                let errorMessage = `${errorData.error_message}`;
+                console.log("errorMessage", errorMessage, errorMessage === 'You have to login to access this page', "errorMessage === 'You have to login to access this page'");
+                if (errorMessage === 'You have to be logged to access this page') {
+                    errorMessage += ` <a href="/login.html" style="color: blue; text-decoration: underline;">Click here to login</a>`;
+                    console.log("errorMessage", errorMessage);
+                    showCustomAlert(errorMessage);
+                } else {
+                    alert(errorData.error_message);
+                    return;
+                }
+                return;
+            }
+
+
             const responseData = await response.json();
             // const data = responseData.userInformation;
 
@@ -101,6 +383,44 @@
             alert('Internal server error. Try again later');
         }
     }
-        fetchHeaderData();
+
+    // Function to show a custom alert with HTML content
+    function showCustomAlert(message) {
+        const alertContainer = document.createElement('div');
+        alertContainer.style.position = 'fixed';
+        alertContainer.style.top = '20px';
+        alertContainer.style.right = '20px';
+        alertContainer.style.backgroundColor = 'white';
+        alertContainer.style.border = '1px solid red';
+        alertContainer.style.padding = '10px';
+        alertContainer.style.zIndex = '1000';
+        alertContainer.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+
+        alertContainer.innerHTML = `
+            <div>
+                <span>${message}</span>
+                <button style="margin-left: 10px; background-color: red; color: white; border: none; cursor: pointer;" onclick="this.parentElement.parentElement.remove()">Close</button>
+            </div>
+        `;
+
+        document.body.appendChild(alertContainer);
+    }
+
+    function showLoadingSpinner() {
+        document.getElementById('loading-overlay').classList.remove('d-none');
+    }
+
+    function hideLoadingSpinner() {
+        document.getElementById('loading-overlay').classList.add('d-none');
+    }
+
+    fetchHeaderData();
+    updateChart6Months();
+    updateChartToday();
+
+    setInterval(() => {
+        updateChart6Months();
+        updateChartToday();
+    }, 300000);
 </script>
 </html>

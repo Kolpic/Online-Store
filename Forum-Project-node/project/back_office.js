@@ -61,7 +61,7 @@ const urlToFunctionMapBackOffice = {
 const TIMEOUT_CONFIG = {
     '/export/:entity': 5 * 60 * 1000,     // 5 min
     '/upload/:schema/csv': 5 * 60 * 1000, // 5 min
-    default: 20 * 1000,                   // 20 sec
+    default: 200 * 1000,                   // 20 sec
 };
 
 const crudHooks = {

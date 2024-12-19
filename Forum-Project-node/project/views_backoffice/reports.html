@@ -326,6 +326,7 @@
             const formData = new FormData(document.getElementById('filterForm'));
 
             const queryString = new URLSearchParams(formData).toString();
+            console.log("queryString", queryString, "new URLSearchParams(formData)", new URLSearchParams(formData));
             showLoadingSpinner();
             try {
                 const response = await fetch(`/reports/${entityType}?${queryString}`);
