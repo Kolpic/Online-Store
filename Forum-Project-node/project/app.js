@@ -26,7 +26,7 @@ app.use(myLogger)
 app.use(express.static(path.join(__dirname, '/schemas')));
 app.use(express.static(path.join(__dirname, '/views')));
 app.use(express.static(path.join(__dirname, '/images')));
-app.use(favicon(path.join(__dirname, 'images', 'favicon-32x32.png')));
+//app.use(favicon(path.join(__dirname, 'images', 'favicon-32x32.png')));
 
 // Middleware for parsing JSON and urlencoded data
 app.use(express.json());
@@ -42,7 +42,7 @@ backOfficeApp.listen(PORT_BACK, () => {
 backOfficeApp.use(express.static(path.join(__dirname, '/schemas')));
 backOfficeApp.use(express.static(path.join(__dirname, '/views_backoffice')));
 backOfficeApp.use(express.static(path.join(__dirname, '/images')));
-backOfficeApp.use(favicon(path.join(__dirname, 'images', 'favicon-32x32.png')));
+//backOfficeApp.use(favicon(path.join(__dirname, 'images', 'favicon-32x32.png')));
 
 // Middleware for parsing JSON and urlencoded data
 backOfficeApp.use(express.json());

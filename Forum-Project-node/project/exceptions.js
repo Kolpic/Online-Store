@@ -14,9 +14,10 @@ class DevException extends Error {
 }
 
 class PeerException extends Error {
-	constructor(message) {
+	constructor(message, errorCode) {
 		super(message);
 		this.name = 'PeerException';
+		this.errorCode = errorCode
 	}
 }
 
@@ -32,9 +33,9 @@ function AssertUser(condition, message, errorCode) {
     }
 }
 
-function AssertPeer(condition, message) {
+function AssertPeer(condition, message, errorCode) {
     if (!condition) {
-        throw new PeerException(message);
+        throw new PeerException(message, errorCode);
     }
 }
 

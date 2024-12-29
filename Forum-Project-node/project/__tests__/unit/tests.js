@@ -1,6 +1,10 @@
 const frontOffice = require('../../front_office');
 const backOfficeService = require('../../backOfficeService');
-const { WrongUserInputException, DevException } = require('../../exceptions');
+const paypal = require('../../paypal');
+const config = require('../../config');
+const { WrongUserInputException, DevException, PeerException } = require('../../exceptions');
+const axios = require('axios');
+jest.mock('axios'); // Mock axios for API calls
 
 describe('Registration functions', () => {
   let client;
