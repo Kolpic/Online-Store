@@ -2,6 +2,7 @@ const { AssertUser, AssertDev } = require('./exceptions');
 const errors = require('./error_codes');
 const pool = require('./db');
 const bcrypt = require('bcryptjs');
+const paypal = require('./paypal');
 
 const Ajv = require('ajv');
 const ajv = new Ajv();
@@ -786,6 +787,9 @@ async function payOrder(orderId, paymentAmount, client) {
 
     AssertDev(orderId != undefined, "orderId is undefined");
     AssertDev(paymentAmount != undefined, "paymentAmount is undefined");
+
+    let settingsRow = await client.query(`SELECT * FROM settings`);
+    let settings = settingsRow.rows;
 
     let floatPaymentAmount = parseFloat(paymentAmount);
     let roundedPaymentAmount = Math.round((floatPaymentAmount + Number.EPSILON) * 100) / 100;

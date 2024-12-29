@@ -8,7 +8,9 @@ const { AssertUser, AssertDev, WrongUserInputException } = require('./exceptions
 const front_office = require('./front_office')
 const bcrypt = require('bcryptjs');
 const router = express.Router();
-const backOfficeService = require('./backOfficeService')
+const backOfficeService = require('./backOfficeService');
+const paypal = require('./paypal');
+const { PayPal, Bobi} = require('./paymentProviders');
 
 console.log("Pool imported in main.js:");  
 
@@ -23,6 +25,8 @@ const urlToFunctionMapFrontOffice = {
         '/verify': getVerificationHandler,
         '/cart': getCartHandler,
         '/order': getOrderHandler,
+        '/complete_order': getPaypalCompleteOrder,
+        '/cancel_order': getPaypalCancelOrder,
     },
     POST: {
         '/registration': postRegistrationHandler,
@@ -33,6 +37,8 @@ const urlToFunctionMapFrontOffice = {
         '/cart': postCartHandler,
         '/finish_payment': postPaymentHandler,
         '/profile': postProfileHandler,
+        '/paypalme': postPaypalHandler,
+        '/payment': postPaymentHandlerDef,
     }
 };
 
@@ -529,6 +535,213 @@ async function getOrderHandler(req, res, next, client) {
         success: true,
         responseGetOrder,
     });
+}
+
+async function postPaymentHandlerDef(req, res, next, client) {
+    let sessionId = req.cookies['session_id'];
+    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+    AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
+
+    const { payment_method, order_id, payment_amount,token } = req.body;
+
+    console.log("Entered in postPaymentHandler ->", "payment_method", payment_method, "order_id", order_id, "payment_amount", payment_amount, "token",token)
+
+    let PaymentClass;
+
+    switch (payment_method) {
+        case 'paypal':
+            PaymentClass = PayPal;
+            break;
+        case 'bobi':
+            console.log("Entered in bobi case");
+            PaymentClass = Bobi;
+            break;
+        default:
+            AssertUser(false, `Unsupported payment method: ${payment_method}`);
+    }
+
+    console.log("PaymentClass", PaymentClass)
+
+    // Instantiate the appropriate payment provider
+    const paymentProvider = payment_method === 'bobi'
+        ? new PaymentClass(order_id, client, payment_amount)
+        : new PaymentClass(order_id, client);
+
+
+    let response = await paymentProvider.executePayment();
+
+    await paymentProvider.postPaymentProcessing(response, authenticatedUser);
+
+    return res.json({ success: true, message: response.message });
+}
+
+
+async function postPaypalHandler(req, res, next, client) {
+    let sessionId = req.cookies['session_id'];
+    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+    AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
+
+    let orderId = req.body.order_id;
+    console.log("orderId", orderId);
+
+    const url = await paypal.createOrder(orderId, client);
+    console.log("url", url);
+
+    // res.redirect(url);
+    return res.json ({
+        success: true,
+        redirectUrl: url
+    });
+}
+
+async function getPaypalCompleteOrder(req, res, next, client) {
+    let sessionId = req.cookies['session_id'];
+    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+    AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
+
+    const orderId = req.query.order_id;
+    const token = req.query.token;
+
+    await paypal.capturePayment(token);
+    await client.query(`UPDATE orders SET status = 'Paid' WHERE order_id = $1`, [orderId]);
+
+    let response = {};
+
+    let order = await client.query(`SELECT * FROM orders WHERE order_id = $1`, [orderId]);
+    let orderRow = order.rows;
+
+    response.orderRow = orderRow;
+    console.log("response", response);
+
+    let orderItems = await client.query(`SELECT 
+                                            order_items.id, 
+                                            order_items.order_id, 
+                                            order_items.product_id, 
+                                            order_items.quantity          AS cart_quantity, 
+                                            order_items.price, 
+                                            order_items.vat,
+                                            products.name                 AS name,
+                                            currencies.symbol             AS symbol
+                                    FROM order_items
+                                        JOIN products   ON products.id          = order_items.product_id
+                                        JOIN currencies ON products.currency_id = currencies.id
+                                    WHERE order_id = $1
+                                    `,[orderId]);
+
+    let orderItemsRows = orderItems.rows;
+    response.cart_items = orderItemsRows;
+    console.log("response", response);
+
+    shippingDetailsRow = await client.query(`
+                                            SELECT 
+                                                shipping_id, 
+                                                order_id,
+                                                email,
+                                                first_name,
+                                                last_name,
+                                                town,
+                                                phone,
+                                                address,
+                                                country_code_id, 
+                                                code 
+                                            FROM shipping_details 
+                                                JOIN country_codes ON country_code_id = country_codes.id 
+                                            WHERE shipping_details.order_id = $1
+                                            `, [orderId]);
+
+    console.log("shippingDetailsRow.rows[0]", shippingDetailsRow.rows[0]);
+    
+    response.shipping_details = shippingDetailsRow.rows;
+
+    const bodyTemplateRow = await client.query(`SELECT body FROM email_template WHERE name = $1`, ["Payment Email"]);
+    const body = bodyTemplateRow.rows[0];
+
+    const userRow = await client.query(`SELECT * FROM users WHERE email = $1`, [authenticatedUser.userRow.data]);
+    const user = userRow.rows[0];
+    AssertDev(userRow.rows.length == 1, "Expect one on user");
+
+    response.user_first_name = user.first_name;
+    response.user_last_name = user.last_name;
+
+    let total = 0;
+    let totalWithVat = 0;
+
+    orderItemsRows.forEach(row => {
+        console.log("row");
+        console.log(row);
+        total += parseInt(row.cart_quantity) * parseFloat(row.price);
+        totalWithVat += parseInt(row.cart_quantity) * parseFloat(row.price) + (parseFloat((row.vat / 100)) * (parseInt(row.cart_quantity) * parseFloat(row.price)));
+    })
+    let totalWithVatToFixed = totalWithVat.toFixed(2);
+    
+    response.total_sum = total;
+    response.total_sum_with_vat = totalWithVatToFixed;
+    response.vat_in_persent = 20;
+
+    const emailData = await backOfficeService.mapEmailData(client, authenticatedUser.userRow.data, "Payment Email", body, response);
+
+    await client.query(`INSERT INTO email_queue (name, data, status) VALUES ($1, $2, $3)`,
+    [
+    'Payment Email', 
+    JSON.stringify(emailData),
+    'pending'
+    ]);
+
+    res.send(`
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Payment Successful</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    height: 100vh;
+                    margin: 0;
+                    background-color: #f8f9fa;
+                }
+                .message-box {
+                    text-align: center;
+                    background: #fff;
+                    padding: 20px;
+                    border-radius: 8px;
+                    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+                }
+                h1 {
+                    color: #28a745;
+                    margin-bottom: 10px;
+                }
+                p {
+                    color: #6c757d;
+                    margin-bottom: 20px;
+                }
+            </style>
+        </head>
+        <body>
+            <div class="message-box">
+                <h1>Payment Successful!</h1>
+                <p>Course purchased successfully.</p>
+                <p>Redirecting to the homepage...</p>
+            </div>
+            <script>
+                setTimeout(function() {
+                    window.location.href = '/home.html';
+                }, 3000);
+            </script>
+        </body>
+        </html>
+    `);
+}
+
+async function getPaypalCancelOrder(req, res, next, client) {
+    res.redirect('/home.html');
 }
 
 async function postPaymentHandler(req, res, next, client) {

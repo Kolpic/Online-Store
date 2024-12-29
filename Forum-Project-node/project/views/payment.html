@@ -50,10 +50,21 @@
         <h2>Payment Details</h2>
         <form id="payment-form">
             <input type="hidden" name="order_id" id="order-id">
-            <div class="form-group">
-                <label for="payment_amount">Enter Payment Amount:</label>
-                <input type="number" id="payment_amount" name="payment_amount" class="form-control" step="0.01" required>
+
+            <label for="payment_method">Choose Payment Method:</label>
+            <select id="payment_method" class="form-control">
+                <option value="bobi">Bobi</option>
+                <option value="paypal">PayPal</option>
+            </select>
+            <br>
+
+            <div id="bobi-payment" class="d-block">
+                <div class="form-group">
+                    <label for="payment_amount">Enter Payment Amount:</label>
+                    <input type="number" id="payment_amount" name="payment_amount" class="form-control" step="0.01" required>
+                </div>
             </div>
+
             <button type="submit" class="btn btn-primary">Submit Payment</button>
         </form>
     </div>
@@ -152,61 +163,99 @@
         }
     };
 
-        // Display alerts
-        const displayAlert = (type, message) => {
-            const alertContainer = document.getElementById('alert-container');
-            const alert = document.createElement('div');
-            alert.classList.add('alert', `alert-${type}`);
-            alert.innerText = message;
-            alertContainer.appendChild(alert);
+    // Display alerts
+    const displayAlert = (type, message) => {
+        const alertContainer = document.getElementById('alert-container');
+        const alert = document.createElement('div');
+        alert.classList.add('alert', `alert-${type}`);
+        alert.innerText = message;
+        alertContainer.appendChild(alert);
 
-            // Automatically hide the alert after 5 seconds
-            setTimeout(() => {
-                alertContainer.innerHTML = '';
-            }, 5000);
-        };
+        // Automatically hide the alert after 5 seconds
+        setTimeout(() => {
+            alertContainer.innerHTML = '';
+        }, 5000);
+    };
 
-        // Handle form submission for payment
-        document.getElementById('payment-form').addEventListener('submit', function(event) {
-            event.preventDefault();
+    // Handle form submission for payment
+    document.getElementById('payment-form').addEventListener('submit', async function(event) {
+        event.preventDefault();
 
-            if (!navigator.onLine) {
-                alert("You are offline. Please check your internet connection.");
-                return;
-            }
-            const paymentAmount = document.getElementById('payment_amount').value;
+        if (!navigator.onLine) {
+            alert("You are offline. Please check your internet connection.");
+            return;
+        }
 
-            fetch('/finish_payment', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    order_id: document.getElementById('order-id').value,
-                    payment_amount: paymentAmount
-                })
-            })
-            .then(response => response.json())
-            .then(data => {
-                console.log("data");
-                console.log(data);
+        const paymentMethod = document.getElementById('payment_method').value;
+        const orderId = document.getElementById('order-id').value;
+
+        try {
+            if (paymentMethod === 'bobi') {
+                const paymentAmount = document.getElementById('payment_amount').value;
+
+                // finish_payment
+                const response = await fetch('/payment', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        payment_method: 'bobi',
+                        order_id: orderId,
+                        payment_amount: paymentAmount
+                    })
+                });
+
+                const data = await response.json();
+
                 if (data.success) {
                     alert(data.message);
                     window.location.href = '/home.html';
                 } else {
-                    if (data.code === undefined) {
-                        displayErrorMessage(data.error_message);
-                    } else {
-                        displayErrorMessage(data.error_message + " code: " + data.error_code);
-                    }
+                    displayErrorMessage(data.error_message || "Payment failed.");
                 }
-            })
-            .catch(error => {
-                console.error('Error post payment:', error);
-                alert(`Internal server error. Try again later.`);
-            })
-        });
+            } else if (paymentMethod === 'paypal') {
+                // paypalme
+                const response = await fetch('/paypalme', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        payment_method: 'paypal',
+                        order_id: orderId,
+                    })
+                });
 
+                if (response.ok) {
+                    const responseData = await response.json();
+                    window.location.href = responseData.redirectUrl; // Redirect to PayPal approval URL
+                } else {
+                    alert("PayPal payment initialization failed.");
+                }
+            }
+        } catch (error) {
+            console.error('Error during payment:', error);
+            alert(`Internal server error. Try again later.`);
+        }
+    });
+
+    document.getElementById('payment_method').addEventListener('change', function() {
+        const selectedMethod = this.value;
+        const bobiPaymentDiv = document.getElementById('bobi-payment');
+        const paymentAmountField = document.getElementById('payment_amount');
+
+        if (selectedMethod === 'bobi') {
+            bobiPaymentDiv.classList.add('d-block');
+            bobiPaymentDiv.classList.remove('d-none');
+            paymentAmountField.required = true;
+        } else {
+            bobiPaymentDiv.classList.add('d-none');
+            bobiPaymentDiv.classList.remove('d-block');
+            paymentAmountField.required = false; // Disable validation when hidden
+        }
+    });
+    
     // Function to display error message dynamically
     function displayErrorMessage(message) {
         $('#error-message').removeClass('d-none').text(message);
