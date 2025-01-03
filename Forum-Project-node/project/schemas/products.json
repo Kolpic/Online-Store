@@ -18,6 +18,30 @@
             "show_in_filter": true
         },
         {
+            "name": "asin",
+            "type": "string",
+            "label": "ASIN Number",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "short_description",
+            "type": "string",
+            "label": "Short Description",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "long_description",
+            "type": "string",
+            "label": "Long Description",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
             "name": "currency_id",
             "type": "select",
             "label": "Currency",

@@ -737,6 +737,7 @@ async function updateEntity(req, res, next, client) {
                     INSERT INTO ${m2m.joinTable} (${m2m.joinColumnOnePK}, ${m2m.joinColumnTwoPK})
                     VALUES ($1, (SELECT ${m2m.targetColumnFilter} FROM ${m2m.targetTable} WHERE ${m2m.targetColumnFilter} = $2))
                 `;
+                console.log("insertQuery in many to many table", insertQuery);
                 await client.query(insertQuery, [entityId, value]);
             }
         }
@@ -845,6 +846,8 @@ async function getOrderItemsData(req, res, next, client) {
 async function getRolePermissions(req, res, next, client) {
     const inputData = req.query;
     let roleId = inputData.role_id;
+
+    console.log("inputData", inputData, "roleId", roleId);
 
     console.log("getRolePermissions for role");    
 

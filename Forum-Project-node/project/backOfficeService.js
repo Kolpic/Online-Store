@@ -95,9 +95,13 @@ async function parseMultipartFormData(req, client) {
                 console.log("fieldName", fieldName, "fieldValue", fieldValue)
 
                 if (fieldName === 'categories') {
-                    formData.categories = formData.categories || [];
+                    if (!Array.isArray(formData.categories)) {
+                        formData.categories = formData.categories ? [formData.categories] : [];
+                    }
+
                     formData.categories.push(fieldValue);
-                } if (fieldName === 'roles') {
+                    console.log("formData categories debug", formData)
+                } else if (fieldName === 'roles') {
                     formData.roles = formData.roles || [];
                     formData.roles.push(fieldValue);
                 } else {
@@ -106,6 +110,7 @@ async function parseMultipartFormData(req, client) {
             }
         }
 
+        console.log("formData returned", formData);
         return { formData, imageIds};
     } catch (error) {
         throw(error);
@@ -355,7 +360,7 @@ async function makeTableJoins(schema) {
             } else if (field === "total_with_vat") {
                 selectFields.push(
                     "ROUND(SUM(order_items.price * order_items.quantity) + " +
-                    "SUM(order_items.price * order_items.quantity * (CAST(order_items.vat AS numeric) / 100)), 2) AS Total_With_Vat"
+                    "SUM(order_items.price * order_items.quantity * (CAST(order_items.vat AS numeric) / 100)), 2) AS \"Total With Vat\""
                 );
             }
             continue;
@@ -407,17 +412,17 @@ async function makeTableJoins(schema) {
 	            console.log("Array.isArray(details.type) NO ELSEEE");
                 if (joinTable == 'order_items') {
                     joins.push(`JOIN ${joinTable} ON ${currentTableToJoin} = ${joinTable}.${joinColumn}`);
-                    selectFields.push(`array_agg(DISTINCT(${details.foreignKey.columnsToShowOnEdit})) AS ${field}`);
+                    selectFields.push(`array_agg(DISTINCT(${details.foreignKey.columnsToShowOnEdit})) AS "${details.label}"`);
                 } else {
                     joins.push(`JOIN ${joinTable} ON ${currentTableToJoin} = ${joinTable}.${joinColumn}`);
-	                selectFields.push(`array_agg(DISTINCT(${joinTable}.${joinColumnToDisplay})) AS ${field}`);
+	                selectFields.push(`array_agg(DISTINCT(${joinTable}.${joinColumnToDisplay})) AS "${details.label}"`);
                 }
 	        } else {
 	            console.log("Array.isArray(details.type) ELSEEE");
 
 	             const joinColumnToDisplay = details.foreignKey.column;
 	             joins.push(`JOIN ${joinTable} ON ${tableName}.${field} = ${joinTable}.${joinColumn}`);
-	             selectFields.push(`${joinTable}.${joinColumnToDisplay} AS ${joinColumnToDisplay}`);
+	             selectFields.push(`${joinTable}.${joinColumnToDisplay} AS "${details.label}"`);
 
 	             groupByFields.push(`${joinTable}.${joinColumnToDisplay}`);
 	        }
@@ -430,10 +435,10 @@ async function makeTableJoins(schema) {
         } else {
             // Regular field, add to selectFields as is
             if (details.PK === true) {
-                selectFields.push(`${tableName}.${tableNamePrimaryKey}`);
+                selectFields.push(`${tableName}.${tableNamePrimaryKey} AS "${details.label}"`);
                 groupByFields.push(`${tableName}.${tableNamePrimaryKey}`);
             } else {
-                selectFields.push(`${tableName}.${field}`);
+                selectFields.push(`${tableName}.${field} AS "${details.label}"`);
                 groupByFields.push(`${tableName}.${field}`);
             }
         }

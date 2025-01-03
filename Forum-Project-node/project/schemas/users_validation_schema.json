@@ -3,64 +3,75 @@
   "title": "users",
   "description": "Schema for a user entity",
   "type": "object",
+  "primaryKeyFrontEnd": "Id",
   "primaryKey": "id",
   "properties": {
     "id": {
       "type": "integer",
       "description": "Unique identifier for the user",
       "readOnly": true,
-      "PK": true
+      "PK": true,
+      "label": "Id"
     },
     "first_name": {
       "type": "string",
       "description": "User's first name",
       "minLength": 5,
-      "maxLength": 50
+      "maxLength": 50,
+      "label": "First Name"
     },
     "last_name": {
       "type": "string",
       "description": "User's last name",
       "minLength": 5,
-      "maxLength": 50
+      "maxLength": 50,
+      "label": "Last Name"
     },
     "email": {
       "type": "string",
       "description": "User's email",
       "minLength": 5,
-      "maxLength": 50
+      "maxLength": 50,
+      "label": "Email"
     },
     "password": {
       "type": "string",
       "description": "User's password",
       "minLength": 5,
-      "maxLength": 150
+      "maxLength": 150,
+      "label": "Password"
     },
     "verification_status": {
       "type": "boolean",
-      "description": "User's account verification status"
+      "description": "User's account verification status",
+      "label": "Verification status"
     },
     "verification_code": {
       "type": "string",
       "description": "User's verification code",
       "minLength": 5,
-      "maxLength": 50
+      "maxLength": 50,
+      "label": "Verification code"
     },
     "address": {
       "type": "string",
       "description": "User's address",
       "minLength": 5,
-      "maxLength": 255
+      "maxLength": 255,
+      "label": "Address"
     },
     "gender": {
       "type": "string",
       "description": "User's gender",
-      "enum": ["", "male","female"]
+      "enum": ["", "male","female"],
+      "label": "Gender"
     },
     "phone": {
       "type": "string",
       "description": "User's phone",
       "minLength": 5,
-      "maxLength": 20
+      "maxLength": 20,
+      "label": "Phone"
     },
     "country_code_id": {
       "foreignKey": {
@@ -70,7 +81,8 @@
         "column": "code"
       },
       "type": "integer",
-      "description": "User's country code id"
+      "description": "User's country code id",
+      "label": "Country code"
     }
   },
   "filters": ["first_name", "last_name", "email", "id"],
