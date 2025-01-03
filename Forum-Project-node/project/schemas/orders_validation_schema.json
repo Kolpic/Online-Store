@@ -3,22 +3,26 @@
   "title": "orders",
   "description": "Schema for a order entity",
   "type": "object",
+  "primaryKeyFrontEnd": "Id",
   "primaryKey": "order_id",
   "properties": {
     "id": {
       "type": "integer",
       "description": "Unique identifier for the order",
       "readOnly": true,
-      "PK": true
+      "PK": true,
+      "label": "Id"
     },
     "order_date": {
       "type": "string",
       "format": "date",
-      "description": "Order Date"
+      "description": "Order Date",
+      "label": "Date"
     },
     "user_id": {
       "type": "integer",
       "description": "User ID",
+      "label": "User email",
       "foreignKey": {
         "table": "users",
         "value": "id",
@@ -28,6 +32,7 @@
     "status": {
       "type": "string",
       "description": "Order Status",
+      "label": "Status",
       "enum": ["Ready for Paying", "Paid"]
     },
     "vat": {
@@ -52,6 +57,7 @@
       "type": "array",
       "description": "Order Items",
       "fieldType": "collapsed",
+      "label": "Items",
       "foreignKey": {
         "table": "order_items",
         "value": "order_id",

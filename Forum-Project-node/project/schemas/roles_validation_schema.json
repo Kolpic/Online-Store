@@ -3,24 +3,28 @@
   "title": "roles",
   "description": "Schema for a roles entity",
   "type": "object",
+  "primaryKeyFrontEnd": "Id",
   "primaryKey": "role_id",
   "properties": {
     "id": {
       "type": "integer",
       "description": "Unique identifier for the roles",
       "readOnly": true,
-      "PK": true
+      "PK": true,
+      "label": "Id"
     },
     "role_name": {
       "type": "string",
       "description": "Role name",
       "minLength": 5,
-      "maxLength": 50
+      "maxLength": 50,
+      "label": "Name"
     },
     "permissions": {
       "type": "array",
       "description": "Permissions associated with the role",
       "fieldType": "collapsed",
+      "label": "Permissions",
       "manyToMany": {
         "joinTable": "role_permissions",
         "joinColumnOnePK": "role_id",

@@ -12,7 +12,7 @@
         {
             "name": "order_date",
             "type": "date",
-            "label": "Order Date",
+            "label": "Date",
             "create": true,
             "editable": true,
             "show_in_filter": true
@@ -48,7 +48,7 @@
         {
             "name": "order_items",
             "type": "array",
-            "label": "Order Items",
+            "label": "Items",
             "create": true,
             "editable": false,
             "show_in_filter": false,

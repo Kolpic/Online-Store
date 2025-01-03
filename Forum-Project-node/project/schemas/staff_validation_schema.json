@@ -3,29 +3,34 @@
   "title": "staff",
   "description": "Schema for a user entity",
   "type": "object",
+  "primaryKeyFrontEnd": "Id",
   "primaryKey": "id",
   "properties": {
     "id": {
       "type": "integer",
       "description": "Unique identifier for the staff",
       "readOnly": true,
-      "PK": true
+      "PK": true,
+      "label": "Id"
     },
     "username": {
       "type": "string",
       "description": "Staff username",
       "minLength": 5,
-      "maxLength": 50
+      "maxLength": 50,
+      "label": "Username"
     },
     "password": {
       "type": "string",
       "description": "Staff password",
       "minLength": 5,
-      "maxLength": 50
+      "maxLength": 50,
+      "label": "Password"
     },
     "roles": {
       "type": "array",
       "description": "Roles associated with the staff",
+      "label": "Roles",
       "items": {
         "type": "string"
       },

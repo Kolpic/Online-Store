@@ -4,7 +4,7 @@
         {
             "name": "id",
             "type": "integer",
-            "label": "ID",
+            "label": "Id",
             "create": false,
             "editable": true,
             "show_in_filter": false
@@ -44,7 +44,7 @@
         {
             "name": "verification_status",
             "type": "boolean",
-            "label": "Verification Status",
+            "label": "Verification status",
             "create": true,
             "editable": true,
             "show_in_filter": false
@@ -52,7 +52,7 @@
         {
             "name": "verification_code",
             "type": "string",
-            "label": "Verification Code",
+            "label": "Verification code",
             "create": true,
             "editable": true,
             "show_in_filter": false
@@ -93,7 +93,7 @@
         {
             "name": "country_code_id",
             "type": "select",
-            "label": "Country Code",
+            "label": "Country code",
             "create": true,
             "editable": true,
             "show_in_filter": false,

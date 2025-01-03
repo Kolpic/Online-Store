@@ -3,6 +3,7 @@
   "title": "products",
   "description": "Schema for a product entity",
   "type": "object",
+  "primaryKeyFrontEnd": "Id",
   "entityIdColumn": "id",
   "primaryKey": "id",
   "properties": {
@@ -10,39 +11,46 @@
       "type": "integer",
       "description": "Unique identifier for the product",
       "readOnly": true,
-      "PK": true
+      "PK": true,
+      "label": "Id"
     },
     "name": {
       "type": "string",
       "description": "Name of the product",
       "minLength": 5,
-      "maxLength": 255
+      "maxLength": 255,
+      "label": "Name"
     },
     "asin": {
       "type": "string",
       "description": "asin of the product",
-      "minLength": 5
+      "minLength": 5,
+      "label": "ASIN Number"
     },
     "short_description": {
       "type": "string",
       "description": "asin of the product",
-      "minLength": 10
+      "minLength": 10,
+      "label": "Short Description"
     },
     "long_description": {
       "type": "string",
       "description": "asin of the product",
-      "minLength": 10
+      "minLength": 10,
+      "label": "Long Description"
     },
     "price": {
       "type": "number",
       "fieldType": "range",
       "description": "Price of the product",
       "minimum": 1,
-      "maximum": 10000
+      "maximum": 10000,
+      "label": "Price"
     },
     "currency_id": {
       "type": "string",
       "description": "Currency symbol",
+      "label": "Currency",
       "foreignKey": {
         "table": "currencies",
         "value": "id",
@@ -53,11 +61,13 @@
       "type": "integer",
       "description": "Available stock quantity",
       "minimum": 1,
-      "maximum": 1000
+      "maximum": 1000,
+      "label": "Quantity"
     },
     "categories": {
       "type": "array",
       "description": "Categories associated with the product",
+      "label": "Categories",
       "items": {
         "type": "string"
       },
@@ -75,6 +85,7 @@
       "description": "VAT rate",
       "minimum": 1,
       "maximum": 100,
+      "label": "VAT",
       "foreignKey": {
         "table": "settings",
         "value": "id",
@@ -84,6 +95,7 @@
     "images": {
       "type": "array",
       "description": "Array of image files",
+      "label": "Images",
       "foreignKey": {
         "currentTableToJoin": "products.id",
         "table": "images",
