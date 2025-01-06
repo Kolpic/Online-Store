@@ -216,9 +216,11 @@ async function prepareHomeData(client, filters) {
     const filterConditions = [
         { value: productName, condition: `products.name ILIKE $`, pattern: `%${productName}%` },
         // { value: productCategory, condition: `products.category ILIKE $`, pattern: `%${productCategory}%` },
-        { value: priceMin, condition: `price >= $`, pattern: priceMin },
-        { value: priceMax, condition: `price <= $`, pattern: priceMax }
+        { value: priceMin, condition: `(products.price * (20 / 100.0)) + products.price >= $`, pattern: priceMin },
+        { value: priceMax, condition: `(products.price * (20 / 100.0)) + products.price <= $`, pattern: priceMax }
     ];
+
+    console.log("filterConditions", filterConditions);
 
     let whereClauses = filterConditions.reduce((clauses, filter) => {
         if (filter.value != null) {
@@ -230,6 +232,8 @@ async function prepareHomeData(client, filters) {
         return clauses;
     }, []);
 
+    console.log("whereClauses", whereClauses);
+
     if (categoriesArray.length > 0) {
         whereClauses.push(`categories.name = ANY($${paramaterCounter})`);
         queryParams.push(categoriesArray);
@@ -237,20 +241,21 @@ async function prepareHomeData(client, filters) {
     }
 
     let whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    console.log("whereClause", whereClause);
 
     let productQuery = `
         SELECT 
             products.id, 
             products.name, 
-            products.price, 
+            ROUND((products.price * (settings.vat / 100.0)) + products.price, 2) AS price_with_vat, 
             products.quantity, 
             array_agg(DISTINCT(categories.name)) as category,
             products.image_path, 
             currencies.symbol, 
             settings.vat 
         FROM products
-            JOIN currencies ON products.currency_id = currencies.id
             JOIN settings ON products.vat_id = settings.id
+            JOIN currencies ON products.currency_id = currencies.id
             JOIN products_categories ON products.id = products_categories.product_id
             JOIN categories ON products_categories.category_id = categories.id
         ${whereClause}
@@ -259,6 +264,7 @@ async function prepareHomeData(client, filters) {
         LIMIT $${paramaterCounter} OFFSET $${paramaterCounter + 1};
     `;
 
+    console.log("productQuery", productQuery);
     queryParams.push(productsPerPage, offset);
     
     let productsResult = await client.query(productQuery, queryParams);

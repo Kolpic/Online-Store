@@ -433,10 +433,12 @@ async function filterEntities(req, res, next, client) {
     let filterById = req.body.id;
     console.log("filterById", filterById);
     let tableName = schema.title;
+    let action = (filterById === undefined) ? "read" : "edit";
+    console.log("action <-> ", action);
 
     await backOfficeService.checkStaffPermissions(client, authenticatedUser.userRow.data, schema.title, "read");
 
-    let {selectFields, joins, groupByFields} = await backOfficeService.makeTableJoins(schema);
+    let {selectFields, joins, groupByFields} = await backOfficeService.makeTableJoins(schema, action);
 
     console.log("selectFields", selectFields, "joins", joins, "groupByFields", groupByFields);
 
@@ -1169,27 +1171,43 @@ async function auditRolePermissionChanges(client, beforeHookObj) {
 
     const permissionIds = [...permissionsAudit.added, ...permissionsAudit.removed];
 
+    console.log("permissionIds", permissionIds);
+
     if (permissionIds.length > 0) {
         const query = `
-            SELECT permission_id, permission_name
+            SELECT permission_id, permission_name, interface
             FROM permissions
             WHERE permission_id = ANY($1)
         `;
         const { rows } = await client.query(query, [permissionIds]);
 
-        const idToNameMap = rows.reduce((acc, row) => {
-            acc[row.permission_id] = row.permission_name;
+        console.log("rows", rows);
+
+        const idToPermissionInfoMap = rows.reduce((acc, row) => {
+            acc[row.permission_id] = { name: row.permission_name, interface: row.interface };
             return acc;
         }, {});
 
+        console.log("idToPermissionInfoMap", idToPermissionInfoMap);
+
         if (permissionsAudit.added.length > 0) {
-            const addedNames = permissionsAudit.added.map(id => idToNameMap[id]);
-            message += `Added permissions: ${addedNames.join(", ")}. `;
+            const addedInfo = permissionsAudit.added.map(id => 
+                `${idToPermissionInfoMap[id].name} (${idToPermissionInfoMap[id].interface})`
+            );
+
+            console.log("addedInfo", addedInfo);
+
+            message += `Added permissions: ${addedInfo.join(", ")}. `;
         }
 
         if (permissionsAudit.removed.length > 0) {
-            const removedNames = permissionsAudit.removed.map(id => idToNameMap[id]);
-            message += `Removed permissions: ${removedNames.join(", ")}. `;
+            const removedInfo = permissionsAudit.removed.map(id => 
+                `${idToPermissionInfoMap[id].name} (${idToPermissionInfoMap[id].interface})`
+            );
+
+            console.log("removedInfo", removedInfo);
+
+            message += `Removed permissions: ${removedInfo.join(", ")}. `;
         }
         message += `Updated for role: ${beforeHookObj.formData.role_name}`;
     }

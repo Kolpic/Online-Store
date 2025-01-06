@@ -7,7 +7,8 @@
             "grouping_expression": "o.order_date",
             "filter_expression": "o.order_date >= $FILTER_VALUE_BEGIN$ AND o.order_date <= $FILTER_VALUE_END$",
             "order_by_expression": "o.order_date",
-            "order_direction": "DESC",
+            "order_direction": "ASC",
+            "time_order": "ASC",
             "type": "timestamp",
             "groupable": true
         },

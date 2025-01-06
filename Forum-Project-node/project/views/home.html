@@ -200,6 +200,37 @@
                 alert(`Internal server error. Try again later.`);
             }
         }
+
+        // Apply saved filters and page state on page load
+        window.addEventListener('load', function () {
+            console.log("window.addEventListener");
+            const savedState = localStorage.getItem('filterState');
+            console.log("savedState in window.addEventListeners", savedState);
+
+            if (savedState) {
+                const filterState = JSON.parse(savedState);
+
+                // Apply filter state to form inputs
+                document.getElementById('price_min').value = filterState.price_min || '';
+                document.getElementById('price_max').value = filterState.price_max || '';
+                document.getElementById('product_name').value = filterState.product_name || '';
+                document.getElementById('products_per_page').value = filterState.products_per_page || 10;
+                document.getElementById('sort').value = filterState.sort || 'price';
+                document.getElementById('order').value = filterState.order || 'asc';
+
+                // Apply selected categories
+                const categorySelect = document.getElementById('category');
+                Array.from(categorySelect.options).forEach(option => {
+                    option.selected = filterState.category.includes(option.value);
+                });
+
+                fetchHeaderData();
+                fetchProducts(filterState.page || 1);
+            } else {
+                fetchHeaderData();
+                fetchProducts();
+            }
+        });
         // <img class="card-img-top" src="/image/${product.id}" alt="${product.name}">
         function renderProducts(products) {
             const productList = document.getElementById('productList');
@@ -216,7 +247,7 @@
                             <img class="card-img-top" src="${product.image_path}" alt="${product.name}">
                             <div class="card-body">
                                 <h5 class="card-title">${product.name}</h5>
-                                <p class="card-text">Price: ${product.price} ${product.symbol}</p>
+                                <p class="card-text">Price: ${product.price_with_vat} ${product.symbol}</p>
                                 <p class="card-text">Category: ${product.category}</p>
                                  <p class="card-text">Availability: <span class="${availability === 'Available' ? 'text-success' : 'text-danger'}">${availability}</span></p>
 
@@ -296,6 +327,20 @@
 
             const selectedCategories = Array.from(document.getElementById('category').selectedOptions).map(option => option.value);
             formData.set('category', selectedCategories.join(','));
+
+            // Store filter and pagination settings in localStorage
+            const filterState = {
+                price_min: formData.get('price_min'),
+                price_max: formData.get('price_max'),
+                product_name: formData.get('product_name'),
+                products_per_page: formData.get('products_per_page'),
+                sort: formData.get('sort'),
+                order: formData.get('order'),
+                category: selectedCategories,
+                page: page
+            };
+            localStorage.setItem('filterState', JSON.stringify(filterState));
+            console.log("filterState in fetch", filterState);
 
             const queryParams = new URLSearchParams(formData).toString();
 
@@ -411,16 +456,16 @@
         $('#error-message').addClass('d-none').text('');
     }
 
-    try {
-        if (!navigator.onLine) {
-          alert("You are offline. Please check your internet connection.");
-        }
-        // Initial fetch on page load
-        fetchHeaderData();
-        fetchProducts();
-    } catch (error) {
-        alert(error);
-    }
+    // try {
+    //     if (!navigator.onLine) {
+    //       alert("You are offline. Please check your internet connection.");
+    //     }
+    //     // Initial fetch on page load
+    //     fetchHeaderData();
+    //     fetchProducts();
+    // } catch (error) {
+    //     alert(error);
+    // }
     </script>
 </body>
 </html>

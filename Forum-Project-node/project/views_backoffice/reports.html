@@ -9,6 +9,16 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 </head>
 <style>
+    .container {
+        margin-top: 25px;
+        margin-right: 140px;
+    }
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    
     body {
         font-family: Arial, sans-serif;
         margin: 0;
@@ -127,11 +137,17 @@
     .filter-row:hover {
         background: #f9f9f9;
         box-shadow: 0 0 7px rgba(0, 0, 0, 0.2);
+    }
 </style>
 <body>
+
+    <div class="container">
+        <div id="header"></div>
+    </div>
+
     <div class="sidebar">
         <div class="list-group">
-            <a href="/login.html" class="list-group-item list-group-item-action">0. Login</a>
+            <a href="/staff_portal.html" class="list-group-item list-group-item-action">0. Dashboard</a>
             <a href="/reports.html?entity=audits" class="list-group-item list-group-item-action">1. View Logs</a>
             <a href="/crud.html?entity=products" class="list-group-item list-group-item-action">2. Manage Products</a>
             <a href="/reports.html?entity=order" class="list-group-item list-group-item-action">3. Report Sales</a>
@@ -203,15 +219,15 @@
 
         function setDefaultDateRange() {
             const now = new Date();
-            const oneMonthAgo = new Date();
-            oneMonthAgo.setMonth(now.getMonth() - 1);
+            const oneDayAgo = new Date();
+            oneDayAgo.setDate(now.getDate() - 1);
 
             const formatDateTime = (date) => date.toISOString().slice(0, 16);
 
             // Set the default values in date inputs
             document.querySelectorAll('input[type="datetime-local"]').forEach(input => {
                 if (input.name.endsWith('_filter_value_begin')) {
-                    input.value = formatDateTime(oneMonthAgo);
+                    input.value = formatDateTime(oneDayAgo);
                 }
                 if (input.name.endsWith('_filter_value_end')) {
                     input.value = formatDateTime(now);
@@ -277,14 +293,14 @@
                 }
 
                 // Add ordering dropdown
-                inputHtml += `
-                    <label>${labelText} Order:</label>
-                    <select name="${filter.key}_order">
-                        <option value="">No Order</option>
-                        <option value="asc">Ascending</option>
-                        <option value="desc">Descending</option>
-                    </select><br>
-                `;
+                // inputHtml += `
+                //     <label>${labelText} Order:</label>
+                //     <select name="${filter.key}_order">
+                //         <option value="">No Order</option>
+                //         <option value="asc">Ascending</option>
+                //         <option value="desc">Descending</option>
+                //     </select><br>
+                // `;
 
                 // Grouping Option
                 if (filter.groupable && filter.type === 'timestamp') {
@@ -477,6 +493,116 @@
         function hideLoadingSpinner() {
             document.getElementById('loading-overlay').classList.add('d-none');
         }
+
+        async function fetchHeaderData() {
+        if (!navigator.onLine) {
+            alert("You are offline. Please check your internet connection.");
+            return;
+        }
+
+        try {
+            const response = await fetch('/header');
+            console.log("response", response);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.log("errorData");
+                console.log(errorData);
+                // alert(errorData.error_message);
+                let errorMessage = `${errorData.error_message}`;
+                console.log("errorMessage", errorMessage, errorMessage === 'You have to login to access this page', "errorMessage === 'You have to login to access this page'");
+                if (errorMessage === 'You have to be logged to access this page') {
+                    errorMessage += ` <a href="/login.html" style="color: blue; text-decoration: underline;">Click here to login</a>`;
+                    console.log("errorMessage", errorMessage);
+                    showCustomAlert(errorMessage);
+                } else {
+                    alert(errorData.error_message);
+                }
+                return;
+            }
+
+
+            const responseData = await response.json();
+            // const data = responseData.userInformation;
+
+            console.log(responseData);
+
+            const headerHtml = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <p class="mb-0">${responseData.email || ''}</p>
+                    <div class="d-flex align-items-center">
+                        <a href="/staff_portal.html" class="btn btn-primary mr-3">Home</a>
+                        ${responseData.email ? `
+                            <a id="logoutButton" href="/logout" class="btn btn-danger mr-3">Logout</a>
+                        ` : `
+                        `}
+                    </div>
+                </div>`;
+            document.getElementById('header').innerHTML = headerHtml;
+
+            // Bind the event listener after the content is loaded
+            const logoutButton = document.querySelector('#logoutButton');
+            if (logoutButton) {
+                logoutButton.addEventListener('click', handleLogout);
+            }
+        } catch (error) {
+            alert('Internal server error. Try again later');
+        }
+    }
+    async function handleLogout() {
+        event.preventDefault();
+        if (!navigator.onLine) {
+            alert("You are offline. Please check your internet connection.");
+            return;
+        }
+        try {
+            const response = await fetch('/logout', {
+                method: 'GET',
+                credentials: 'include'  // Ensure cookies are sent
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                sessionStorage.setItem('message', result.message);
+                window.location.href = '/login.html';
+            } else {
+                alert('Error logging out: ' + result.message);
+            }
+        } catch (error) {
+            alert('Internal server error. Try again later');
+        }
+    }
+
+    // Function to show a custom alert with HTML content
+    function showCustomAlert(message) {
+        const alertContainer = document.createElement('div');
+        alertContainer.style.position = 'fixed';
+        alertContainer.style.top = '20px';
+        alertContainer.style.right = '20px';
+        alertContainer.style.backgroundColor = 'white';
+        alertContainer.style.border = '1px solid red';
+        alertContainer.style.padding = '10px';
+        alertContainer.style.zIndex = '1000';
+        alertContainer.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
+
+        alertContainer.innerHTML = `
+            <div>
+                <span>${message}</span>
+                <button style="margin-left: 10px; background-color: red; color: white; border: none; cursor: pointer;" onclick="this.parentElement.parentElement.remove()">Close</button>
+            </div>
+        `;
+
+        document.body.appendChild(alertContainer);
+    }
+
+    function showLoadingSpinner() {
+        document.getElementById('loading-overlay').classList.remove('d-none');
+    }
+
+    function hideLoadingSpinner() {
+        document.getElementById('loading-overlay').classList.add('d-none');
+    }
+    fetchHeaderData();
     </script>
 </body>
 </html>

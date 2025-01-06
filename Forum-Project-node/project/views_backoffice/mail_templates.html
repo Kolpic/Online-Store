@@ -92,7 +92,7 @@
     <!-- Sidebar -->
     <div class="sidebar">
         <div class="list-group">
-            <a href="/login.html" class="list-group-item list-group-item-action">0. Login</a>
+            <a href="/staff_portal.html" class="list-group-item list-group-item-action">0. Dashboard</a>
             <a href="/reports.html?entity=audits" class="list-group-item list-group-item-action">1. View Logs</a>
             <a href="/crud.html?entity=products" class="list-group-item list-group-item-action">2. Manage Products</a>
             <a href="/reports.html?entity=order" class="list-group-item list-group-item-action">3. Report Sales</a>
@@ -112,7 +112,10 @@
             <select id="template-name" name="name"></select>
 
             <label for="template-subject">Subject</label>
-            <input type="text" id="template-subject" name="subject" required>
+            <input type="text" id="template-subject" name="subject" readonly>
+
+            <label for="placeholders">Placeholders</label>
+            <input type="text" id="placeholders" name="placeholders" readonly>
 
             <label for="template-body">Body</label>
             <textarea id="template-body" name="body"></textarea>
@@ -203,10 +206,16 @@
                 const response = await fetch(`/email_by_id/${id}`);
                 const resp = await response.json();
                 const template = resp.template[0];
+
                 console.log("loadTemplate loadTemplate", template);
+
                 document.getElementById('template-subject').value = template.subject;
                 CKEDITOR.instances['template-body'].setData(template.body);
                 document.getElementById('template-sender').value = template.sender;
+
+                const placeholderMatches = template.body.match(/{(.*?)}/g) || [];
+                const placeholders = placeholderMatches.map(p => p.replace(/[{}]/g, '')).join(', ');
+                document.getElementById('placeholders').value = placeholders;
             } catch (error) {
                 console.error('Error loading template:', error);
                 alert(`Internal server error, while trying to fetch current template`);
