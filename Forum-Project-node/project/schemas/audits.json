@@ -7,7 +7,7 @@
             "grouping_expression": "el.time",
             "filter_expression": "el.time >= $FILTER_VALUE_BEGIN$ AND el.time <= $FILTER_VALUE_END$",
             "order_by_expression": "el.time",
-            "order_direction": "DESC",
+            "order_direction": "ASC",
             "type": "timestamp",
             "groupable": true
         },

@@ -25,6 +25,10 @@
       "description": "Permissions associated with the role",
       "fieldType": "collapsed",
       "label": "Permissions",
+      "skippable": {
+        "read": true,
+        "edit": false
+      },
       "manyToMany": {
         "joinTable": "role_permissions",
         "joinColumnOnePK": "role_id",

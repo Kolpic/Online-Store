@@ -57,7 +57,7 @@
 
     <div class="sidebar">
         <div class="list-group">
-            <a href="/login.html" class="list-group-item list-group-item-action">0. Login</a>
+            <a href="/staff_portal.html" class="list-group-item list-group-item-action">0. Dashboard</a>
             <a href="/reports.html?entity=audits" class="list-group-item list-group-item-action">1. View Logs</a>
             <a href="/crud.html?entity=products" class="list-group-item list-group-item-action">2. Manage Products</a>
             <a href="/reports.html?entity=order" class="list-group-item list-group-item-action">3. Report Sales</a>
@@ -216,7 +216,7 @@
             formData.append(`time_filter_value_begin`, timeFilterBegin);
             formData.append(`time_filter_value_end`, timeFilterEnd);
             formData.append(`time_grouping_select_value`, timeGrouping);
-            formData.append(`time_order`, '');
+            formData.append(`time_order`, 'DESC');
             formData.append(`order_id_filter_value`, '');
             formData.append(`order_id_order`, '');
             formData.append(`order_id_grouping_select_value`, 'all');

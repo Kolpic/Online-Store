@@ -337,7 +337,7 @@ function getBoundary(header) {
     return null;
 }
 
-async function makeTableJoins(schema) {
+async function makeTableJoins(schema, action) {
 	let selectFields = [];
     let joins = [];
     let groupByFields = [];
@@ -351,6 +351,11 @@ async function makeTableJoins(schema) {
         console.log(field);
         console.log("details");
         console.log(details);
+        console.log("action", action);
+
+        if (details?.skippable?.[action] == true) {
+            continue;
+        }
 
         if (details.computed) {
             if (field === "total") {
@@ -508,10 +513,12 @@ async function makeTableFilters(schema, req) {
             console.log(req.body.price_max);
 
             if (req.body.price_min !== undefined) {
+                AssertUser(Number(req.body.price_min) > 0, "Price min can't be negative");
                 whereConditions.push(`${tableName}.price >= $${values.length + 1}`);
                 values.push(req.body.price_min);
             }
             if (req.body.price_max !== undefined) {
+                AssertUser(Number(req.body.price_max) > 0, "Price max can't be negative");
                 whereConditions.push(`${tableName}.price <= $${values.length + 1}`);
                 values.push(req.body.price_max);
             }
@@ -532,6 +539,7 @@ async function makeTableFilters(schema, req) {
 async function generateReportSQLQuery(inputData, reportFilters, reportName) {
     let sqlTemplate = getSQLTemplateFromInterfaceName(reportName);
 
+    let counter = 1;
     let orderByClauses = [];
     let groupingSelected = false;
     let countExpression = '';
@@ -590,13 +598,16 @@ async function generateReportSQLQuery(inputData, reportFilters, reportName) {
 
         // Order by clause
         const orderBy = inputData[`${reportFilter.key}_order`];
+        console.log("orderBy", orderBy);
+
         if (orderBy) {
-            orderByClauses.push(`${reportFilter.grouping_expression} ${orderBy.toUpperCase()}`);
+            orderByClauses.push(`${counter} ${orderBy.toUpperCase()}`);
+            counter++;
         }
     });
 
     sqlTemplate = sqlTemplate
-        .replace('$order_by_clause$', orderByClauses.length > 0 ? orderByClauses.join(', ') : '1 DESC')
+        .replace('$order_by_clause$', orderByClauses.length > 0 ? orderByClauses.join(', ') : '1 ASC')
         // .replace(/\$[a-z_]+_grouping_expression\$/g, (placeholder) => {
         //     // Default to grouping expressions from the JSON
         //     const matchingField = reportFilters.fields.find((field) => `$${field.key}_grouping_expression$` === placeholder);

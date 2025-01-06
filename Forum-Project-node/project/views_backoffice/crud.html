@@ -9,6 +9,16 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 </head>
 <style>
+    .container {
+        margin-top: 25px;
+        margin-right: 140px;
+    }
+    .header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
     #loading-overlay {
         position: fixed;
         top: 0;
@@ -66,9 +76,14 @@
 
 </style>
 <body>
+
+    <div class="container">
+        <div id="header"></div>
+    </div>
+
     <div class="sidebar">
         <div class="list-group">
-            <a href="/login.html" class="list-group-item list-group-item-action">0. Login</a>
+            <a href="/staff_portal.html" class="list-group-item list-group-item-action">0. Dashboard</a>
             <a href="/reports.html?entity=audits" class="list-group-item list-group-item-action">1. View Logs</a>
             <a href="/crud.html?entity=products" class="list-group-item list-group-item-action">2. Manage Products</a>
             <a href="/reports.html?entity=order" class="list-group-item list-group-item-action">3. Report Sales</a>
@@ -310,6 +325,7 @@
 
         // Load the schema dynamically based on the entity type
         async function loadSchema(entity) {
+            await fetchHeaderData();
             try {
                 console.log("entityType");
                 console.log(entityType);
@@ -2085,6 +2101,85 @@
 
             document.body.appendChild(alertContainer);
         }
+
+        async function fetchHeaderData() {
+        if (!navigator.onLine) {
+            alert("You are offline. Please check your internet connection.");
+            return;
+        }
+
+        try {
+            const response = await fetch('/header');
+            console.log("response", response);
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                console.log("errorData");
+                console.log(errorData);
+                // alert(errorData.error_message);
+                let errorMessage = `${errorData.error_message}`;
+                console.log("errorMessage", errorMessage, errorMessage === 'You have to login to access this page', "errorMessage === 'You have to login to access this page'");
+                if (errorMessage === 'You have to be logged to access this page') {
+                    errorMessage += ` <a href="/login.html" style="color: blue; text-decoration: underline;">Click here to login</a>`;
+                    console.log("errorMessage", errorMessage);
+                    showCustomAlert(errorMessage);
+                } else {
+                    alert(errorData.error_message);
+                }
+                return;
+            }
+
+
+            const responseData = await response.json();
+            // const data = responseData.userInformation;
+
+            console.log(responseData);
+
+            const headerHtml = `
+                <div class="d-flex justify-content-between align-items-center">
+                    <p class="mb-0">${responseData.email || ''}</p>
+                    <div class="d-flex align-items-center">
+                        <a href="/staff_portal.html" class="btn btn-primary mr-3">Home</a>
+                        ${responseData.email ? `
+                            <a id="logoutButton" href="/logout" class="btn btn-danger mr-3">Logout</a>
+                        ` : `
+                        `}
+                    </div>
+                </div>`;
+            document.getElementById('header').innerHTML = headerHtml;
+
+            // Bind the event listener after the content is loaded
+            const logoutButton = document.querySelector('#logoutButton');
+            if (logoutButton) {
+                logoutButton.addEventListener('click', handleLogout);
+            }
+        } catch (error) {
+            alert('Internal server error. Try again later');
+        }
+    }
+    async function handleLogout() {
+        event.preventDefault();
+        if (!navigator.onLine) {
+            alert("You are offline. Please check your internet connection.");
+            return;
+        }
+        try {
+            const response = await fetch('/logout', {
+                method: 'GET',
+                credentials: 'include'  // Ensure cookies are sent
+            });
+
+            const result = await response.json();
+            if (result.success) {
+                sessionStorage.setItem('message', result.message);
+                window.location.href = '/login.html';
+            } else {
+                alert('Error logging out: ' + result.message);
+            }
+        } catch (error) {
+            alert('Internal server error. Try again later');
+        }
+    }
     </script>
 </body>
 </html>
