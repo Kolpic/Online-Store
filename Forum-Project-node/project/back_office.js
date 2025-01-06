@@ -816,6 +816,8 @@ async function getReportsHandler(req, res, next, client) {
     const result = await client.query(sqlTemplate, queryParams);
     let resultRows = result.rows;
 
+    console.log("resultRows", resultRows);
+
     let totalRows = resultRows.length > 0 ? resultRows[0]["Total Rows"] : 0;
     resultRows.forEach(row => delete row["Total Rows"]);
 

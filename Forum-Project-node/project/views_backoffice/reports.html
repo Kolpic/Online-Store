@@ -156,6 +156,7 @@
             <a href="/crud.html?entity=staff" class="list-group-item list-group-item-action">6. Manage Staff</a>
             <a href="/crud.html?entity=roles" class="list-group-item list-group-item-action">7. Manage Roles</a>
             <a href="/mail_templates.html" class="list-group-item list-group-item-action">8. Mail Templates</a>
+            <a href="/reports.html?entity=user_orders" class="list-group-item list-group-item-action">9. Report Users</a>
         </div>
     </div>
 
@@ -187,6 +188,36 @@
     <script>
         const entityType = getEntityTypeFromUrl();
         let reportFilters;
+
+        const reportConfigs = {
+            user_orders: {
+                headers: [
+                    { label: "User Email", key: "User Email", rowspan: 2 },
+                    { label: "User ID", key: "User ID", rowspan: 2 },
+                    { label: "Orders Last Day", colspan: 2 },
+                    { label: "Orders Last Week", colspan: 2 },
+                    { label: "Orders Last Month", colspan: 2 },
+                    { label: "Orders Last Year", colspan: 2 }
+                ],
+                subHeaders: [
+                    { label: "Count" },
+                    { label: "Total" },
+                    { label: "Count" },
+                    { label: "Total" },
+                    { label: "Count" },
+                    { label: "Total" },
+                    { label: "Count" },
+                    { label: "Total" }
+                ],
+                keys: [
+                    "User Email", "User ID",
+                    "Orders Last Day", "VAT Total Price Last Day",
+                    "Orders Last Week", "VAT Total Price Last Week",
+                    "Orders Last Month", "VAT Total Price Last Month",
+                    "Orders Last Year", "VAT Total Price Last Year"
+                ]
+            }
+        };
 
         document.addEventListener('DOMContentLoaded', async () => {
             // entityType = getEntityTypeFromUrl();
@@ -290,6 +321,16 @@
                             <input type="text" name="${filter.key}_filter_value" placeholder="Enter text"><br>
                         `;
                         break;
+
+                    case 'range':
+                        inputHtml = `
+                            <br>
+                            <label>${labelText} (Min Price):</label>
+                            <input type="number" step="0.01" name="${filter.key}_filter_value_min" placeholder="Enter minimum price"><br>
+                            <label>${labelText} (Max Price):</label>
+                            <input type="number" step="0.01" name="${filter.key}_filter_value_max" placeholder="Enter maximum price"><br>
+                        `;
+                        break;
                 }
 
                 // Add ordering dropdown
@@ -340,10 +381,11 @@
             }
 
             const formData = new FormData(document.getElementById('filterForm'));
-
             const queryString = new URLSearchParams(formData).toString();
+
             console.log("queryString", queryString, "new URLSearchParams(formData)", new URLSearchParams(formData));
             showLoadingSpinner();
+
             try {
                 const response = await fetch(`/reports/${entityType}?${queryString}`);
                 console.log("response", response);
@@ -365,51 +407,84 @@
                 rowCount.innerHTML = '';
 
                 if (resultRows.length > 0) {
-                    const headers = Object.keys(resultRows[0]);
-                    let headerRow = '<tr>';
-                    headers.forEach(header => headerRow += `<th>${header}</th>`);
+                    if (reportConfigs[entityType]) {
+                        const config = reportConfigs[entityType];
 
-                    // if (headers.includes("Count")) {
-                    //     headerRow += `<th>${headers[headers.length - 1]}</th>`
-                    // }
-
-                    headerRow += '</tr>';
-                    tableHead.innerHTML = headerRow;
-
-                    resultRows.forEach(row => {
-                        console.log("row", row);
-
-                        let rowHtml = '<tr>';
-                        headers.forEach(header => {
-                            console.log("header", header)
-
-                            let cellValue = row[header];
-
-                            // console.log("row[header]", row[header])
-
-                            const field = reportFilters.fields.find(f => f.key === header);
-                            // console.log("field", field);
-                            if (header.includes("Inserted At") && cellValue && cellValue != "-") {
-                                const date = new Date(cellValue);
-                                cellValue = date.toLocaleString('en-US', {
-                                    year: 'numeric',
-                                    month: 'short',
-                                    day: 'numeric',
-                                    hour: 'numeric',
-                                    minute: 'numeric',
-                                    second: 'numeric',
-                                    hour12: true
-                                });
+                        // Step 1: Generate the header rows
+                        let headerRow1 = '<tr>';
+                        config.headers.forEach(header => {
+                            if (header.rowspan) {
+                                headerRow1 += `<th rowspan="${header.rowspan}">${header.label}</th>`;
+                            } else if (header.colspan) {
+                                headerRow1 += `<th colspan="${header.colspan}">${header.label}</th>`;
                             }
-
-                            if (cellValue == null) {
-                                cellValue = "-"
-                            }
-                            rowHtml += `<td>${cellValue}</td>`;
                         });
-                        rowHtml += '</tr>';
-                        tableBody.innerHTML += rowHtml;
-                    });
+                        headerRow1 += '</tr>';
+
+                        let headerRow2 = '<tr>';
+                        config.subHeaders.forEach(subHeader => {
+                            headerRow2 += `<th>${subHeader.label}</th>`;
+                        });
+                        headerRow2 += '</tr>';
+
+                        tableHead.innerHTML = headerRow1 + headerRow2;
+
+                        // Step 2: Generate the table body rows
+                        resultRows.forEach(row => {
+                            let rowHtml = '<tr>';
+                            config.keys.forEach(key => {
+                                rowHtml += `<td>${row[key] || '-'}</td>`;
+                            });
+                            rowHtml += '</tr>';
+                            tableBody.innerHTML += rowHtml;
+                        });
+                    } else {
+                        const headers = Object.keys(resultRows[0]);
+                        let headerRow = '<tr>';
+                        headers.forEach(header => headerRow += `<th>${header}</th>`);
+
+                        // if (headers.includes("Count")) {
+                        //     headerRow += `<th>${headers[headers.length - 1]}</th>`
+                        // }
+
+                        headerRow += '</tr>';
+                        tableHead.innerHTML = headerRow;
+
+                        resultRows.forEach(row => {
+                            console.log("row", row);
+
+                            let rowHtml = '<tr>';
+                            headers.forEach(header => {
+                                console.log("header", header)
+
+                                let cellValue = row[header];
+
+                                // console.log("row[header]", row[header])
+
+                                const field = reportFilters.fields.find(f => f.key === header);
+                                // console.log("field", field);
+                                if (header.includes("Inserted At") && cellValue && cellValue != "-") {
+                                    const date = new Date(cellValue);
+                                    cellValue = date.toLocaleString('en-US', {
+                                        year: 'numeric',
+                                        month: 'short',
+                                        day: 'numeric',
+                                        hour: 'numeric',
+                                        minute: 'numeric',
+                                        second: 'numeric',
+                                        hour12: true
+                                    });
+                                }
+
+                                if (cellValue == null) {
+                                    cellValue = "-"
+                                }
+                                rowHtml += `<td>${cellValue}</td>`;
+                            });
+                            rowHtml += '</tr>';
+                            tableBody.innerHTML += rowHtml;
+                        });
+                    }
                     rowCount.innerHTML = `Rows in report: ${resultRows.length} from ${totalRows} total rows`;
                 } else {
                     tableBody.innerHTML = '<tr><td colspan="100%">No data available</td></tr>';
