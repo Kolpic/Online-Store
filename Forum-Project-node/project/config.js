@@ -14,7 +14,7 @@ CLIENT_ID = "AS4qTYXSuN-yKadzxKNCRSrCH5SlbD7AdF-o4JP4k4OrUKWhPOnHUUqqNGMBVJneFVY
 SECRET_KEY = "EFg-7y5ImzAW1tf1RylCpQsSzpWVIUYh-ju5WgUOePpJF766vZxiN4bdXbnGQiXBatyvcG0My_eX7-FT";
 BASE_URL = "http://10.20.3.101:5002";
 BASE_URL_HOME_OFFICE = "http://localhost:5002";
-BASE_URL_QA = "";
+BASE_URL_QA = "http://10.20.3.101:5001";
 
 // urls for sending emails
 urlVerifyEmail = "http://10.20.3.101:5002/verify.html?token=";
