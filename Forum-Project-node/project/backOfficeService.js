@@ -584,6 +584,28 @@ async function generateReportSQLQuery(inputData, reportFilters, reportName) {
             } else {
                 sqlTemplate = sqlTemplate.replace(`$${filterKey}$`, 'TRUE');
             }
+        } else if (reportFilter.type === 'range') {
+            let minValue = inputData[`${reportFilter.key}_filter_value_min`];
+            let maxValue = inputData[`${reportFilter.key}_filter_value_max`];
+
+            console.log("before -> minValue", minValue,"maxValue", maxValue);
+
+            if (minValue === undefined || minValue === '') {
+                minValue = 0.01;
+            }
+            if (maxValue === undefined || maxValue === '') {
+                maxValue = 10000;
+            }
+
+            let filterExpr = reportFilter.filter_expression
+                    .replace('$FILTER_VALUE_MIN$', `$${paramIndex}`)
+                    .replace('$FILTER_VALUE_MAX$', `$${paramIndex + 1}`);
+                queryParams.push(minValue, maxValue);
+                paramIndex += 2;
+                sqlTemplate = sqlTemplate.replace(`$${filterKey}$`, filterExpr);
+
+            console.log("after -> minValue", minValue,"maxValue", maxValue);
+
         } else {
             const filterValue = inputData[`${reportFilter.key}_filter_value`];
             if (filterValue) {
@@ -695,7 +717,40 @@ function getSQLTemplateFromInterfaceName(reportName) {
             ORDER BY $order_by_clause$
             LIMIT 1000
         `;
+    } else if (reportName == "user_orders") {
+        sqlTemplate = `
+            SELECT 
+                u.email AS "User Email",
+                u.id AS "User ID",
+                
+                COUNT(CASE WHEN o.order_date >= NOW() - INTERVAL '1 day' THEN o.order_id END) AS "Orders Last Day",
+                ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 day' THEN oi.quantity * oi.price * (1 + CAST(oi.vat AS numeric) / 100) END), 2) AS "VAT Total Price Last Day",
+                
+                COUNT(CASE WHEN o.order_date >= NOW() - INTERVAL '1 week' THEN o.order_id END) AS "Orders Last Week",
+                ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 week' THEN oi.quantity * oi.price * (1 + CAST(oi.vat AS numeric) / 100) END), 2) AS "VAT Total Price Last Week",
+                
+                COUNT(CASE WHEN o.order_date >= NOW() - INTERVAL '1 month' THEN o.order_id END) AS "Orders Last Month",
+                ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 month' THEN oi.quantity * oi.price * (1 + CAST(oi.vat AS numeric) / 100) END), 2) AS "VAT Total Price Last Month",
+                
+                COUNT(CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' THEN o.order_id END) AS "Orders Last Year",
+                ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' THEN oi.quantity * oi.price * (1 + CAST(oi.vat AS numeric) / 100) END), 2) AS "VAT Total Price Last Year",
+                SUM (COUNT (DISTINCT u.id))OVER () AS "Over Total Count"
+            FROM 
+                users u
+            LEFT JOIN 
+                orders o ON u.id = o.user_id
+            LEFT JOIN 
+                order_items oi ON o.order_id = oi.order_id
+            WHERE TRUE
+                AND $email_filter_expression$
+                AND $price_filter_expression$
+            GROUP BY 
+                1, 2
+            ORDER BY $order_by_clause$
+            LIMIT 100
+        `;
     }
+    // AND $price_filter_expression$
     return sqlTemplate;
 }
 

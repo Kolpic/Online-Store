@@ -1,0 +1,20 @@
+{
+    "entity": "user_orders",
+    "fields": [
+        {
+            "key": "email",
+            "display_name": "User email",
+            "grouping_expression": "u.email",
+            "filter_expression": "STRPOS(u.email, $FILTER_VALUE$) <> 0",
+            "type": "text",
+            "groupable": false
+        },
+        {
+            "key": "price",
+            "display_name": "Order price",
+            "filter_expression": "(oi.price * (CAST(oi.vat AS numeric) / 100.0)) + oi.price >= $FILTER_VALUE_MIN$ AND (oi.price * (CAST(oi.vat AS numeric) / 100.0)) + oi.price <= $FILTER_VALUE_MAX$",
+            "type": "range",
+            "groupable": false
+        }
+    ]
+}
