@@ -1,0 +1,53 @@
+{
+    "entity": "promotions",
+    "fields": [
+        {
+            "name": "id",
+            "type": "integer",
+            "label": "Id",
+            "create": false,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "name",
+            "type": "string",
+            "label": "Promotion Name",
+            "create": true,
+            "editable": true,
+            "show_in_filter": true
+        },
+        {
+            "name": "discount_percentage",
+            "type": "string",
+            "label": "Discount Percentage",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "start_date",
+            "type": "date",
+            "label": "Start Date",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "end_date",
+            "type": "date",
+            "label": "End Date",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "is_active",
+            "type": "boolean",
+            "label": "Is Active",
+            "create": true,
+            "editable": true,
+            "show_in_filter": false
+        }
+    ]
+}

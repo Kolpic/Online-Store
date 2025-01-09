@@ -17,6 +17,7 @@ class PaymentProvider {
         // console.log("response in postPaymentProcessing", response);
         // Common post-payment logic (e.g., update order status, add to email queue)
         await this.client.query(`UPDATE orders SET status = 'Paid' WHERE order_id = $1`, [this.orderId]);
+        let orderRow = await this.client.query(`SELECT * FROM orders WHERE order_id = $1`, [this.orderId]);
 
         // Queue email logic here...
         console.log('Post-payment processing complete for order:', this.orderId);
@@ -52,7 +53,8 @@ class PaymentProvider {
         response.user_first_name = user.first_name;
         response.user_last_name = user.last_name;
 
-        const emailData = await backOfficeService.mapEmailData(this.client, authenticatedUser.userRow.data, "Payment Email", body, response);
+        console.log("orderRow.rows[0].discount_percentage", orderRow.rows[0].discount_percentage);
+        const emailData = await backOfficeService.mapEmailData(this.client, authenticatedUser.userRow.data, "Payment Email", body, response, orderRow.rows[0]);
 
         await this.client.query(`INSERT INTO email_queue (name, data, status) VALUES ($1, $2, $3)`,
             [
@@ -84,7 +86,7 @@ class PayPal extends PaymentProvider {
         const paymentResult = await paypal.capturePayment(token);
 
         return {
-            status: 'success',
+            status: 'success', // da polzvam promenlivi
             message: 'Payment captured successfully.'
         };
     }

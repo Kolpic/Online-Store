@@ -425,12 +425,14 @@ describe('Registration functions', () => {
                 rows: [{ id: 1, send_email_template_text_align: 'center' }],
             });
 
+            const orderObj = {}
             const emailData = await backOfficeService.mapEmailData(
                 client,
                 'test@example.com',
                 'Verification Email',
                 { body: 'Hello {first_name} {last_name}, click {url}' },
-                { first_name: 'Vankata', last_name: 'Balabanov', verification_code: '123456' }
+                { first_name: 'Vankata', last_name: 'Balabanov', verification_code: '123456' },
+                orderObj
             );
 
             expect(emailData).toEqual({
@@ -455,6 +457,7 @@ describe('Registration functions', () => {
                 ],
             });
 
+            const orderObj = {}
             const emailData = await backOfficeService.mapEmailData(
                 client,
                 'test@example.com',
@@ -478,7 +481,8 @@ describe('Registration functions', () => {
                             phone: '123456789',
                         },
                     ],
-                }
+                },
+                orderObj
             );
 
             expect(emailData).toEqual({
@@ -497,7 +501,7 @@ describe('Registration functions', () => {
             });
 
             await expect(
-                backOfficeService.mapEmailData(client, 'test@example.com', 'Unknown Subject', {}, {})
+                backOfficeService.mapEmailData(client, 'test@example.com', 'Unknown Subject', {}, {}, {})
             ).rejects.toThrow(new DevException('No more options'));
         });
     });

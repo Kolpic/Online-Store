@@ -42,6 +42,9 @@
                 <td colspan="3" class="text-right"><strong>Total :</strong></td>
                 <td class="text-right" id="total-sum-vat"></td>
             </tr>
+            <tbody id="promotion">
+                <!-- Items will be dynamically loaded here -->
+            </tbody>
         </table>
         <div>
             <h4>Shipping Details</h4>
@@ -83,7 +86,11 @@
         document.getElementById('order-id').value = order.order_id;
 
         const orderProductsBody = document.getElementById('order-products');
+
+        let symbol;
+
         order.cart_items.forEach(item => {
+        symbol = item.symbol;
 
         let priceWithVatPerItem = (item.price + (item.price * (item.vat / 100))).toFixed(2);
         let totalPriceWithVatForAllItemsSameType = ((item.price * item.quantity) +  ((item.price * item.quantity) * (item.vat / 100))).toFixed(2);
@@ -98,10 +105,32 @@
             `;
         });
 
-        document.getElementById('vat').innerText = (order.total_sum_with_vat - order.total_sum).toFixed(2) + ' ' + (order.cart_items[0].symbol || '');
+        let total_sum = order.total_sum;
+        let total_sum_with_vat = order.total_sum_with_vat;
+        let discount_percentage = order.discount_percentage;
+
+        document.getElementById('vat').innerText = (total_sum_with_vat - total_sum).toFixed(2) + ' ' + (symbol || '');
         document.getElementById('vat-percent').innerText = `${order.vat_in_persent}%`;
-        document.getElementById('total-sum').innerText = (order.total_sum).toFixed(2) + ' ' + (order.cart_items[0].symbol || '');
-        document.getElementById('total-sum-vat').innerText = (order.total_sum_with_vat).toFixed(2) + ' ' + (order.cart_items[0].symbol || '');
+        document.getElementById('total-sum').innerText = (total_sum).toFixed(2) + ' ' + (symbol || '');
+        document.getElementById('total-sum-vat').innerText = (total_sum_with_vat).toFixed(2) + ' ' + (symbol || '');
+
+        if (discount_percentage != 0) {
+            const discountTable = document.getElementById('promotion');
+            discountTable.innerHTML += `
+            <tr>
+                <td colspan="3" id="discount_percentage" class="text-right"><strong>Discount Percentage:</strong></td>
+                <td class="text-right">${discount_percentage} %</td>
+            </tr>
+            <tr>
+                <td colspan="3" class="text-right"><strong>Discount Amount:</strong></td>
+                <td class="text-right">${(total_sum_with_vat * (discount_percentage / 100)).toFixed(2)} ${symbol}</td>
+            </tr>
+            <tr>
+                <td colspan="3" class="text-right"><strong>Total with discount:</strong></td>
+                <td class="text-right">${(total_sum_with_vat - (total_sum_with_vat * (discount_percentage / 100))).toFixed(2)} ${symbol}</td>
+            </tr>
+            `;
+        }
 
         // Populate shipping details
         const shippingDetails = order.shipping_details;

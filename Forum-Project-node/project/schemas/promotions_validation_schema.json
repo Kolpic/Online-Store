@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "promotions",
+  "description": "Schema for a promotion entity",
+  "type": "object",
+  "primaryKeyFrontEnd": "Id",
+  "primaryKey": "id",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Unique identifier for the promotion",
+      "readOnly": true,
+      "PK": true,
+      "label": "Id"
+    },
+    "name": {
+      "type": "string",
+      "description": "Promotion name",
+      "minLength": 5,
+      "maxLength": 50,
+      "label": "Promotion Name"
+    },
+    "discount_percentage": {
+      "type": "number",
+      "description": "Discount Percentage",
+      "minimum": 1,
+      "maximum": 100,
+      "label": "Discount Percentage"
+    },
+    "start_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Promotion Start Date",
+      "label": "Start Date"
+    },
+    "end_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Promotion End Date",
+      "label": "End Date"
+    },
+    "is_active": {
+      "type": "boolean",
+      "description": "Promotion status",
+      "label": "Is Active"
+    }
+  },
+  "filters": ["name", "id"],
+  "required": ["name", "discount_percentage", "start_date", "end_date"],
+  "errorMessage": {
+    "required": {
+        "name": "Promotion name is required",
+        "discount_percentage": "Discount percentage is required",
+        "start_date": "Promotion start date is required",
+        "end_date": "Promotion end date is required"
+      },
+  "properties": {
+        "name": "Promotion name should be between 5 and 50 characters",
+        "discount_percentage": "Discount percentage must be between 1 and 100",
+        "start_date": "Promotion start should be date",
+        "end_date": "Promotion end should be date",
+        "is_active": "Promotion status should be true or false"
+      }
+  },
+  "additionalProperties": true
+}

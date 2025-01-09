@@ -565,7 +565,7 @@ async function mergeCart(userId, sessionIdUnauthenticatedUser, client) {
 }
 
 async function cart(deliveryInformation, authenticatedUser, client) {
-    let { first_name: firstName, last_name: lastName, email: email, address: address, country_code: countryCode, phone: phone, town: town } = deliveryInformation;
+    let { first_name: firstName, last_name: lastName, email: email, address: address, country_code: countryCode, phone: phone, town: town, discount_percentage: discount_percentage } = deliveryInformation;
 
     const regexPhone = /^\d{7,15}$/;
     const regexEmail = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,7}\b/;
@@ -645,11 +645,12 @@ async function cart(deliveryInformation, authenticatedUser, client) {
 
     // Insert into orders
     let orderResult = await client.query(`
-        INSERT INTO orders (user_id, status, order_date)
-        VALUES ($1, $2, CURRENT_TIMESTAMP)
+        INSERT INTO orders (user_id, status, discount_percentage, order_date)
+        VALUES ($1, $2, $3, CURRENT_TIMESTAMP)
         RETURNING order_id
-    `, [userId, 'Ready for Paying']);
+    `, [userId, 'Ready for Paying', discount_percentage]);
 
+    console.log("orderResult.rows[0]", orderResult);
     let orderId = orderResult.rows[0].order_id;
 
     const orderItemsData = cartItems.map(item => [
@@ -745,6 +746,9 @@ async function getOrder(orderId, client) {
     let totalSum = 0;
     let totalSumWithVat = 0;
     let shippingDetails = null;
+    let discount_percentage = 0;
+
+    console.log("resultQuery", resultQuery);
 
     resultQuery.rows.forEach(row => {
         // Extract each cart item from the row
@@ -760,6 +764,7 @@ async function getOrder(orderId, client) {
         // Calculate total sum without VAT and with VAT
         totalSum += row.quantity * parseFloat(row.price);  // Total without VAT
         totalSumWithVat += row.quantity * parseFloat(row.price) * (1 + parseFloat(row.vat) / 100);  // Total with VAT
+        discount_percentage = row.discount_percentage;
 
         // Extract shipping details (same across all rows, so just assign once)
         if (!shippingDetails) {
@@ -784,6 +789,7 @@ async function getOrder(orderId, client) {
         user_first_name: shippingDetails.first_name,
         user_last_name: shippingDetails.last_name,
         vat_in_persent: 20,
+        discount_percentage: discount_percentage
     };
 }
 
@@ -826,6 +832,7 @@ async function payOrder(orderId, paymentAmount, client) {
 
     AssertUser(orderRow[0].status == 'Ready for Paying', "This order can't be payed, due to it's status");
 
+    let discount_percentage = parseFloat(orderRow[0].discount_percentage);
     let total = 0;
     let totalWithVat = 0;
 
@@ -836,10 +843,18 @@ async function payOrder(orderId, paymentAmount, client) {
         totalWithVat += parseInt(row.cart_quantity) * parseFloat(row.price) + (parseFloat((row.vat / 100)) * (parseInt(row.cart_quantity) * parseFloat(row.price)));
     })
 
-    let totalWithVatToFixed = totalWithVat.toFixed(2)
+    console.log("orderRow", orderRow);
+    let totalSumToBePayed;
 
-    AssertUser(!(roundedPaymentAmount < totalWithVatToFixed), "You entered amout, which is less than the order you have");
-    AssertUser(!(roundedPaymentAmount > totalWithVatToFixed), "You entered amout, which is bigger than the order you have");
+    if (discount_percentage > 0) {
+        totalSumToBePayed = (totalWithVat - (totalWithVat * (discount_percentage / 100))).toFixed(2);
+    } else {
+        totalSumToBePayed = totalWithVat.toFixed(2);
+    }
+
+    console.log("totalSumToBePayed is -> ", totalSumToBePayed);
+    AssertUser(!(roundedPaymentAmount < totalSumToBePayed), "You entered amout, which is less than the order you have");
+    AssertUser(!(roundedPaymentAmount > totalSumToBePayed), "You entered amout, which is bigger than the order you have");
 
     // const paymentResult = await fetch("http://10.20.3.224:5002/api/payments", {
     //     method: "POST",
@@ -857,7 +872,7 @@ async function payOrder(orderId, paymentAmount, client) {
 
     await client.query(`UPDATE orders SET status = 'Paid' WHERE order_id = $1`, [orderId]);
 
-    return { message: "You paid the order successful", orderRow: orderRow, cart_items: orderItemsRows, total_sum: total, total_sum_with_vat: totalWithVatToFixed, vat_in_persent: 20};
+    return { message: "You paid the order successful", orderRow: orderRow, cart_items: orderItemsRows, total_sum: total, total_sum_with_vat: totalWithVat, vat_in_persent: 20};
 }
 
 async function postProfile(userDetails, authenticatedUser, client) {
@@ -933,6 +948,28 @@ async function postProfile(userDetails, authenticatedUser, client) {
     };
 }
 
+async function getPromotionForTheCurrentTime(client) {
+    let promotionRow = await client.query(`
+        SELECT * 
+        FROM promotions
+        WHERE discount_percentage = (
+            SELECT MAX(discount_percentage) 
+            FROM promotions 
+            WHERE start_date <= now() 
+                AND end_date >= now() 
+                AND is_active = true 
+        )
+        AND start_date <= now()
+        AND end_date >= now()
+        AND is_active = true;    
+        `);
+
+    console.log(promotionRow.rows[0]);
+    AssertDev(promotionRow.rows.length <= 1, "Asser one on promotion")
+
+    return promotionRow.rows[0];
+}
+
 module.exports = {
     prepareRegistrationData,
     registration,
@@ -951,5 +988,6 @@ module.exports = {
     cart,
     getOrder,
     payOrder,
-    postProfile
+    postProfile,
+    getPromotionForTheCurrentTime,
 }

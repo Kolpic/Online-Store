@@ -93,6 +93,7 @@
             <a href="/crud.html?entity=roles" class="list-group-item list-group-item-action">7. Manage Roles</a>
             <a href="/mail_templates.html" class="list-group-item list-group-item-action">8. Mail Templates</a>
             <a href="/reports.html?entity=user_orders" class="list-group-item list-group-item-action">9. Report Users</a>
+            <a href="/crud.html?entity=promotions" class="list-group-item list-group-item-action">10. Manage Promotions</a>
         </div>
     </div>
 
@@ -658,7 +659,7 @@
                             img.style.height = 'auto';
                             cell.appendChild(img);
                         });
-                    } else if (field === 'Date') {
+                    } else if (field === 'Date' || field === 'Start Date' || field === 'End Date') {
                         const date = new Date(entity[field]);
                         cellValue = date.toLocaleString('en-US', {
                             year: 'numeric',
@@ -1488,12 +1489,21 @@
                 } else if (field.type === 'boolean') {
                     input = document.createElement('input');
                     input.type = 'checkbox';
+                    input.name = field.name;
                     input.className = 'form-control';
                     formGroup.appendChild(input);
-                } else if (field.type === 'date') { 
+                } else if (field.type === 'date') {
                     input = document.createElement('input');
                     input.type = 'datetime-local';
-                    input.name = 'date-create';
+
+                    if (field.name === 'start_date') {
+                        input.name = 'start_date'
+                    } else if (field.name === 'end_date') {
+                        input.name = 'end_date';
+                    } else {
+                        input.name = 'date-create';
+                    }
+
                     input.className = 'form-control';
                     formGroup.appendChild(input);
                 } else if (field.type === 'permission'){
@@ -1683,11 +1693,17 @@
                 const permissions = [];
                 document.querySelectorAll('input[name^="permissions["]:checked').forEach(checkbox => {
                     console.log("Entered in checkbox ", checkbox.value);
-                    permissions.push(checkbox.value);
+                    permissions.push(checkbox.value) = formData.getAll('roles');
                 });
                 formData.append('permissions', JSON.stringify(permissions));
 
                 console.log("Permissions JSON", JSON.stringify(permissions));
+            } else if (entityType == 'promotions') {
+                productData.discount_percentage = parseInt(productData.discount_percentage);
+                productData.is_active = formData.has('is_active');
+
+                formData.append('discount_percentage', productData.discount_percentage);
+                formData.append('is_active', productData.is_active);
             }
 
             console.log("productData AFTER HOOK");
