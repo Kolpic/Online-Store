@@ -118,7 +118,7 @@
         .then(data => {
             console.log(data);
             if (data.cartData && data.cartData.cartItems && data.cartData.cartItems.length > 0) {
-                populateCart(data.cartData);
+                populateCart(data.cartData, data.promotion);
                 populateShippingDetails(data.cartData);
             } else {
                 displayEmptyCartMessage();
@@ -133,6 +133,13 @@
             if (!navigator.onLine) {
                 alert("You are offline. Please check your internet connection.");
             }
+
+            let discountPercentage = 0;
+            const discountElement = document.querySelector('#discount_percentage + td');
+            if (discountElement) {
+                discountPercentage = parseFloat(discountElement.textContent.replace('%', '').trim());
+            }
+
             const formData = {
                 first_name: document.getElementById('first_name').value,
                 last_name: document.getElementById('last_name').value,
@@ -140,6 +147,7 @@
                 address: document.getElementById('address').value,
                 country_code: document.getElementById('country_code').value,
                 phone: document.getElementById('phone').value,
+                discount_percentage: discountPercentage,
             };
 
             // Send POST request with the form data
@@ -178,7 +186,7 @@
         </tr>`;
     }
 
-    function populateCart(cartData) {
+    function populateCart(cartData, promotion) {
         const cartItems = cartData.cartItems;
         let totalSum = cartData.totalSum;
         let totalSumWithVat = cartData.totalSumWithVat;
@@ -215,6 +223,23 @@
                 <td class="text-right">${totalSumWithVat.toFixed(2)} ${symbol}</td>
             </tr>
         `;
+
+        if (promotion) {
+            cartItemsTable.innerHTML += `
+            <tr>
+                <td colspan="4" id="discount_percentage" class="text-right"><strong>Discount Percentage:</strong></td>
+                <td class="text-right">${promotion.discount_percentage} %</td>
+            </tr>
+            <tr>
+                <td colspan="4" class="text-right"><strong>Discount Amount:</strong></td>
+                <td class="text-right">${(totalSumWithVat * (promotion.discount_percentage / 100)).toFixed(2)} ${symbol}</td>
+            </tr>
+            <tr>
+                <td colspan="4" class="text-right"><strong>Total with discount:</strong></td>
+                <td class="text-right">${(totalSumWithVat - (totalSumWithVat * (promotion.discount_percentage / 100))).toFixed(2)} ${symbol}</td>
+            </tr>
+            `;
+        }
     }
 
     function populateShippingDetails(cartData) {

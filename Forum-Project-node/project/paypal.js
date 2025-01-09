@@ -23,41 +23,47 @@ async function generateAccessToken() {
 
 async function createOrder(orderId, client) {
 	const accessToken = await generateAccessToken();
+    console.log("Paypal generateAccessToken", accessToken);
 	
-	let order = await client.query(`SELECT * FROM orders WHERE order_id = $1`, [orderId]);
-    let orderRow = order.rows;
+	let order = await client.query(`SELECT * FROM orders WHERE order_id = $1`, [orderId]); // da obedinq selectite 
+    let orderRow = order.rows;                                                             // da napravq == na ===
 
     AssertDev(orderRow.length == 1, "There can't be more than one row with same order id");
 
-	let orderItems = await client.query(`SELECT 
-												order_items.id, 
-												order_items.order_id, 
-												order_items.product_id, 
-												order_items.quantity          AS cart_quantity, 
-												order_items.price, 
-												order_items.vat,
-												products.name                 AS name,
-												currencies.symbol             AS symbol
-										FROM order_items
-											JOIN products   ON products.id          = order_items.product_id
-											JOIN currencies ON products.currency_id = currencies.id
-										WHERE order_id = $1
-										`,[orderId]);
+	let orderItems = await client.query(`
+        SELECT 
+    		order_items.id, 
+    		order_items.order_id, 
+    		order_items.product_id, 
+    		order_items.quantity          AS cart_quantity, 
+    		order_items.price, 
+    		order_items.vat,
+    		products.name                 AS name,
+    		currencies.symbol             AS symbol
+		FROM order_items
+		JOIN products   ON products.id          = order_items.product_id
+		JOIN currencies ON products.currency_id = currencies.id
+		WHERE order_id = $1
+		`,[orderId]);
 
 	let orderItemsRows = orderItems.rows;
 
-	console.log("orderItemsRows", orderItemsRows);
+	console.log("orderItemsRows", orderItemsRows); 
 
+    // 'Ready for Paying' da e enum -> promenliva v koda ( orderRow[0].status == constanta)
 	AssertUser(orderRow[0].status == 'Ready for Paying', "This order can't be payed, due to it's status");
 
+    let discount_percentage = parseFloat(orderRow[0].discount_percentage);
 	let total = 0;
     let totalWithVat = 0;
+    let totalSumToBePayed = 0;
 	
 	const items = orderItemsRows.map(row => {
         const price = parseFloat(row.price);
         const vatMultiplier = 1 + parseFloat(row.vat) / 100;
 
         const itemTotalWithVat = price * vatMultiplier;
+        let itemTotalWithVatToFixed = 0;
 
 		let totalWithVATProduct = (itemTotalWithVat * parseInt(row.cart_quantity)).toFixed(2);
 		// let itemTotalWithoutVAT = price * parseInt(row.cart_quantity);
@@ -65,24 +71,51 @@ async function createOrder(orderId, client) {
         totalWithVat += itemTotalWithVat * parseInt(row.cart_quantity);
 
 		console.log("totalWithVATProduct", totalWithVATProduct);
+
+        let totalFinalPrice;
+
+        if (discount_percentage > 0) {
+            totalFinalPrice = (totalWithVATProduct - (totalWithVATProduct * (discount_percentage / 100))).toFixed(2)
+            itemTotalWithVatToFixed =  itemTotalWithVatToFixed - (itemTotalWithVatToFixed * (discount_percentage / 100)).toFixed(2)
+        } else {
+            totalFinalPrice = totalWithVATProduct.toFixed(2);
+        }
+
+        console.log("totalFinalPrice <->", totalFinalPrice, typeof totalFinalPrice);
+        let dis = parseFloat(parseFloat(totalFinalPrice).toFixed(2));
+        console.log("dis", dis, typeof dis);
+        totalSumToBePayed += dis;
+        console.log("totalSumToBePayed <->", totalSumToBePayed);
+        console.log("itemTotalWithVatToFixed <->", itemTotalWithVatToFixed);
+
         return {
             name: row.name,
             description: `Product ID: ${row.product_id}`,
             quantity: row.cart_quantity.toString(),
             unit_amount: {
                 currency_code: 'USD',
-                value: totalWithVATProduct
+                value: itemTotalWithVatToFixed
             }
         };
     });
 
+    totalSumToBePayed = totalSumToBePayed.toFixed(2);
+
+    // let totalSumToBePayed;
+    // if (discount_percentage > 0) {
+    //     totalSumToBePayed = (totalWithVat - (totalWithVat * (discount_percentage / 100))).toFixed(2);
+    // } else {
+    //     totalSumToBePayed = totalWithVat.toFixed(2);
+    // }
+
 	const breakdown = {
         item_total: {
             currency_code: 'USD',
-            value: totalWithVat.toFixed(2)
+            value: totalSumToBePayed
         }
     };
 
+    console.log("totalSumToBePayed given in fetch", totalSumToBePayed);
 	console.log("items", items);
 	console.log("breakdown", breakdown);
 	console.log("accessToken createOrder", accessToken);
@@ -100,13 +133,13 @@ async function createOrder(orderId, client) {
                     items,
                     amount: {
                         currency_code: 'USD',
-                        value: totalWithVat.toFixed(2),
+                        value: totalSumToBePayed,
                         breakdown
                     }
                 }
             ],
-            application_context: {
-                return_url: `${config.BASE_URL_HOME_OFFICE}/complete_order?order_id=${orderId}`,
+            application_context: {                                                               // url query params escape
+                return_url: `${config.BASE_URL_HOME_OFFICE}/complete_order?order_id=${orderId}`, // orderId -> da mine prez custom f-q da generirame url-a
                 cancel_url: `${config.BASE_URL_HOME_OFFICE}/cancel_order?order_id=${orderId}`,
                 shipping_preference: 'NO_SHIPPING',
                 user_action: 'PAY_NOW',
@@ -114,7 +147,7 @@ async function createOrder(orderId, client) {
             }
         })
     });
-	// console.log("responseOrder <->", responseOrder)
+	console.log("responseOrder <->", responseOrder)
 	AssertPeer(responseOrder.ok, "Failed to create order with paypal", errors.ERROR_GENERATING_ORDER);
 	const orderData = await responseOrder.json();
 

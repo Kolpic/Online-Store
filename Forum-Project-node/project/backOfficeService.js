@@ -695,12 +695,16 @@ function getSQLTemplateFromInterfaceName(reportName) {
                 $time_grouping_expression$ AS "Order Inserted At",
                 $order_id_grouping_expression$ AS "Order ID",
                 $status_grouping_expression$ AS "Status",
-                sum(oi.price * oi.quantity)                                                                          AS "Total",
-                round(sum(oi.price * oi.quantity * (CAST(oi.vat as numeric) / 100)),2)                               AS "VAT",
-                round(sum(oi.price * oi.quantity) + sum(oi.price * oi.quantity * (cast(oi.vat as numeric) / 100)),2) AS "Total With VAT",
-                c.symbol                                                                                             AS "Currency",
-                count(oi.order_id)                                                                                   AS "Number of orders items",
-                count(*) OVER ()                                                                                     AS "Total Rows" 
+                sum(oi.price * oi.quantity)                                                                                                                     AS "Total",
+                round(sum(oi.price * oi.quantity * (CAST(oi.vat as numeric) / 100)),2)                                                                          AS "VAT",
+                round(sum(oi.price * oi.quantity) + sum(oi.price * oi.quantity * (cast(oi.vat as numeric) / 100)),2)                                            AS "Total With VAT",
+                o.discount_percentage                                                                                                                           AS "Discount Percentage",
+                round(round(sum(oi.price * oi.quantity) + sum(oi.price * oi.quantity * (cast(oi.vat as numeric) / 100)),2) * (o.discount_percentage / 100.0),2) AS "Discount Amount",
+                round(round(sum(oi.price * oi.quantity) + sum(oi.price * oi.quantity * (cast(oi.vat as numeric) / 100)),2) - (round(sum(oi.price * oi.quantity) 
+                    + sum(oi.price * oi.quantity * (cast(oi.vat as numeric) / 100)),2) * (o.discount_percentage / 100)),2)                                      AS "Price after discount",
+                c.symbol                                                                                                                                        AS "Currency",
+                count(oi.order_id)                                                                                                                              AS "Number of orders items",
+                count(*) OVER ()                                                                                                                                AS "Total Rows" 
             FROM orders o
             JOIN order_items AS oi ON o.order_id = oi.order_id
             JOIN users       AS u  ON o.user_id  = u.id
@@ -711,7 +715,7 @@ function getSQLTemplateFromInterfaceName(reportName) {
                 AND $order_id_filter_expression$
                 AND $status_filter_expression$
             GROUP BY GROUPING SETS ( 
-                (1, 2, 3, 7),
+                (1, 2, 3, 7, 10),
                 ()
             )
             ORDER BY $order_by_clause$
@@ -805,6 +809,8 @@ async function checkStaffPermissions(client, staffUsername, interfaceI, permissi
         interfaceI = "CRUD Email";
     } else if (interfaceI == "settings") {
         interfaceI = "CRUD Email";
+    } else if (interfaceI == "promotions") {
+        interfaceI = "CRUD Promotions";
     }
 
     const permissions = await getStaffPermissions(client, staffUsername);
@@ -848,13 +854,14 @@ async function getTemplateById(client, id) {
     return emailTemplates;
 }
 
-async function mapEmailData(client, email, subject, bodyData, informationToMap) {
+async function mapEmailData(client, email, subject, bodyData, informationToMap, orderObj) {
     const settingsRow = await client.query(`SELECT * FROM settings`);
     const settings = settingsRow.rows[0];
     console.log("settings", settingsRow.rows);
     AssertDev(settingsRow.rows.length == 1, "Expect one settings");
 
-    console.log("body", bodyData, "informationToMap", informationToMap);
+    console.log("body", bodyData, "informationToMap", informationToMap, "orderObj", orderObj);
+    let discount_percentage = orderObj.discount_percentage;
 
     let body = bodyData.body;
 
@@ -942,8 +949,29 @@ async function mapEmailData(client, email, subject, bodyData, informationToMap) 
                 <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">You paid:</td>
                 <td style="text-align: ${settings.send_email_template_text_align};">${totalWithVatRounded} ${currency_sumbol}</td>
             </tr>
-        </table>
         `
+
+        if (discount_percentage > 0) {
+            html +=
+            `<tr>
+                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">Discount Percentage:</td>
+                <td style="text-align: ${settings.send_email_template_text_align};"> ${discount_percentage} %</td>
+            </tr>
+            <tr>
+                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">Discount Amount:</td>
+                <td class="text-align": ${settings.send_email_template_text_align};"> ${(totalWithVatRounded * (discount_percentage / 100)).toFixed(2)} ${currency_sumbol}</td>
+            </tr>
+            <tr>
+                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">Total with discount:</td>
+                <td class="text-align": ${settings.send_email_template_text_align};"> ${(totalWithVatRounded - (totalWithVatRounded * (discount_percentage / 100))).toFixed(2)} ${currency_sumbol}</td>
+            </tr>
+            </table>
+            `
+        } else {
+            html += `</table>`
+        }
+
+        console.log("html", html);
 
         let shippingHtml = `
             <table border="${settings.send_email_template_border}" cellpadding="5" cellspacing="3" style="border-collapse: ${settings.send_email_template_border_collapse};">

@@ -396,8 +396,11 @@ async function getCartHandler(req, res, next, client) {
         cartData = await front_office.prepareCartData(sessionIdUnauthenticatedUser, client);
     }
 
+    let promotion = await front_office.getPromotionForTheCurrentTime(client);
+
     return res.json({
         cartData,
+        promotion
     })
 }
 
@@ -489,7 +492,9 @@ async function postCartHandler(req, res, next, client) {
 
     AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_ORDER)
 
-    let { first_name, last_name, email, address, country_code, phone, town } = req.body;
+    let { first_name, last_name, email, address, country_code, phone, town, discount_percentage } = req.body;
+
+    console.log("discount_percentage", discount_percentage);
 
     const deliveryInformation = {
         first_name,
@@ -499,14 +504,21 @@ async function postCartHandler(req, res, next, client) {
         country_code,
         address,
         town,
+        discount_percentage
     };
 
     let responsePostCart = await front_office.cart(deliveryInformation, authenticatedUser, client);
 
+    console.log("responsePostCart", responsePostCart);
+
     const bodyTemplateRow = await client.query(`SELECT body FROM email_template WHERE name = $1`, ["Purchase Email"]);
     const body = bodyTemplateRow.rows[0];
 
-    const emailData = await backOfficeService.mapEmailData(client, email, "Purchase Email", body, responsePostCart);
+    let mappingObj = {
+        discount_percentage
+    }
+
+    const emailData = await backOfficeService.mapEmailData(client, email, "Purchase Email", body, responsePostCart, mappingObj);
 
     await client.query(`INSERT INTO email_queue (name, data, status) VALUES ($1, $2, $3)`,
         [
@@ -549,7 +561,7 @@ async function postPaymentHandlerDef(req, res, next, client) {
 
     let PaymentClass;
 
-    switch (payment_method) {
+    switch (payment_method) { // factory method bez switch -> hash
         case 'paypal':
             PaymentClass = PayPal;
             break;
@@ -563,13 +575,13 @@ async function postPaymentHandlerDef(req, res, next, client) {
 
     console.log("PaymentClass", PaymentClass)
 
-    // Instantiate the appropriate payment provider
+    // Instantiate the appropriate payment provider (Edin constructor(hash))
     const paymentProvider = payment_method === 'bobi'
         ? new PaymentClass(order_id, client, payment_amount)
         : new PaymentClass(order_id, client);
 
 
-    let response = await paymentProvider.executePayment();
+    let response = await paymentProvider.executePayment(); // da podavam parametrite v konstructora, da ne gi vzimam s this.
 
     await paymentProvider.postPaymentProcessing(response, authenticatedUser);
 
@@ -577,7 +589,7 @@ async function postPaymentHandlerDef(req, res, next, client) {
 }
 
 
-async function postPaypalHandler(req, res, next, client) {
+async function postPaypalHandler(req, res, next, client) { // postPaypalHandler -> paymentSecondStep ? ili drugo ime abstractno ne konretno
     let sessionId = req.cookies['session_id'];
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
