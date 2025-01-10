@@ -37,7 +37,7 @@ const urlToFunctionMapFrontOffice = {
         '/cart': postCartHandler,
         '/finish_payment': postPaymentHandler,
         '/profile': postProfileHandler,
-        '/paypalme': postPaypalHandler,
+        // '/paypalme': postPaypalHandler,
         '/payment': postPaymentHandlerDef,
     }
 };
@@ -559,33 +559,24 @@ async function postPaymentHandlerDef(req, res, next, client) {
 
     console.log("Entered in postPaymentHandler ->", "payment_method", payment_method, "order_id", order_id, "payment_amount", payment_amount, "token",token)
 
-    let PaymentClass;
+    const paymentFactory = {
+        paypal: PayPal,
+        bobi: Bobi
+    };
 
-    switch (payment_method) { // factory method bez switch -> hash
-        case 'paypal':
-            PaymentClass = PayPal;
-            break;
-        case 'bobi':
-            console.log("Entered in bobi case");
-            PaymentClass = Bobi;
-            break;
-        default:
-            AssertUser(false, `Unsupported payment method: ${payment_method}`);
+    const PaymentClass = paymentFactory[payment_method];
+
+    AssertUser(PaymentClass, `Unsupported payment method: ${payment_method}`, errors.INVALID_PAYMENT_METHOD);
+
+    const paymentProvider = new PaymentClass({ order_id, client });
+
+    let response = await paymentProvider.executePayment(order_id, payment_amount);
+
+    if (PaymentClass instanceof Bobi) {
+        await paymentProvider.postPaymentProcessing(order_id, response, authenticatedUser);
     }
 
-    console.log("PaymentClass", PaymentClass)
-
-    // Instantiate the appropriate payment provider (Edin constructor(hash))
-    const paymentProvider = payment_method === 'bobi'
-        ? new PaymentClass(order_id, client, payment_amount)
-        : new PaymentClass(order_id, client);
-
-
-    let response = await paymentProvider.executePayment(); // da podavam parametrite v konstructora, da ne gi vzimam s this.
-
-    await paymentProvider.postPaymentProcessing(response, authenticatedUser);
-
-    return res.json({ success: true, message: response.message });
+    return res.json({ success: true, message: response.message, approvalUrl: response.approvalUrl });
 }
 
 
@@ -693,7 +684,7 @@ async function getPaypalCompleteOrder(req, res, next, client) {
     response.total_sum_with_vat = totalWithVatToFixed;
     response.vat_in_persent = 20;
 
-    const emailData = await backOfficeService.mapEmailData(client, authenticatedUser.userRow.data, "Payment Email", body, response);
+    const emailData = await backOfficeService.mapEmailData(client, authenticatedUser.userRow.data, "Payment Email", body, response, orderRow[0]);
 
     await client.query(`INSERT INTO email_queue (name, data, status) VALUES ($1, $2, $3)`,
     [
