@@ -245,7 +245,7 @@
                 }
             } else if (paymentMethod === 'paypal') {
                 // paypalme
-                const response = await fetch('/paypalme', {
+                const response = await fetch('/payment', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -258,7 +258,8 @@
 
                 if (response.ok) {
                     const responseData = await response.json();
-                    window.location.href = responseData.redirectUrl; // Redirect to PayPal approval URL
+                    console.log("responseData", responseData, "responseData.redirectUrl", responseData.redirectUrl, "responseData.approvalUrl", responseData.approvalUrl);
+                    window.location.href = responseData.approvalUrl; // Redirect to PayPal approval URL
                 } else {
                     alert("PayPal payment initialization failed.");
                 }

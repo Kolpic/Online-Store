@@ -3,9 +3,13 @@ const paypal = require('./paypal');
 const backOfficeService = require('./backOfficeService');
 const { AssertUser, AssertDev, WrongUserInputException } = require('./exceptions');
 
+const statusАpprovalUrl = 'redirect';
+const statusCapturePayment = 'success';
+const messageCapturePayment = 'Payment captured successfully.';
+
 class PaymentProvider {
-    constructor(orderId, client) {
-        this.orderId = orderId;
+    constructor({ order_id, client }) {
+        this.orderId = order_id;
         this.client = client;
     }
 
@@ -13,14 +17,13 @@ class PaymentProvider {
         throw new Error('executePayment() must be implemented by subclass');
     }
 
-    async postPaymentProcessing(response, authenticatedUser) {
-        // console.log("response in postPaymentProcessing", response);
+    async postPaymentProcessing(orderId, response, authenticatedUser) {
         // Common post-payment logic (e.g., update order status, add to email queue)
-        await this.client.query(`UPDATE orders SET status = 'Paid' WHERE order_id = $1`, [this.orderId]);
-        let orderRow = await this.client.query(`SELECT * FROM orders WHERE order_id = $1`, [this.orderId]);
+        await this.client.query(`UPDATE orders SET status = 'Paid' WHERE order_id = $1`, [orderId]);
+        let orderRow = await this.client.query(`SELECT * FROM orders WHERE order_id = $1`, [orderId]);
 
         // Queue email logic here...
-        console.log('Post-payment processing complete for order:', this.orderId);
+        console.log('Post-payment processing complete for order:', orderId);
 
         let shippingDetailsRow = await this.client.query(`
                 SELECT 
@@ -37,7 +40,7 @@ class PaymentProvider {
                 FROM shipping_details 
                     JOIN country_codes ON country_code_id = country_codes.id 
                 WHERE shipping_details.order_id = $1
-                `, [this.orderId]);
+                `, [orderId]);
 
         console.log("shippingDetailsRow.rows[0]", shippingDetailsRow.rows[0]);
 
@@ -53,7 +56,6 @@ class PaymentProvider {
         response.user_first_name = user.first_name;
         response.user_last_name = user.last_name;
 
-        console.log("orderRow.rows[0].discount_percentage", orderRow.rows[0].discount_percentage);
         const emailData = await backOfficeService.mapEmailData(this.client, authenticatedUser.userRow.data, "Payment Email", body, response, orderRow.rows[0]);
 
         await this.client.query(`INSERT INTO email_queue (name, data, status) VALUES ($1, $2, $3)`,
@@ -66,15 +68,12 @@ class PaymentProvider {
 }
 
 class PayPal extends PaymentProvider {
-    constructor(orderId, client) {
-        super(orderId, client);
-    }
-
-    async executePayment() {
-        console.log('Executing PayPal payment for order:', this.orderId);
-        const approvalUrl = await paypal.createOrder(this.orderId, this.client);
+    async executePayment(orderId) {
+        console.log('Executing PayPal payment for order:', orderId);
+        const approvalUrl = await paypal.createOrder(orderId, this.client);
+        console.log("approvalUrl", approvalUrl);
         return {
-            status: 'redirect',
+            status: statusАpprovalUrl,
             approvalUrl: approvalUrl
         };
     }
@@ -86,21 +85,21 @@ class PayPal extends PaymentProvider {
         const paymentResult = await paypal.capturePayment(token);
 
         return {
-            status: 'success', // da polzvam promenlivi
-            message: 'Payment captured successfully.'
+            status: statusCapturePayment,
+            message: messageCapturePayment
         };
     }
 }
 
 class Bobi extends PaymentProvider {
-    constructor(orderId, client, paymentAmount) {
-        super(orderId, client);
-        this.paymentAmount = paymentAmount;
+    constructor({ orderId, client }) {
+        super({ orderId, client });
+        // this.paymentAmount = payment_amount;
     }
 
-    async executePayment() {
-        console.log('Executing Bobi payment for order:', this.orderId, 'with amount:', this.paymentAmount);
-        return await front_office.payOrder(this.orderId, this.paymentAmount, this.client);
+    async executePayment(orderId, paymentAmount) {
+        console.log('Executing Bobi payment for order:', orderId, 'with amount:', paymentAmount);
+        return await front_office.payOrder(orderId, paymentAmount, this.client);
     }
 }
 

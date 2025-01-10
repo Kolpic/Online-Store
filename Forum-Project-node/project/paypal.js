@@ -3,6 +3,7 @@ const errors = require('./error_codes');
 const { AssertUser, AssertDev, AssertPeer } = require('./exceptions');
 const axios = require('axios');
 
+const orderStatusReadyForPaying = 'Ready for Paying';
 
 async function generateAccessToken() {
     const response = await fetch(config.PAYPAL_BASE_URL + "/v1/oauth2/token", {
@@ -25,10 +26,10 @@ async function createOrder(orderId, client) {
 	const accessToken = await generateAccessToken();
     console.log("Paypal generateAccessToken", accessToken);
 	
-	let order = await client.query(`SELECT * FROM orders WHERE order_id = $1`, [orderId]); // da obedinq selectite 
-    let orderRow = order.rows;                                                             // da napravq == na ===
+	let order = await client.query(`SELECT * FROM orders WHERE order_id = $1`, [orderId]);
+    let orderRow = order.rows;                                                            
 
-    AssertDev(orderRow.length == 1, "There can't be more than one row with same order id");
+    AssertDev(orderRow.length === 1, "There can't be more than one row with same order id");
 
 	let orderItems = await client.query(`
         SELECT 
@@ -50,8 +51,7 @@ async function createOrder(orderId, client) {
 
 	console.log("orderItemsRows", orderItemsRows); 
 
-    // 'Ready for Paying' da e enum -> promenliva v koda ( orderRow[0].status == constanta)
-	AssertUser(orderRow[0].status == 'Ready for Paying', "This order can't be payed, due to it's status");
+	AssertUser(orderRow[0].status === orderStatusReadyForPaying, "This order can't be payed, due to it's status");
 
     let discount_percentage = parseFloat(orderRow[0].discount_percentage);
 	let total = 0;
@@ -101,13 +101,6 @@ async function createOrder(orderId, client) {
 
     totalSumToBePayed = totalSumToBePayed.toFixed(2);
 
-    // let totalSumToBePayed;
-    // if (discount_percentage > 0) {
-    //     totalSumToBePayed = (totalWithVat - (totalWithVat * (discount_percentage / 100))).toFixed(2);
-    // } else {
-    //     totalSumToBePayed = totalWithVat.toFixed(2);
-    // }
-
 	const breakdown = {
         item_total: {
             currency_code: 'USD',
@@ -119,6 +112,9 @@ async function createOrder(orderId, client) {
 	console.log("items", items);
 	console.log("breakdown", breakdown);
 	console.log("accessToken createOrder", accessToken);
+
+    const returnUrl = generateUrl(config.BASE_URL_HOME_OFFICE, '/complete_order', { order_id: orderId });
+    const cancelUrl = generateUrl(config.BASE_URL_HOME_OFFICE, '/cancel_order', { order_id: orderId });
 
 	const responseOrder = await fetch(config.PAYPAL_BASE_URL + '/v2/checkout/orders', {
         method: 'POST',
@@ -138,9 +134,9 @@ async function createOrder(orderId, client) {
                     }
                 }
             ],
-            application_context: {                                                               // url query params escape
-                return_url: `${config.BASE_URL_HOME_OFFICE}/complete_order?order_id=${orderId}`, // orderId -> da mine prez custom f-q da generirame url-a
-                cancel_url: `${config.BASE_URL_HOME_OFFICE}/cancel_order?order_id=${orderId}`,
+            application_context: {                                                               
+                return_url: returnUrl,
+                cancel_url: cancelUrl,
                 shipping_preference: 'NO_SHIPPING',
                 user_action: 'PAY_NOW',
                 brand_name: 'Kolpic store'
@@ -170,6 +166,11 @@ async function capturePayment(orderId) {
 
 	const data = await response.json();
 	return data;
+}
+
+function generateUrl(baseUrl, path, params) {
+    const query = new URLSearchParams(params).toString();
+    return `${baseUrl}${path}?${query}`;
 }
 
 module.exports = {
