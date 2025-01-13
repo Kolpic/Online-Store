@@ -740,6 +740,8 @@ function getSQLTemplateFromInterfaceName(reportName) {
                 
                 COUNT(CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' THEN o.order_id END) AS "Orders Last Year",
                 ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' THEN oi.quantity * oi.price * (1 + CAST(oi.vat AS numeric) / 100) END), 2) AS "VAT Total Price Last Year",
+
+                c.symbol AS "Currency",
                 SUM (COUNT (DISTINCT u.id))OVER () AS "Over Total Count"
             FROM 
                 users u
@@ -747,11 +749,17 @@ function getSQLTemplateFromInterfaceName(reportName) {
                 orders o ON u.id = o.user_id
             LEFT JOIN 
                 order_items oi ON o.order_id = oi.order_id
+            JOIN 
+                products p ON oi.product_id = p.id
+            JOIN 
+                currencies c ON p.currency_id = c.id
             WHERE TRUE
                 AND $email_filter_expression$
                 AND $price_filter_expression$
-            GROUP BY 
-                1, 2
+            GROUP BY GROUPING SETS (
+                (1, 2, 11),
+                ()
+            )
             ORDER BY $order_by_clause$
             LIMIT 100
         `;
