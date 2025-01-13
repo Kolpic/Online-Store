@@ -276,8 +276,7 @@
 
             const container = document.getElementById('filterContainer');
             reportFilters.fields.forEach(filter => {
-                console.log("filter");
-                console.log(filter);
+                console.log("filter", filter, "filter.type", filter.type);
                 let inputHtml = '';
                 const labelText = filter.display_name.replace(/_/g, ' '); // Replace underscores with spaces
 
@@ -298,13 +297,17 @@
                         break;
 
                     case 'select':
-                        inputHtml = `
-                            <br>
-                            <label>${labelText}:</label>
-                            <select name="${filter.key}_filter_value">
-                                <option value="all">All</option>
-                            </select><br>
-                        `;
+                        // if (filter.key === 'audit_type') {
+                            inputHtml = `
+                                <br>
+                                <label>${labelText}:</label>
+                                <select name="${filter.key}_filter_value">
+                                    <option value="">All</option>
+                                </select><br>
+                            `;
+                            // populateAuditTypeSelect(filter.key);
+                            populateSelectDropdown(filter.key);
+                        // }   
                         break;
 
                     case 'number':
@@ -678,6 +681,26 @@
     function hideLoadingSpinner() {
         document.getElementById('loading-overlay').classList.add('d-none');
     }
+
+    async function populateSelectDropdown(filterKey) {
+        try {
+            const response = await fetch(`/distinct_values?field=${filterKey}`);
+            const values = await response.json();
+
+            const selectElement = document.querySelector(`select[name="${filterKey}_filter_value"]`);
+
+            values.forEach(value => {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = value;
+                selectElement.appendChild(option);
+            });
+        } catch (error) {
+            console.error(`Error fetching distinct values for ${filterKey}:`, error);
+            alert(`Failed to load ${filterKey} values. Please try again later.`);
+        }
+    }
+
     fetchHeaderData();
     </script>
 </body>

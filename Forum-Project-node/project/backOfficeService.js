@@ -672,6 +672,7 @@ function getSQLTemplateFromInterfaceName(reportName) {
                 $time_grouping_expression$           AS "Log Inserted At",
                 $message_grouping_expression$        AS "Message",
                 $exception_type_grouping_expression$ AS "Exception type",
+                $audit_type_grouping_expression$ AS "Audit type",
                 $user_email_grouping_expression$     AS "User",
                 $sub_system_grouping_expression$     AS "Sub system",
                 $log_type_grouping_expression$       AS "Log type",
@@ -682,10 +683,11 @@ function getSQLTemplateFromInterfaceName(reportName) {
                 AND $time_filter_expression$
                 AND $message_filter_expression$
                 AND $exception_type_filter_expression$
+                AND $audit_type_filter_expression$
                 AND $user_email_filter_expression$
                 AND $sub_system_filter_expression$
                 AND $log_type_filter_expression$
-            GROUP BY 1, 2, 3, 4, 5, 6
+            GROUP BY 1, 2, 3, 4, 5, 6, 7
             ORDER BY $order_by_clause$
             LIMIT 100
         `;

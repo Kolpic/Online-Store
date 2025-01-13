@@ -45,6 +45,7 @@ const urlToFunctionMapBackOffice = {
         '/get_staff_permissions': getStaffPermissions,
         '/email_templates': getEmailTemplatesHandler,
         '/email_by_id': getEmailByIdHnadler,
+        '/distinct_values': getDistinctValuesHandler,
     },
     POST: {
         '/login': postLoginHandler,
@@ -1242,6 +1243,20 @@ async function getEmailByIdHnadler(req, res, next, client) {
     console.log("templateRow", templateRow.rows);
 
     return res.json({ template: templateRow.rows});
+}
+
+
+async function getDistinctValuesHandler(req, res, next, client) {
+    const { field } = req.query;
+
+    const allowedFields = ['audit_type', 'sub_system', 'log_type'];
+
+    AssertUser(allowedFields.includes(field), "Invalid field");
+
+    const result = await client.query(`SELECT DISTINCT ${field} FROM exception_logs`);
+    const values = result.rows.map(row => row[field]);
+
+    res.json(values);
 }
 
 process.on('uncaughtException', async (error) => {

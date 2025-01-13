@@ -28,6 +28,14 @@
             "groupable": true
         },
         {
+            "key": "audit_type",
+            "display_name": "Audit type",
+            "grouping_expression": "el.audit_type",
+            "filter_expression": "STRPOS(el.audit_type, $FILTER_VALUE$) <> 0",
+            "type": "select",
+            "groupable": true
+        },
+        {
             "key": "user_email",
             "display_name": "User",
             "grouping_expression": "el.user_email",
@@ -40,7 +48,7 @@
             "display_name": "Sub System",
             "grouping_expression": "el.sub_system",
             "filter_expression": "STRPOS(el.sub_system, $FILTER_VALUE$) <> 0",
-            "type": "text",
+            "type": "select",
             "groupable": true
         },
         {
@@ -48,7 +56,7 @@
             "display_name": "Log Type",
             "grouping_expression": "el.log_type",
             "filter_expression": "STRPOS(el.log_type, $FILTER_VALUE$) <> 0",
-            "type": "text",
+            "type": "select",
             "groupable": true
         }
     ]

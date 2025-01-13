@@ -21,6 +21,13 @@ class PeerException extends Error {
 	}
 }
 
+class TemporaryException extends Error {
+	constructor(message) {
+		super(message);
+		this.name = 'TemporaryException'
+	}
+}
+
 function AssertDev(condition, message) {
     if (!condition) {
         throw new DevException(message);
@@ -39,11 +46,19 @@ function AssertPeer(condition, message, errorCode) {
     }
 }
 
+function TemporaryError(condition, message) {
+    if (!condition) {
+        throw new TemporaryException(message);
+    }
+}
+
 module.exports = {
 	WrongUserInputException,
 	DevException,
 	PeerException,
+	TemporaryException,
 	AssertDev,
     AssertUser,
     AssertPeer,
+    TemporaryError,
 };
