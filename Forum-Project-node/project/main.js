@@ -4,7 +4,7 @@ const errors = require('./error_codes');
 const sessions = require('./sessions');
 const mailer = require('./mailer');
 const express = require('express');
-const { AssertUser, AssertDev, WrongUserInputException } = require('./exceptions');
+const { AssertUser, AssertDev, WrongUserInputException, DevException, PeerException, TemporaryException } = require('./exceptions');
 const front_office = require('./front_office')
 const bcrypt = require('bcryptjs');
 const router = express.Router();
@@ -835,10 +835,29 @@ async function postProfileHandler(req, res, next, client) {
 
 async function logException(user_email, exception_type, message, subSystem) {
     let clientForExcaptionLog = await pool.connect();
+
+    let auditType = "";
+
+    console.log("exception_type", exception_type);
+
+    if (exception_type === "WrongUserInputException") {
+        auditType = "ASSERT_USER";
+    } else if (exception_type === "DevException") {
+        auditType = "ASSERT_DEV";
+    } else if (exception_type === "PeerException") {
+        auditType = "ASSERT_PEER";
+    } else if (exception_type === "TemporaryException") {
+        auditType = "TEMPORARY";
+    } else {
+        auditType = "ASSERT_DEV";
+    }
+
+    console.log("LOGGING EXCEPTION -> user_email " + user_email + " exception_type -> " + exception_type + " message -> " + message + " subSystem -> " + subSystem + " audit type -> " + auditType);
+
     await clientForExcaptionLog.query('BEGIN');
 
-    await clientForExcaptionLog.query(`INSERT INTO exception_logs (user_email, exception_type, message, sub_system, log_type) VALUES ($1, $2, $3, $4, $5)`, 
-        [user_email, exception_type, message, subSystem, "error"]);
+    await clientForExcaptionLog.query(`INSERT INTO exception_logs (user_email, exception_type, message, sub_system, audit_type, log_type) VALUES ($1, $2, $3, $4, $5, $6)`, 
+        [user_email, exception_type, message, subSystem, auditType,"error"]);
 
     await clientForExcaptionLog.query('COMMIT');
     clientForExcaptionLog.release();
