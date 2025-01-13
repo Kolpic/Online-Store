@@ -198,7 +198,8 @@
                     { label: "Orders Last Day", colspan: 2 },
                     { label: "Orders Last Week", colspan: 2 },
                     { label: "Orders Last Month", colspan: 2 },
-                    { label: "Orders Last Year", colspan: 2 }
+                    { label: "Orders Last Year", colspan: 2 },
+                    { label: "Currency", key: "Currency", rowspan: 2 },
                 ],
                 subHeaders: [
                     { label: "Count" },
@@ -215,7 +216,8 @@
                     "Orders Last Day", "VAT Total Price Last Day",
                     "Orders Last Week", "VAT Total Price Last Week",
                     "Orders Last Month", "VAT Total Price Last Month",
-                    "Orders Last Year", "VAT Total Price Last Year"
+                    "Orders Last Year", "VAT Total Price Last Year",
+                    "Currency"
                 ]
             }
         };
@@ -413,6 +415,8 @@
                 if (resultRows.length > 0) {
                     if (reportConfigs[entityType]) {
                         const config = reportConfigs[entityType];
+
+                        console.log("config", config);
 
                         // Step 1: Generate the header rows
                         let headerRow1 = '<tr>';
