@@ -12,7 +12,9 @@ const backOfficeService = require('./backOfficeService');
 const paypal = require('./paypal');
 const { PayPal, Bobi} = require('./paymentProviders');
 
-console.log("Pool imported in main.js:");  
+console.log("Pool imported in main.js:");
+
+const SESSION_ID = "front_office_session_id";
 
 const urlToFunctionMapFrontOffice = {
     GET: {
@@ -104,7 +106,7 @@ router.use(async (req, res, next) => {
 	} catch (error) {
         console.log(error, "error");
 
-        let sessionId = req.cookies['session_id'];
+        let sessionId = req.cookies[SESSION_ID];
         let userDataSession = await sessions.getCurrentUser(sessionId, client);
         let userData;
 
@@ -254,7 +256,7 @@ async function postLoginHandler(req, res, next, client) {
     let user = await sessions.getCurrentUser(sessionId, client);
     await logEvent(user.userRow.data, "", "User logged in site");
 
-    res.cookie('session_id', sessionId, {
+    res.cookie(SESSION_ID, sessionId, {
       httpOnly: true,
       sameSite: 'Lax',
     });
@@ -267,7 +269,7 @@ async function postLoginHandler(req, res, next, client) {
 }
 
 async function getHeaderHandler(req, res, next, client) {
-    let sessionId = req.cookies['session_id']
+    let sessionId = req.cookies[SESSION_ID]
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     let userInformation = {
@@ -350,14 +352,14 @@ async function getHomeHandler(req, res, next, client) {
 }
 
 async function getLogoutHandler(req, res, next, client) {
-    sessionId = req.cookies['session_id']
+    sessionId = req.cookies[SESSION_ID]
     authenticatedUser = await sessions.getCurrentUser(sessionId, client)
 
     await client.query(`DELETE FROM custom_sessions WHERE session_id = $1`,[authenticatedUser['userRow']['session_id']]);
 
     await logEvent(authenticatedUser.userRow.data, "", "User logged out from the site");
 
-    res.cookie('session_id', "", {
+    res.cookie(SESSION_ID, "", {
       httpOnly: true,
       sameSite: 'Lax',
     });
@@ -370,7 +372,7 @@ async function getLogoutHandler(req, res, next, client) {
 }
 
 async function getProfileHandler(req, res, next, client) {
-    sessionId = req.cookies['session_id'];
+    sessionId = req.cookies[SESSION_ID];
     authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     let profileData = await front_office.getProfileData(authenticatedUser, client);
@@ -381,7 +383,7 @@ async function getProfileHandler(req, res, next, client) {
 }
 
 async function getCartHandler(req, res, next, client) {
-    let sessionId = req.cookies['session_id'] || null;
+    let sessionId = req.cookies[SESSION_ID] || null;
     let sessionIdUnauthenticatedUser = req.cookies['session_id_unauthenticated_user'] || null;
 
     AssertDev(sessionId != null && sessionIdUnauthenticatedUser == null || sessionId == null && sessionIdUnauthenticatedUser != null || sessionId == null && sessionIdUnauthenticatedUser == null, "We can't have two of the sessions");
@@ -421,7 +423,7 @@ async function postUpdateCarQuantityHandler(req, res, next, client) {
 }
 
 async function postAddToCart(req, res, next, client) {
-    let sessionId = req.cookies['session_id'];
+    let sessionId = req.cookies[SESSION_ID];
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     let productId = req.body.productId;
@@ -487,7 +489,7 @@ async function postRemoveFromCart(req, res, next, client) {
 }
 
 async function postCartHandler(req, res, next, client) {
-    let sessionId = req.cookies['session_id'];
+    let sessionId = req.cookies[SESSION_ID];
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_ORDER)
@@ -534,7 +536,7 @@ async function postCartHandler(req, res, next, client) {
 }
 
 async function getOrderHandler(req, res, next, client) {
-    let sessionId = req.cookies['session_id'];
+    let sessionId = req.cookies[SESSION_ID];
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
@@ -550,7 +552,7 @@ async function getOrderHandler(req, res, next, client) {
 }
 
 async function postPaymentHandlerDef(req, res, next, client) {
-    let sessionId = req.cookies['session_id'];
+    let sessionId = req.cookies[SESSION_ID];
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
@@ -581,7 +583,7 @@ async function postPaymentHandlerDef(req, res, next, client) {
 
 
 async function postPaypalHandler(req, res, next, client) { // postPaypalHandler -> paymentSecondStep ? ili drugo ime abstractno ne konretno
-    let sessionId = req.cookies['session_id'];
+    let sessionId = req.cookies[SESSION_ID];
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
@@ -600,7 +602,7 @@ async function postPaypalHandler(req, res, next, client) { // postPaypalHandler 
 }
 
 async function getPaypalCompleteOrder(req, res, next, client) {
-    let sessionId = req.cookies['session_id'];
+    let sessionId = req.cookies[SESSION_ID];
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
@@ -748,7 +750,7 @@ async function getPaypalCancelOrder(req, res, next, client) {
 }
 
 async function postPaymentHandler(req, res, next, client) {
-    let sessionId = req.cookies['session_id'];
+    let sessionId = req.cookies[SESSION_ID];
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
@@ -807,7 +809,7 @@ async function postPaymentHandler(req, res, next, client) {
 }
 
 async function postProfileHandler(req, res, next, client) {
-    let sessionId = req.cookies['session_id'];
+    let sessionId = req.cookies[SESSION_ID];
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     AssertUser(authenticatedUser != null, "You have to be logged in to edit your profile", errors.NOT_LOGGED_USER_FOR_MAKEING_PROFILE_CHANGES);
