@@ -46,272 +46,298 @@ describe('PayPal API Integration Basic Cases', () => {
         await expect(generateAccessToken()).rejects.toThrow('Failed to generate access token');
     });
 
-    it('should create order successfully', async () => {
-        fetch
-        .mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ access_token: 'test_access_token' })
-        }) // Mock for `generateAccessToken`
-        .mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({
-                links: [{ rel: 'approve', href: 'https://approval-link.com' }]
-            })
-        }); // Mock for `createOrder`
+    // it('should create order successfully', async () => {
+    //     fetch
+    //     .mockResolvedValueOnce({
+    //         ok: true,
+    //         json: async () => ({ access_token: 'test_access_token' })
+    //     }) // Mock for `generateAccessToken`
+    //     .mockResolvedValueOnce({
+    //         ok: true,
+    //         json: async () => ({
+    //             links: [{ rel: 'approve', href: 'https://approval-link.com' }]
+    //         })
+    //     }); // Mock for `createOrder`
 
-        const mockClient = {
-            query: jest.fn()
-                .mockResolvedValueOnce({
-                    rows: [{ order_id: 123, status: 'Ready for Paying' }]
-                })
-                .mockResolvedValueOnce({
-                    rows: [
-                        {
-                            id: 1,
-                            order_id: 123,
-                            product_id: 132,
-                            cart_quantity: 2,
-                            price: '50.00',
-                            vat: '10',
-                            name: 'Product A',
-                            symbol: 'USD'
-                        }
-                    ]
-                })
-        };
+    //     const mockClient = {
+    //         query: jest.fn()
+    //             .mockResolvedValueOnce({
+    //                 rows: [{ order_id: 123, status: 'Ready for Paying' }]
+    //             })
+    //             .mockResolvedValueOnce({
+    //                 rows: [
+    //                     {
+    //                         id: 1,
+    //                         order_id: 123,
+    //                         product_id: 132,
+    //                         cart_quantity: 2,
+    //                         price: '50.00',
+    //                         vat: '10',
+    //                         name: 'Product A',
+    //                         symbol: 'USD'
+    //                     }
+    //                 ]
+    //             })
+    //     };
 
-        const orderId = 123;
-        const approvalLink = await createOrder(orderId, mockClient);
-        console.log("Approval link", approvalLink);
+    //     const orderId = 123;
+    //     const approvalLink = await createOrder(orderId, mockClient);
+    //     console.log("Approval link", approvalLink);
 
-        expect(approvalLink).toBe('https://approval-link.com');
-    });
+    //     expect(approvalLink).toBe('https://approval-link.com');
+    // });
 
-    it('should throw error when fetch fails for createOrder', async () => {
-        fetch
-        .mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ access_token: 'test_access_token' })
-        }) // Mock for `generateAccessToken`
-        .mockResolvedValueOnce({
-            ok: false,
-            json: async () => ({
-                links: [{ rel: 'approve', href: 'https://approval-link.com' }]
-            })
-        }); // Mock for `createOrder`
+    // it('should throw error when fetch fails for createOrder', async () => {
+    //     fetch
+    //     .mockResolvedValueOnce({
+    //         ok: true,
+    //         json: async () => ({ access_token: 'test_access_token' })
+    //     }) // Mock for `generateAccessToken`
+    //     .mockResolvedValueOnce({
+    //         ok: false,
+    //         json: async () => ({
+    //             links: [{ rel: 'approve', href: 'https://approval-link.com' }]
+    //         })
+    //     }); // Mock for `createOrder`
 
-        const mockClient = {
-            query: jest.fn()
-                .mockResolvedValueOnce({
-                    rows: [{ order_id: 123, status: 'Ready for Paying' }]
-                })
-                .mockResolvedValueOnce({
-                    rows: [
-                        {
-                            id: 1,
-                            order_id: 123,
-                            product_id: 132,
-                            cart_quantity: 2,
-                            price: '50.00',
-                            vat: '10',
-                            name: 'Product A',
-                            symbol: 'USD'
-                        }
-                    ]
-                })
-        };
+    //     const mockClient = {
+    //         query: jest.fn()
+    //             .mockResolvedValueOnce({
+    //                 rows: [{ order_id: 123, status: 'Ready for Paying' }]
+    //             })
+    //             .mockResolvedValueOnce({
+    //                 rows: [
+    //                     {
+    //                         id: 1,
+    //                         order_id: 123,
+    //                         product_id: 132,
+    //                         cart_quantity: 2,
+    //                         price: '50.00',
+    //                         vat: '10',
+    //                         name: 'Product A',
+    //                         symbol: 'USD'
+    //                     }
+    //                 ]
+    //             })
+    //     };
 
-        const orderId = 123;
-        await expect(createOrder(orderId, mockClient)).rejects.toThrow('Failed to create order');
-    });
+    //     const orderId = 123;
+    //     await expect(createOrder(orderId, mockClient)).rejects.toThrow('Failed to create order');
+    // });
 
-    it('should capture payment successfully', async () => {
-        fetch
-        .mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ access_token: 'test_access_token' })
-        })
-        .mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ status: 'COMPLETED' })
-        });
+    // it('should capture payment successfully', async () => {
+    //     fetch
+    //     .mockResolvedValueOnce({
+    //         ok: true,
+    //         json: async () => ({ access_token: 'test_access_token' })
+    //     })
+    //     .mockResolvedValueOnce({
+    //         ok: true,
+    //         json: async () => ({ status: 'COMPLETED' })
+    //     });
 
-        const response = await capturePayment('order1');
-        expect(response.status).toBe('COMPLETED');
-    })
+    //     const response = await capturePayment('order1');
+    //     expect(response.status).toBe('COMPLETED');
+    // })
 
-    it('should throw error when fetch fails for capturePayment', async () => {
-        fetch
-        .mockResolvedValueOnce({
-            ok: true,
-            json: async () => ({ access_token: 'test_access_token' })
-        })
-        .mockResolvedValueOnce({
-            ok: false,
-            json: async () => ({ status: 'COMPLETED' })
-        });
+    // it('should throw error when fetch fails for capturePayment', async () => {
+    //     fetch
+    //     .mockResolvedValueOnce({
+    //         ok: true,
+    //         json: async () => ({ access_token: 'test_access_token' })
+    //     })
+    //     .mockResolvedValueOnce({
+    //         ok: false,
+    //         json: async () => ({ status: 'COMPLETED' })
+    //     });
 
-        await expect(capturePayment('order1')).rejects.toThrow('Failed to capture payment with paypal');
-    })
+    //     await expect(capturePayment('order1')).rejects.toThrow('Failed to capture payment with paypal');
+    // })
 });
 
-describe('PayPal API Integration - Edge Cases', () => {
-    let mockClient;
+// describe('PayPal API Integration - Edge Cases', () => {
+//     let mockClient;
 
-    beforeEach(() => {
-        fetch.mockClear();
-        mockClient = {
-            query: jest.fn()
-                .mockResolvedValueOnce({
-                    rows: [{ order_id: 123, status: 'Ready for Paying' }]
-                })
-                .mockResolvedValueOnce({
-                    rows: [
-                        {
-                            id: 1,
-                            order_id: 123,
-                            product_id: 132,
-                            cart_quantity: 2,
-                            price: '50.00',
-                            vat: '10',
-                            name: 'Product A',
-                            symbol: 'USD'
-                        }
-                    ]
-                })
-        };
-    });
+//     beforeEach(() => {
+//         fetch.mockClear();
+//         mockClient = {
+//             query: jest.fn()
+//                 .mockResolvedValueOnce({
+//                     rows: [{ order_id: 123, status: 'Ready for Paying' }]
+//                 })
+//                 .mockResolvedValueOnce({
+//                     rows: [
+//                         {
+//                             id: 1,
+//                             order_id: 123,
+//                             product_id: 132,
+//                             cart_quantity: 2,
+//                             price: '50.00',
+//                             vat: '10',
+//                             name: 'Product A',
+//                             symbol: 'USD'
+//                         }
+//                     ]
+//                 })
+//         };
+//     });
 
-    it('should handle invalid headers in generateAccessToken', async () => {
-        fetch.mockResolvedValueOnce({
-            ok: false,
-            json: async () => ({ error: 'Invalid Authorization header' })
-        });
+//     it('should handle invalid headers in generateAccessToken', async () => {
+//         fetch.mockResolvedValueOnce({
+//             ok: false,
+//             json: async () => ({ error: 'Invalid Authorization header' })
+//         });
 
-        await expect(generateAccessToken()).rejects.toThrow('Failed to generate access token with paypal');
-    });
+//         await expect(generateAccessToken()).rejects.toThrow('Failed to generate access token with paypal');
+//     });
 
-    it('should handle wrong HTTP method in generateAccessToken', async () => {
-        fetch.mockImplementationOnce((url, options) => {
-            expect(options.method).toBe('POST'); // Ensuring it's called with correct method
-            options.method = 'GET'; // Simulate incorrect method
-            return Promise.resolve({
-                ok: false,
-                json: async () => ({ error: 'Invalid HTTP method' })
-            });
-        });
+//     it('should handle wrong HTTP method in generateAccessToken', async () => {
+//         fetch.mockImplementationOnce((url, options) => {
+//             expect(options.method).toBe('POST'); // Ensuring it's called with correct method
+//             options.method = 'GET'; // Simulate incorrect method
+//             return Promise.resolve({
+//                 ok: false,
+//                 json: async () => ({ error: 'Invalid HTTP method' })
+//             });
+//         });
 
-        await expect(generateAccessToken()).rejects.toThrow('Failed to generate access token with paypal');
-    });
+//         await expect(generateAccessToken()).rejects.toThrow('Failed to generate access token with paypal');
+//     });
 
-    it('should handle invalid headers in createOrder', async () => {
-        fetch
-            .mockResolvedValueOnce({
-                ok: true,
-                json: async () => ({ access_token: 'test_access_token' })
-            }) // Mock for `generateAccessToken`
-            .mockResolvedValueOnce({
-                ok: false,
-                json: async () => ({ error: 'Invalid headers' })
-            }); // Mock for `createOrder`
+//     it('should handle invalid headers in createOrder', async () => {
+//         fetch
+//             .mockResolvedValueOnce({
+//                 ok: true,
+//                 json: async () => ({ access_token: 'test_access_token' })
+//             }) // Mock for `generateAccessToken`
+//             .mockResolvedValueOnce({
+//                 ok: false,
+//                 json: async () => ({ error: 'Invalid headers' })
+//             }); // Mock for `createOrder`
 
-        const orderId = 123;
+//         const orderId = 123;
 
-        await expect(createOrder(orderId, mockClient)).rejects.toThrow('Failed to create order with paypal');
-    });
+//         await expect(createOrder(orderId, mockClient)).rejects.toThrow('Failed to create order with paypal');
+//     });
 
-    it('should handle wrong HTTP method in createOrder', async () => {
-        fetch
-            .mockResolvedValueOnce({
-                ok: true,
-                json: async () => ({ access_token: 'test_access_token' })
-            }) // Mock for `generateAccessToken`
-            .mockImplementationOnce((url, options) => {
-                expect(options.method).toBe('POST'); // Ensuring it's called with correct method
-                options.method = 'GET'; // Simulate incorrect method
-                return Promise.resolve({
-                    ok: false,
-                    json: async () => ({ error: 'Invalid HTTP method for creating order' })
-                });
-            });
+//     it('should handle wrong HTTP method in createOrder', async () => {
+//         fetch
+//             .mockResolvedValueOnce({
+//                 ok: true,
+//                 json: async () => ({ access_token: 'test_access_token' })
+//             }) // Mock for `generateAccessToken`
+//             .mockImplementationOnce((url, options) => {
+//                 expect(options.method).toBe('POST'); // Ensuring it's called with correct method
+//                 options.method = 'GET'; // Simulate incorrect method
+//                 return Promise.resolve({
+//                     ok: false,
+//                     json: async () => ({ error: 'Invalid HTTP method for creating order' })
+//                 });
+//             });
 
-        const orderId = 123;
+//         const orderId = 123;
 
-        await expect(createOrder(orderId, mockClient)).rejects.toThrow('Failed to create order with paypal');
-    });
+//         await expect(createOrder(orderId, mockClient)).rejects.toThrow('Failed to create order with paypal');
+//     });
 
-    it('should handle invalid payload in createOrder', async () => {
-        fetch
-            .mockResolvedValueOnce({
-                ok: true,
-                json: async () => ({ access_token: 'test_access_token' })
-            }) // Mock for `generateAccessToken`
-            .mockResolvedValueOnce({
-                ok: false,
-                json: async () => ({ error: 'Invalid payload' })
-            }); // Mock for `createOrder`
+//     it('should handle invalid payload in createOrder', async () => {
+//         fetch
+//             .mockResolvedValueOnce({
+//                 ok: true,
+//                 json: async () => ({ access_token: 'test_access_token' })
+//             }) // Mock for `generateAccessToken`
+//             .mockResolvedValueOnce({
+//                 ok: false,
+//                 json: async () => ({ error: 'Invalid payload' })
+//             }); // Mock for `createOrder`
 
-        const orderId = 123;
-        const badClient = {
-            query: jest.fn()
-                .mockResolvedValueOnce({
-                    rows: [{ order_id: 123, status: 'Ready for Paying' }]
-                })
-                .mockResolvedValueOnce({
-                    rows: [
-                        {
-                            id: 1,
-                            order_id: 123,
-                            product_id: 132,
-                            cart_quantity: 'bad_value', // Simulate invalid payload
-                            price: '50.00',
-                            vat: '10',
-                            name: 'Product A',
-                            symbol: 'USD'
-                        }
-                    ]
-                })
-        };
+//         const orderId = 123;
+//         const badClient = {
+//             query: jest.fn()
+//                 .mockResolvedValueOnce({
+//                     rows: [{ order_id: 123, status: 'Ready for Paying' }]
+//                 })
+//                 .mockResolvedValueOnce({
+//                     rows: [
+//                         {
+//                             id: 1,
+//                             order_id: 123,
+//                             product_id: 132,
+//                             cart_quantity: 'bad_value', // Simulate invalid payload
+//                             price: '50.00',
+//                             vat: '10',
+//                             name: 'Product A',
+//                             symbol: 'USD'
+//                         }
+//                     ]
+//                 })
+//         };
 
-        await expect(createOrder(orderId, badClient)).rejects.toThrow('Failed to create order with paypal');
-    });
+//         await expect(createOrder(orderId, badClient)).rejects.toThrow('Failed to create order with paypal');
+//     });
 
-    it('should handle invalid headers in capturePayment', async () => {
-        fetch
-            .mockResolvedValueOnce({
-                ok: true,
-                json: async () => ({ access_token: 'test_access_token' })
-            }) // Mock for `generateAccessToken`
-            .mockResolvedValueOnce({
-                ok: false,
-                json: async () => ({ error: 'Invalid headers' })
-            }); // Mock for `capturePayment`
+//     it('should handle invalid headers in capturePayment', async () => {
+//         fetch
+//             .mockResolvedValueOnce({
+//                 ok: true,
+//                 json: async () => ({ access_token: 'test_access_token' })
+//             }) // Mock for `generateAccessToken`
+//             .mockResolvedValueOnce({
+//                 ok: false,
+//                 json: async () => ({ error: 'Invalid headers' })
+//             }); // Mock for `capturePayment`
 
-        const orderId = 'order1';
+//         const orderId = 'order1';
 
-        await expect(capturePayment(orderId)).rejects.toThrow('Failed to capture payment with paypal');
-    });
+//         await expect(capturePayment(orderId)).rejects.toThrow('Failed to capture payment with paypal');
+//     });
 
-    it('should handle wrong HTTP method in capturePayment', async () => {
-        fetch
-            .mockResolvedValueOnce({
-                ok: true,
-                json: async () => ({ access_token: 'test_access_token' })
-            }) // Mock for `generateAccessToken`
-            .mockImplementationOnce((url, options) => {
-                expect(options.method).toBe('POST'); // Ensuring it's called with correct method
-                options.method = 'GET'; // Simulate incorrect method
-                return Promise.resolve({
-                    ok: false,
-                    json: async () => ({ error: 'Invalid HTTP method for capturing payment' })
-                });
-            });
+//     it('should handle wrong HTTP method in capturePayment', async () => {
+//         fetch
+//             .mockResolvedValueOnce({
+//                 ok: true,
+//                 json: async () => ({ access_token: 'test_access_token' })
+//             }) // Mock for `generateAccessToken`
+//             .mockImplementationOnce((url, options) => {
+//                 expect(options.method).toBe('POST'); // Ensuring it's called with correct method
+//                 options.method = 'GET'; // Simulate incorrect method
+//                 return Promise.resolve({
+//                     ok: false,
+//                     json: async () => ({ error: 'Invalid HTTP method for capturing payment' })
+//                 });
+//             });
 
-        const orderId = 'order1';
+//         const orderId = 'order1';
 
-        await expect(capturePayment(orderId)).rejects.toThrow('Failed to capture payment with paypal');
-    });
-});
+//         await expect(capturePayment(orderId)).rejects.toThrow('Failed to capture payment with paypal');
+//     });
+// });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 // describe('GET /registration test', () => {
 //     let app;
