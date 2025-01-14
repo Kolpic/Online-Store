@@ -23,7 +23,9 @@ const { Transform } = require('stream');
 const { PassThrough } = require('stream');
 const timeout = require('express-timeout-handler');
 
-console.log("Pool imported in back_office.js:"); 
+console.log("Pool imported in back_office.js:");
+
+const SESSION_ID = "back_office_session_id";
 
 const urlToFunctionMapBackOffice = {
     GET: {
@@ -288,8 +290,9 @@ router.use(async (req, res, next) => {
         let clientCatch = await pool.connect();
         await clientCatch.query('BEGIN');
 
-        let sessionId = req.cookies['session_id']
+        let sessionId = req.cookies[SESSION_ID]
         let userDataSession = await sessions.getCurrentUser(sessionId, clientCatch);
+        clientCatch.release();
         let userData;
         if (userDataSession == null) {
             userData = "Guest";
@@ -406,7 +409,7 @@ async function postLoginHandler(req, res, next, client) {
 
     await logEvent(username, "", "User logged in back office");
 
-    res.cookie('session_id', sessionId, {
+    res.cookie(SESSION_ID, sessionId, {
       httpOnly: true,
       sameSite: 'Lax',
     });
@@ -418,7 +421,7 @@ async function postLoginHandler(req, res, next, client) {
 }
 
 async function getHeaderHandler(req, res, next, client) {
-    let sessionId = req.cookies['session_id']
+    let sessionId = req.cookies[SESSION_ID]
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     AssertUser(authenticatedUser != null, "You have to be logged to access this page");
@@ -429,7 +432,7 @@ async function getHeaderHandler(req, res, next, client) {
 }
 
 async function getLogoutHandler(req, res, next, client) {
-    sessionId = req.cookies['session_id']
+    sessionId = req.cookies[SESSION_ID]
     authenticatedUser = await sessions.getCurrentUser(sessionId, client)
 
     AssertUser(authenticatedUser != null, "You have to be logged to access this page");
@@ -438,7 +441,7 @@ async function getLogoutHandler(req, res, next, client) {
 
     await logEvent(authenticatedUser.userRow.data, "", "User logged out from back office");
 
-    res.cookie('session_id', "", {
+    res.cookie(SESSION_ID, "", {
       httpOnly: true,
       sameSite: 'Lax',
     });
@@ -450,7 +453,7 @@ async function getLogoutHandler(req, res, next, client) {
 }
 
 async function filterEntities(req, res, next, client) {
-    let sessionId = req.cookies['session_id']
+    let sessionId = req.cookies[SESSION_ID]
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     AssertUser(authenticatedUser != null, "You have to login to access this page");
@@ -522,7 +525,7 @@ async function getCategoriesHandler(req, res, next, client) {
 const pipelineAsync = promisify(pipeline);
 
 async function createEntityHandler(req, res, next, client) { // client -> dbConnection
-    let sessionId = req.cookies['session_id']
+    let sessionId = req.cookies[SESSION_ID]
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     AssertUser(authenticatedUser != null, "You have to login to access this page");
@@ -674,7 +677,7 @@ async function createEntity(client, schemaName, schema, formData, imageIds) {
 
 async function updateEntity(req, res, next, client) {
 
-    let sessionId = req.cookies['session_id']
+    let sessionId = req.cookies[SESSION_ID]
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     AssertUser(authenticatedUser != null, "You have to login to access this page");
@@ -1125,7 +1128,7 @@ function formatTimestamp(timestamp) {
 }
 
 async function uploadEntitiesHandler(req, res, next, client) {
-    let sessionId = req.cookies['session_id']
+    let sessionId = req.cookies[SESSION_ID]
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     // let schemaName = req.path.split("/")[2];
@@ -1176,7 +1179,7 @@ async function getPermissionsForCreate(req, res, next, client) {
 }
 
 async function getStaffPermissions(req, res, next, client) {
-    let sessionId = req.cookies['session_id']
+    let sessionId = req.cookies[SESSION_ID]
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     AssertUser(authenticatedUser != null, "You have to login to access this page");
@@ -1246,7 +1249,7 @@ async function auditRolePermissionChanges(client, beforeHookObj) {
 }
 
 async function getEmailTemplatesHandler(req, res, next, client) {
-    let sessionId = req.cookies['session_id']
+    let sessionId = req.cookies[SESSION_ID]
     let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
     AssertUser(authenticatedUser != null, "You have to login to access this page");
