@@ -734,17 +734,20 @@ function getSQLTemplateFromInterfaceName(reportName) {
                 
                 COUNT(CASE WHEN o.order_date >= NOW() - INTERVAL '1 day' THEN o.order_id END) AS "Orders Last Day",
                 ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 day' THEN oi.quantity * oi.price * (1 + CAST(oi.vat AS numeric) / 100) END), 2) AS "VAT Total Price Last Day",
+                c.symbol AS "Currency Last Day",
                 
                 COUNT(CASE WHEN o.order_date >= NOW() - INTERVAL '1 week' THEN o.order_id END) AS "Orders Last Week",
                 ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 week' THEN oi.quantity * oi.price * (1 + CAST(oi.vat AS numeric) / 100) END), 2) AS "VAT Total Price Last Week",
+                c.symbol AS "Currency Last Week",
                 
                 COUNT(CASE WHEN o.order_date >= NOW() - INTERVAL '1 month' THEN o.order_id END) AS "Orders Last Month",
                 ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 month' THEN oi.quantity * oi.price * (1 + CAST(oi.vat AS numeric) / 100) END), 2) AS "VAT Total Price Last Month",
+                c.symbol AS "Currency Last Month",
                 
                 COUNT(CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' THEN o.order_id END) AS "Orders Last Year",
                 ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' THEN oi.quantity * oi.price * (1 + CAST(oi.vat AS numeric) / 100) END), 2) AS "VAT Total Price Last Year",
+                c.symbol AS "Currency Last Year",
 
-                c.symbol AS "Currency",
                 SUM (COUNT (DISTINCT u.id))OVER () AS "Over Total Count"
             FROM 
                 users u

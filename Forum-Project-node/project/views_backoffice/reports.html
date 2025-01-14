@@ -193,31 +193,33 @@
         const reportConfigs = {
             user_orders: {
                 headers: [
-                    { label: "User Email", key: "User Email", rowspan: 2 },
-                    { label: "User ID", key: "User ID", rowspan: 2 },
-                    { label: "Orders Last Day", colspan: 2 },
-                    { label: "Orders Last Week", colspan: 2 },
-                    { label: "Orders Last Month", colspan: 2 },
-                    { label: "Orders Last Year", colspan: 2 },
-                    { label: "Currency", key: "Currency", rowspan: 2 },
+                    { label: "User Email", key: "User Email", rowspan: 3 },
+                    { label: "User ID", key: "User ID", rowspan: 3 },
+                    { label: "Orders Last Day", colspan: 3 },
+                    { label: "Orders Last Week", colspan: 3 },
+                    { label: "Orders Last Month", colspan: 3 },
+                    { label: "Orders Last Year", colspan: 3 },
                 ],
                 subHeaders: [
                     { label: "Count" },
                     { label: "Total" },
+                    { label: "Currency" },
                     { label: "Count" },
                     { label: "Total" },
+                    { label: "Currency" },
                     { label: "Count" },
                     { label: "Total" },
+                    { label: "Currency" },
                     { label: "Count" },
-                    { label: "Total" }
+                    { label: "Total" },
+                    { label: "Currency" },
                 ],
                 keys: [
                     "User Email", "User ID",
-                    "Orders Last Day", "VAT Total Price Last Day",
-                    "Orders Last Week", "VAT Total Price Last Week",
-                    "Orders Last Month", "VAT Total Price Last Month",
-                    "Orders Last Year", "VAT Total Price Last Year",
-                    "Currency"
+                    "Orders Last Day", "VAT Total Price Last Day", "Currency Last Day",
+                    "Orders Last Week", "VAT Total Price Last Week", "Currency Last Week",
+                    "Orders Last Month", "VAT Total Price Last Month", "Currency Last Month",
+                    "Orders Last Year", "VAT Total Price Last Year", "Currency Last Year",
                 ]
             }
         };
@@ -402,7 +404,14 @@
                     alert(responceJson.error_message);
                     return;
                 }
-                const {resultRows, totalRows} = await response.json();
+                let {resultRows, totalRows} = await response.json();
+
+                console.log("totalRows", totalRows);
+                console.log("resultRows", resultRows);
+
+                if (totalRows === undefined) {
+                    totalRows = resultRows.length;
+                }
 
                 // Generate HTML table headers and rows dynamically
                 const tableHead = document.getElementById('tableHead');
@@ -439,6 +448,7 @@
 
                         // Step 2: Generate the table body rows
                         resultRows.forEach(row => {
+                            console.log("row", row)
                             let rowHtml = '<tr>';
                             config.keys.forEach(key => {
                                 rowHtml += `<td>${row[key] || '-'}</td>`;
