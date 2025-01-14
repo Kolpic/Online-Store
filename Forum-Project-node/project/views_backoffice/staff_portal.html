@@ -225,6 +225,9 @@
             formData.append(`status_filter_value`, '');
             formData.append(`status_order`, '');
             formData.append(`status_grouping_select_value`,'all');
+            formData.append(`discount_percentage_filter_value`, '');
+            formData.append(`discount_percentage_order`, '');
+            formData.append(`discount_percentage_grouping_select_value`,'all');
 
             const queryString = new URLSearchParams(formData).toString();
 
@@ -239,33 +242,41 @@
     }
 
     async function updateChart6Months() {
-        const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
         const now = new Date();
-
+        
         showLoadingSpinner();
+
+        const monthsOrder = [];
+        console.log("months after inicialization", monthsOrder);
+        for (let i = 0; i < 6; i++) {
+            const date = new Date();
+            date.setMonth(now.getMonth() - i);
+            monthsOrder.unshift(date.toLocaleString('default', { month: 'short' }));
+        }
+
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(now.getMonth() - 5);
 
         const rows = await fetchReportData(sixMonthsAgo.toISOString(), now.toISOString(), 'month');
 
-        const processedData = [];
+        const reversed = monthsOrder.reverse();
+
+        const dataMap = {};
+        reversed.forEach(month => {
+            dataMap[month] = { orders: 0, totalPrice: 0 };
+        });
 
         for (const row of rows) {
-            if (!row['Order Inserted At']) {
-                continue; // Skip this iteration if 'Order Inserted At' is null
+            if (row['Order Inserted At']) {
+                const month = new Date(row['Order Inserted At']).toLocaleString('default', { month: 'short' });
+                dataMap[month].orders += parseInt(row['Number of orders items']) || 0;
+                dataMap[month].totalPrice += parseFloat(row['Total With VAT']) || 0;
             }
-
-            processedData.push({
-                month: new Date(row['Order Inserted At']).toLocaleString('default', { month: 'short' }),
-                orders: parseInt(row['Number of orders items']) || 0,
-                totalPrice: parseFloat(row['Total With VAT']) || 0
-            });
         }
 
-        console.log("processedData", processedData);
-
-        chart6Months.data.labels = processedData.map(item => item.month);
-        chart6Months.data.datasets[0].data = processedData.map(item => item.orders); // Orders count
-        chart6Months.data.datasets[1].data = processedData.map(item => item.totalPrice); // Total price
+        chart6Months.data.labels = reversed;
+        chart6Months.data.datasets[0].data = reversed.map(month => dataMap[month].orders); // Orders count
+        chart6Months.data.datasets[1].data = reversed.map(month => dataMap[month].totalPrice); // Total price
         chart6Months.update();
 
         hideLoadingSpinner();
@@ -273,36 +284,40 @@
 
     async function updateChartToday() {
         const today = new Date();
-        today.setDate(today.getDate() + 1);
+        today.setDate(today.getDate());
         today.setHours(0, 0, 0, 0);
 
         const yesterday = new Date();
-        yesterday.setDate(today.getDate() - 2);
+        yesterday.setDate(today.getDate() - 1);
         yesterday.setHours(0, 0, 0, 0);
 
         const rows = await fetchReportData(yesterday.toISOString(), today.toISOString(), 'day');
 
-        const processedData = [];
-
-        for (const row of rows) {
-            if (!row['Order Inserted At']) {
-                continue;
-            }
-
-            const day = new Date(row['Order Inserted At']).toLocaleDateString('default', { weekday: 'short', day: 'numeric' });
-
-            processedData.push({
-                day: day,
-                orders: parseInt(row['Number of orders items']) || 0,
-                totalPrice: parseFloat(row['Total With VAT']) || 0
-            });
+        const allDays = [];
+        const tempDate = new Date(yesterday);
+        while (tempDate <= today) {
+            allDays.push(tempDate.toLocaleDateString('default', { weekday: 'short', day: 'numeric' }));
+            tempDate.setDate(tempDate.getDate() + 1);
         }
 
-        console.log("processedData", processedData);
+        const dataMap = {};
+        allDays.forEach(day => {
+            dataMap[day] = { orders: 0, totalPrice: 0 };
+        });
 
-        chartToday.data.labels = processedData.map(item => item.day);
-        chartToday.data.datasets[0].data = processedData.map(item => item.orders);
-        chartToday.data.datasets[1].data = processedData.map(item => item.totalPrice);
+        for (const row of rows) {
+            if (row['Order Inserted At']) {
+                const day = new Date(row['Order Inserted At']).toLocaleDateString('default', { weekday: 'short', day: 'numeric' });
+                dataMap[day].orders = parseInt(row['Number of orders items']) || 0;
+                dataMap[day].totalPrice = parseFloat(row['Total With VAT']) || 0;
+            }
+        }
+
+        console.log("dataMap", dataMap);
+
+        chartToday.data.labels = allDays;
+        chartToday.data.datasets[0].data = allDays.map(day => dataMap[day].orders);
+        chartToday.data.datasets[1].data = allDays.map(day => dataMap[day].totalPrice);
         chartToday.update();
     }
 
