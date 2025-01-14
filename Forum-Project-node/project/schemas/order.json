@@ -27,6 +27,14 @@
             "filter_expression": "STRPOS(o.status, $FILTER_VALUE$) <> 0",
             "type": "text",
             "groupable": true
+        },
+        {
+            "key": "discount_percentage",
+            "display_name": "Discount Percentage",
+            "grouping_expression": "o.discount_percentage",
+            "filter_expression": "o.discount_percentage = $FILTER_VALUE$",
+            "type": "number",
+            "groupable": true
         }
     ]
 }
