@@ -694,27 +694,17 @@ function getSQLTemplateFromInterfaceName(reportName) {
     } else if (reportName == "order") {
         sqlTemplate = `
             SELECT 
-                $time_grouping_expression$ AS "Order Inserted At",
-                $order_id_grouping_expression$ AS "Order ID",
-                $status_grouping_expression$ AS "Status",
+                $time_grouping_expression$                                                                                                                      AS "Order Inserted At",
+                $order_id_grouping_expression$                                                                                                                  AS "Order ID",
+                $id_grouping_expression$                                                                                                                        AS "User ID",
+                $status_grouping_expression$                                                                                                                    AS "Status",
                 sum(oi.price * oi.quantity)                                                                                                                     AS "Total",
                 round(sum(oi.price * oi.quantity * (CAST(oi.vat as numeric) / 100)),2)                                                                          AS "VAT",
                 round(sum(oi.price * oi.quantity) + sum(oi.price * oi.quantity * (cast(oi.vat as numeric) / 100)),2)                                            AS "Total With VAT",
                 $discount_percentage_grouping_expression$                                                                                                       AS "Discount Percentage",
-
-
-
-
                 round(sum(oi.price * oi.quantity * (o.discount_percentage / 100.0)), 2)                                                                         AS "Discount Amount",
-
-
-
                 round(sum(oi.price * oi.quantity) + sum(oi.price * oi.quantity * (cast(oi.vat as numeric) / 100)) 
-                    - sum(oi.price * oi.quantity * (o.discount_percentage / 100.0)), 2)                                                                       AS "Price after discount",
-
-
-
-
+                    - sum(oi.price * oi.quantity * (o.discount_percentage / 100.0)), 2)                                                                         AS "Price after discount",
                 c.symbol                                                                                                                                        AS "Currency",
                 count(oi.order_id)                                                                                                                              AS "Number of orders items",
                 count(*) OVER ()                                                                                                                                AS "Total Rows" 
@@ -727,9 +717,10 @@ function getSQLTemplateFromInterfaceName(reportName) {
                 AND $time_filter_expression$
                 AND $order_id_filter_expression$
                 AND $status_filter_expression$
-                AND $discount_percentage_filter_expression$ 
+                AND $discount_percentage_filter_expression$
+                AND $id_filter_expression$ 
             GROUP BY GROUPING SETS ( 
-                (1, 2, 3, 7, 10),
+                (1, 2, 3, 4, 8, 11),
                 ()
             )
             ORDER BY $order_by_clause$

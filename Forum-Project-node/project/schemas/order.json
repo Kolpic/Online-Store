@@ -21,6 +21,13 @@
             "groupable": true
         },
         {
+            "key": "id",
+            "display_name": "User ID",
+            "grouping_expression": "u.id",
+            "filter_expression": "u.id = $FILTER_VALUE$",
+            "type": "number"
+        },
+        {
             "key": "status",
             "display_name": "Status",
             "grouping_expression": "o.status",
