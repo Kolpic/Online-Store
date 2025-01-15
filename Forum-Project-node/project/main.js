@@ -20,6 +20,7 @@ const AUDIT_SUB_SYSTEM_SITE = "site";
 const AUDIT_LOG_TYPE_EVENT = "event";
 const AUDIT_LOG_TYPE_ERROR = "error";
 const AUDIT_LOG_EXCEPTION_TYPE_EMPTY_STRING = "";
+const PAYPAL_STATUS_FAILED = "Failed";
 
 const urlToFunctionMapFrontOffice = {
     GET: {
@@ -754,6 +755,10 @@ async function getPaypalCompleteOrder(req, res, next, client) {
 }
 
 async function getPaypalCancelOrder(req, res, next, client) {
+    const orderId = req.query.order_id;
+
+    await client.query(`UPDATE orders SET status = $1 WHERE order_id = $2`, [PAYPAL_STATUS_FAILED, orderId]);
+
     res.redirect('/home.html');
 }
 
