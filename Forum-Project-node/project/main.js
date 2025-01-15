@@ -11,10 +11,15 @@ const router = express.Router();
 const backOfficeService = require('./backOfficeService');
 const paypal = require('./paypal');
 const { PayPal, Bobi} = require('./paymentProviders');
+const { logEvent } = require('./logger');
 
 console.log("Pool imported in main.js:");
 
 const SESSION_ID = "front_office_session_id";
+const AUDIT_SUB_SYSTEM_SITE = "site";
+const AUDIT_LOG_TYPE_EVENT = "event";
+const AUDIT_LOG_TYPE_ERROR = "error";
+const AUDIT_LOG_EXCEPTION_TYPE_EMPTY_STRING = "";
 
 const urlToFunctionMapFrontOffice = {
     GET: {
@@ -181,7 +186,7 @@ async function postRegistrationHandler(req, res, next, client) {
 
     await front_office.registration(client, user);
 
-    await logEvent(email, "", "User just registered in site");
+    await logEvent(email, AUDIT_LOG_EXCEPTION_TYPE_EMPTY_STRING, "User just registered in site", AUDIT_SUB_SYSTEM_SITE, AUDIT_LOG_TYPE_EVENT);
 
     const bodyTemplateRow = await client.query(`SELECT body FROM email_template WHERE name = $1`, ["Verification Email"]);
     const body = bodyTemplateRow.rows[0];
@@ -254,7 +259,7 @@ async function postLoginHandler(req, res, next, client) {
     }
 
     let user = await sessions.getCurrentUser(sessionId, client);
-    await logEvent(user.userRow.data, "", "User logged in site");
+    await logEvent(user.userRow.data, AUDIT_LOG_EXCEPTION_TYPE_EMPTY_STRING, "User logged in site", AUDIT_SUB_SYSTEM_SITE, AUDIT_LOG_TYPE_EVENT);
 
     res.cookie(SESSION_ID, sessionId, {
       httpOnly: true,
@@ -357,7 +362,7 @@ async function getLogoutHandler(req, res, next, client) {
 
     await client.query(`DELETE FROM custom_sessions WHERE session_id = $1`,[authenticatedUser['userRow']['session_id']]);
 
-    await logEvent(authenticatedUser.userRow.data, "", "User logged out from the site");
+    await logEvent(authenticatedUser.userRow.data, AUDIT_LOG_EXCEPTION_TYPE_EMPTY_STRING, "User logged out from the site", AUDIT_SUB_SYSTEM_SITE, AUDIT_LOG_TYPE_EVENT);
 
     res.cookie(SESSION_ID, "", {
       httpOnly: true,
@@ -574,7 +579,7 @@ async function postPaymentHandlerDef(req, res, next, client) {
 
     let response = await paymentProvider.executePayment(order_id, payment_amount);
 
-    if (PaymentClass instanceof Bobi) {
+    if (paymentProvider instanceof Bobi) {
         await paymentProvider.postPaymentProcessing(order_id, response, authenticatedUser);
     }
 
@@ -694,6 +699,9 @@ async function getPaypalCompleteOrder(req, res, next, client) {
     JSON.stringify(emailData),
     'pending'
     ]);
+
+    console.log("********************************");
+    await logEvent(authenticatedUser.userRow.data, AUDIT_LOG_EXCEPTION_TYPE_EMPTY_STRING, "User just made an order in the site with PayPal payment", AUDIT_SUB_SYSTEM_SITE, AUDIT_LOG_TYPE_EVENT);
 
     res.send(`
         <!DOCTYPE html>
@@ -827,7 +835,7 @@ async function postProfileHandler(req, res, next, client) {
 
     let result = await front_office.postProfile(userDetails, authenticatedUser, client);
 
-    await logEvent(authenticatedUser.userRow.data, "", "User " + authenticatedUser.userRow.data + " " +  result.message)
+    await logEvent(authenticatedUser.userRow.data, AUDIT_LOG_EXCEPTION_TYPE_EMPTY_STRING, "User " + authenticatedUser.userRow.data + " " +  result.message, AUDIT_SUB_SYSTEM_SITE, AUDIT_LOG_TYPE_EVENT);
 
     return res.json({
         success: true,
@@ -865,18 +873,6 @@ async function logException(user_email, exception_type, message, subSystem) {
     clientForExcaptionLog.release();
 }
 
-async function logEvent(user_email, exception_type, message) {
-    let clientForExcaptionLog = await pool.connect();
-    await clientForExcaptionLog.query('BEGIN');
-
-    console.log("Logged event -> " + message);
-    await clientForExcaptionLog.query(`INSERT INTO exception_logs (user_email, exception_type, message, sub_system, log_type) VALUES ($1, $2, $3, $4, $5)`, 
-        [user_email, exception_type, message, "site", "event"]);
-
-    await clientForExcaptionLog.query('COMMIT');
-    clientForExcaptionLog.release();
-}
-
 process.on('uncaughtException', async (error) => {
     console.error("error in uncaughtException");
     console.error(error);
@@ -902,4 +898,5 @@ module.exports = {
     getRegistrationHandler,
     postRegistrationHandler,
     getRefreshCaptchaHandler,
+    logEvent,
 };
