@@ -435,6 +435,10 @@
                     fetch(field.options_url)
                         .then(response => response.json())
                         .then(options => {
+                            let optAll = document.createElement('option');
+                                optAll.value = "";
+                                optAll.textContent = "All";
+                                input.appendChild(optAll);
                             options.forEach(option => {
                                 const opt = document.createElement('option');
                                 opt.value = option.name;
