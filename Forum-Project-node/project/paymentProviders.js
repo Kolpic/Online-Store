@@ -2,10 +2,14 @@ const front_office = require('./front_office');
 const paypal = require('./paypal');
 const backOfficeService = require('./backOfficeService');
 const { AssertUser, AssertDev, WrongUserInputException } = require('./exceptions');
+const { logEvent } = require('./logger');
 
-const statusАpprovalUrl = 'redirect';
-const statusCapturePayment = 'success';
-const messageCapturePayment = 'Payment captured successfully.';
+const STATUS_APPROVAL_URL = 'redirect';
+const STATUS_CAPTURE_PAYMENT = 'success';
+const MESSAGE_CAPTURE_PAYMENT = 'Payment captured successfully.';
+const AUDIT_LOG_EXCEPTION_TYPE_EMPTY_STRING = "";
+const AUDIT_SUB_SYSTEM_SITE = "site";
+const AUDIT_LOG_TYPE_EVENT = "event";
 
 class PaymentProvider {
     constructor({ order_id, client }) {
@@ -18,6 +22,7 @@ class PaymentProvider {
     }
 
     async postPaymentProcessing(orderId, response, authenticatedUser) {
+        console.log("Entered in paymentProvider.postPaymentProcessing")
         // Common post-payment logic (e.g., update order status, add to email queue)
         await this.client.query(`UPDATE orders SET status = 'Paid' WHERE order_id = $1`, [orderId]);
         let orderRow = await this.client.query(`SELECT * FROM orders WHERE order_id = $1`, [orderId]);
@@ -64,6 +69,8 @@ class PaymentProvider {
             JSON.stringify(emailData),
             'pending'
             ]);
+
+        await logEvent(authenticatedUser['userRow']['data'], AUDIT_LOG_EXCEPTION_TYPE_EMPTY_STRING, "User just made an order in the site with Bobi payment", AUDIT_SUB_SYSTEM_SITE, AUDIT_LOG_TYPE_EVENT);
     }
 }
 
@@ -73,7 +80,7 @@ class PayPal extends PaymentProvider {
         const approvalUrl = await paypal.createOrder(orderId, this.client);
         console.log("approvalUrl", approvalUrl);
         return {
-            status: statusАpprovalUrl,
+            status: STATUS_APPROVAL_URL,
             approvalUrl: approvalUrl
         };
     }
@@ -85,8 +92,8 @@ class PayPal extends PaymentProvider {
         const paymentResult = await paypal.capturePayment(token);
 
         return {
-            status: statusCapturePayment,
-            message: messageCapturePayment
+            status: STATUS_CAPTURE_PAYMENT,
+            message: MESSAGE_CAPTURE_PAYMENT
         };
     }
 }
