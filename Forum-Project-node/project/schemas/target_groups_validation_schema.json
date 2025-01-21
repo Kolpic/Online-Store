@@ -1,0 +1,42 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "target_groups",
+  "description": "Schema for a target groups entity",
+  "type": "object",
+  "primaryKeyFrontEnd": "Id",
+  "primaryKey": "id",
+  "properties": {
+    "id": {
+      "type": "integer",
+      "description": "Unique identifier for the groups entity",
+      "readOnly": true,
+      "PK": true,
+      "label": "Id"
+    },
+    "name": {
+      "type": "string",
+      "description": "Target group name",
+      "minLength": 5,
+      "maxLength": 50,
+      "label": "First Name"
+    },
+    "filters": {
+      "type": "string",
+      "description": "User's last name",
+      "minLength": 5,
+      "maxLength": 50,
+      "label": "Last Name"
+    }
+  },
+  "filters": ["id"],
+  "required": ["name"],
+  "errorMessage": {
+    "required": {
+        "name": "Target group name is required"
+      },
+  "properties": {
+        "name": "Target group name should be between 5 and 50 characters"
+      }
+  },
+  "additionalProperties": true
+}

@@ -485,6 +485,9 @@ async function makeTableFilters(schema, req) {
         if (schema.properties[filter].format === 'date') {
             const fromDate = req.body[`${filter}_from`];
             const toDate = req.body[`${filter}_to`];
+            const date = req.body[`date`];
+
+            console.log("| date |", date)
 
             if (fromDate) {
                 whereConditions.push(`${tableName}.${filter} >= $${values.length + 1}`);
@@ -493,6 +496,10 @@ async function makeTableFilters(schema, req) {
             if (toDate) {
                 whereConditions.push(`${tableName}.${filter} <= $${values.length + 1}`);
                 values.push(toDate);
+            }
+            if (date) {
+                whereConditions.push(`${tableName}.${filter} >= $${values.length + 1} AND ${tableName}.${filter} <= $${values.length + 1}`);
+                values.push(date); 
             }
         } else if (schema.properties[filter].type === 'string' && req.body[filter] != undefined) {
             console.log("filter is string");
@@ -769,7 +776,23 @@ function getSQLTemplateFromInterfaceName(reportName) {
             ORDER BY $order_by_clause$
             LIMIT 100
         `;
+    } else if (reportName === "target_group") {
+        sqlTemplate = `
+            SELECT 
+                u.first_name AS "User first name", 
+                u.last_name  AS "User last name", 
+                u.email      AS "User email", 
+                u.birth_date AS "User birth date"
+            FROM target_groups tg
+            JOIN user_target_groups utg ON tg.id       = utg.target_group_id 
+            JOIN users              u   ON utg.user_id = u.id 
+            WHERE TRUE
+                AND $target_group_filter_expression$
+            ORDER BY $order_by_clause$
+            LIMIT 1000
+        `
     }
+
     // AND $price_filter_expression$
     return sqlTemplate;
 }
@@ -827,6 +850,8 @@ async function checkStaffPermissions(client, staffUsername, interfaceI, permissi
         interfaceI = "CRUD Email";
     } else if (interfaceI == "promotions") {
         interfaceI = "CRUD Promotions";
+    } else if (interfaceI == "target_groups") {
+        interfaceI = "CRUD Target Groups";
     }
 
     const permissions = await getStaffPermissions(client, staffUsername);

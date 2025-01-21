@@ -9,6 +9,14 @@
     <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/js/bootstrap.min.js"></script>
 </head>
 <style>
+    .date-container {
+        display: flex;
+        gap: 1rem;
+    }
+
+    .date-container select {
+        flex: 1;
+    }
     .container {
         margin-top: 25px;
         margin-right: 140px;
@@ -94,6 +102,7 @@
             <a href="/mail_templates.html" class="list-group-item list-group-item-action">8. Mail Templates</a>
             <a href="/reports.html?entity=user_orders" class="list-group-item list-group-item-action">9. Report Users</a>
             <a href="/crud.html?entity=promotions" class="list-group-item list-group-item-action">10. Manage Promotions</a>
+            <a href="/crud.html?entity=target_groups" class="list-group-item list-group-item-action">11. Manage Target Groups</a>
         </div>
     </div>
 
@@ -101,6 +110,7 @@
         <h1 id="crud-title"></h1>
         <button id="create-product-btn" class="btn btn-success mt-3 d-none">Create</button>
         <div id="csv-upload-container" class="mt-3"></div>
+        <div id="view-target-groups" class="mt-3"></div>
         <div id="error-messages"></div>
 
         <!-- Form to input filters -->
@@ -157,6 +167,42 @@
                 </div>
             </div>
 
+        </div>
+    </div>
+
+    <!-- Modal to display users -->
+    <div class="modal fade" id="usersModal" tabindex="-1" role="dialog" aria-labelledby="usersModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg" role="document">
+            <div class="modal-content">
+
+                <div class="modal-header">
+                    <h5 class="modal-title" id="usersModalLabel">Users in Target Group</h5>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+                        <span aria-hidden="true">&times;</span>
+                    </button>
+                </div>
+
+                <div class="modal-body">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>First Name</th>
+                                <th>Last Name</th>
+                                <th>Email</th>
+                                <th>Birth Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <!-- User rows will be dynamically inserted here -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                </div>
+
+            </div>
         </div>
     </div>
 
@@ -228,6 +274,8 @@
             let entityTypeForPermissions = entityType.toLowerCase();
             if (entityTypeForPermissions == "roles") {
                 entityTypeForPermissions = "staff roles"
+            } else if (entityTypeForPermissions == "target_groups") {
+                entityTypeForPermissions = "crud target groups"
             } else {
                 entityTypeForPermissions = "crud " + entityTypeForPermissions;
             }
@@ -308,6 +356,8 @@
 
                 csvUploadContainer.appendChild(uploadButton);
                 csvUploadContainer.appendChild(fileInput);
+            } else if (entityType === 'target_groups') {
+                await addShowTargetGroupsButton();
             }
 
             let schemaa = await loadSchema(entityType);
@@ -345,7 +395,8 @@
         async function renderForm(schema) {
             const form = document.getElementById('crud-form');
             const title = document.getElementById('crud-title');
-            title.textContent = `Manage ${entityType}`;
+            let manageTitle = entityType.replace("_", " ");
+            title.textContent = `Manage ${manageTitle}`;
 
             schema.fields.forEach(field => {
                 if (!field.show_in_filter) return; // Skip non-editable or non-filter fields
@@ -359,7 +410,24 @@
 
                 let input;
 
-                if (field.type === 'date') {
+                if (field.type === 'currentDate') {
+                    const today = new Date();
+                    const dateToGroup = document.createElement('div');
+                    dateToGroup.className = 'form-group';
+
+                    const dateToLabel = document.createElement('label');
+                    dateToLabel.textContent = `${field.label}`;
+                    dateToGroup.appendChild(dateToLabel);
+
+                    const dateToInput = document.createElement('input');
+                    dateToInput.type = 'date';
+                    dateToInput.className = 'form-control';
+                    dateToInput.name = `${field.name}`;
+                    dateToInput.value = today.toISOString().split('T')[0];
+                    dateToGroup.appendChild(dateToInput);
+                    form.appendChild(dateToGroup);
+
+                } else if (field.type === 'date') {
                     const today = new Date();
                     const oneMonthLater = new Date();
 
@@ -486,6 +554,13 @@
 
             const data = {};
             const filters = {};  // Object to hold filter criteria
+            if (entityType === "target_groups") {
+                let hookShecma = await fetch(`/users_validation_schema.json`);
+                currentSchema = await hookShecma.json();
+                console.log("currentSchema");
+                console.log(currentSchema);
+            }
+
             filters['schema'] = currentSchema;
 
             formData.forEach((value, key) => {
@@ -518,7 +593,18 @@
             // Fetch filtered products from the back-end
             try {
                 console.log("entityType", entityType);
-                let response = await fetch(`/crud/${entityType}`, {
+
+                let entityTypeToFetch = "";
+
+                if (entityType === "target_groups") {
+                    entityTypeToFetch = "users";
+                } else {
+                    entityTypeToFetch = entityType
+                }
+
+                console.log("JSON.stringify(filters)", JSON.stringify(filters));
+
+                let response = await fetch(`/crud/${entityTypeToFetch}`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1616,6 +1702,29 @@
             console.log("entityType");
             console.log(entityType);
 
+            const filterFormData = new FormData(document.getElementById('crud-form'));
+
+            const combinedFormData = new FormData();
+            
+            for (let [key, value] of formData.entries()) {
+                combinedFormData.append(key, value);
+            }
+            
+            if (entityType === "target_groups") {
+                for (let [key, value] of filterFormData.entries()) {
+                    console.log("value in loop", value);
+                    if (value) {
+                        combinedFormData.append(`filter_${key}`, value);
+                    }
+                }
+            }
+
+            const productDataToSend = {};
+            
+            for (let [key, value] of combinedFormData.entries()) {
+                productDataToSend[key] = value;
+            }
+
             if (entityType == 'products') {
                 // Convert formData to an object (handling arrays like categories and images)
                 productData.categories = formData.getAll('categories'); // Handle multiselect categories
@@ -1647,8 +1756,13 @@
             } else if (entityType == 'users') {
                 productData.country_code_id = parseInt(productData.country_code_id);
                 productData.verification_status = formData.has('verification_status');
+                productData.birth_date = productData['date-create'];
+                combinedFormData.delete('date-create');
+                combinedFormData.append('birth_date', productData['date-create']);
+                formData.delete('date-create');
                 formData.append('country_code_id', productData.country_code_id);
                 formData.append('verification_status', productData.verification_status);
+                formData.append('birth_date', productData['date-create']);
             } else if (entityType == 'orders') {
                 const productsArray = [];
                 selectedProducts.forEach((product, productId) => {
@@ -1672,6 +1786,8 @@
                 console.log(productsArray);
 
                 formData.append('order_items', JSON.stringify(productsArray));
+                combinedFormData.append('order_items', JSON.stringify(productsArray));
+                combinedFormData.append('order_date', productData['date-create']);
                 productData.selected_products =  JSON.stringify(productsArray);
 
                 const dateInput = document.querySelector('input[name="date-create"]');
@@ -1697,9 +1813,11 @@
                 const permissions = [];
                 document.querySelectorAll('input[name^="permissions["]:checked').forEach(checkbox => {
                     console.log("Entered in checkbox ", checkbox.value);
-                    permissions.push(checkbox.value) = formData.getAll('roles');
+                    // permissions.push(checkbox.value) = formData.getAll('roles');
+                    permissions.push(checkbox.value);
                 });
                 formData.append('permissions', JSON.stringify(permissions));
+                combinedFormData.append('permissions', JSON.stringify(permissions));
 
                 console.log("Permissions JSON", JSON.stringify(permissions));
             } else if (entityType == 'promotions') {
@@ -1752,7 +1870,7 @@
             try {
                 const response = await fetch(`/create/${entityType}`, {
                     method: 'POST',
-                    body: formData,
+                    body: combinedFormData,
                 });
 
                 console.log("response", response);
@@ -2099,6 +2217,157 @@
             });
 
             container.appendChild(table);
+        }
+
+        async function addShowTargetGroupsButton() {
+            const header = document.getElementById('view-target-groups');
+
+            const showTargetGroupsButton = document.createElement('button');
+            showTargetGroupsButton.textContent = 'Show Target Groups';
+            showTargetGroupsButton.className = 'btn btn-info mb-3';
+            showTargetGroupsButton.id = 'show-target-groups-btn';
+
+            header.appendChild(showTargetGroupsButton);
+
+            showTargetGroupsButton.addEventListener('click', async () => {
+                await fetchAndDisplayTargetGroups();
+            });
+        }
+
+        async function fetchAndDisplayTargetGroups() {
+            try {
+                const response = await fetch('/target_groups');
+                const targetGroups = await response.json();
+
+                console.log("targetGroups", targetGroups);
+
+                if (response.ok) {
+                    renderTargetGroupsTable(targetGroups.resultRows);
+                } else {
+                    alert(`Failed to fetch target groups: ${targetGroups.message}`);
+                }
+            } catch (error) {
+                console.error('Error fetching target groups:', error);
+                alert('An error occurred while fetching target groups.');
+            }
+        }
+
+        function renderTargetGroupsTable(data) {
+            const entitiesTable = document.getElementById('entities-table');
+            const tableHeaders = document.getElementById('table-headers');
+            const entitiesTbody = document.getElementById('entities-tbody');
+
+            tableHeaders.innerHTML = '';
+            entitiesTbody.innerHTML = '';
+
+            const headers = ['ID', 'Name', 'User Count', 'Created At', 'Options'];
+            headers.forEach((header) => {
+                const th = document.createElement('th');
+                th.textContent = header;
+                tableHeaders.appendChild(th);
+            });
+
+            data.forEach((group) => {
+                console.log("group", group)
+                const row = document.createElement('tr');
+
+                // Add data cells
+                row.innerHTML = `
+                    <td>${group.id}</td>
+                    <td>${group.name}</td>
+                    <td>${group.count}</td>
+                    <td>${new Date(group.created_at).toLocaleString()}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary view-users-btn" data-id="${group.id}">View Users</button>
+                        <button class="btn btn-sm btn-secondary export-csv-btn" data-id="${group.id}">Export to CSV</button>
+                    </td>
+                `;
+
+                entitiesTbody.appendChild(row);
+            });
+
+            entitiesTable.style.display = 'table';
+
+            document.querySelectorAll('.view-users-btn').forEach((btn) =>
+                btn.addEventListener('click', async (e) => {
+                    const targetGroupId = e.target.getAttribute('data-id');
+                    await viewUsers(targetGroupId);
+                })
+            );
+
+            document.querySelectorAll('.export-csv-btn').forEach((btn) =>
+                btn.addEventListener('click', async (e) => {
+                    const targetGroupId = e.target.getAttribute('data-id');
+                    await exportToCSV(targetGroupId);
+                })
+            );
+        }
+
+        async function viewUsers(targetGroupId) {
+            try {
+                const response = await fetch(`/users_in_target_group/${targetGroupId}`);
+                const result = await response.json();
+                const users = result.resultRows;
+
+                if (response.ok) {
+                    const tableBody = document.getElementById('usersTableBody');
+                    tableBody.innerHTML = '';
+
+                    if (users.length > 0) {
+                        users.forEach(user => {
+                            const date = new Date(user.birth_date);
+                            let cellValueFormatedDate = date.toLocaleString('en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: 'numeric',
+                                second: 'numeric',
+                                hour12: true
+                            });
+                            const row = `
+                                <tr>
+                                    <td>${user.first_name}</td>
+                                    <td>${user.last_name}</td>
+                                    <td>${user.email}</td>
+                                    <td>${cellValueFormatedDate}</td>
+                                </tr>`;
+                            tableBody.innerHTML += row;
+                        });
+                    } else {
+                        tableBody.innerHTML = '<tr><td colspan="4" class="text-center">No users found</td></tr>';
+                    }
+
+                    $('#usersModal').modal('show');
+                } else {
+                    alert(`Failed to fetch users: ${result.message}`);
+                }
+            } catch (error) {
+                console.error('Error fetching users:', error);
+                alert('An error occurred while fetching users.');
+            }
+        }
+
+        async function exportToCSV(targetGroupId) {
+            try {
+                const response = await fetch(`/export_target_group_to_csv/${targetGroupId}`);
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = `target_group_${targetGroupId}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                } else {
+                    alert('Failed to export target group to CSV.');
+                }
+            } catch (error) {
+                console.error('Error exporting to CSV:', error);
+                alert('An error occurred while exporting to CSV.');
+            }
         }
 
         // Function to show a custom alert with HTML content

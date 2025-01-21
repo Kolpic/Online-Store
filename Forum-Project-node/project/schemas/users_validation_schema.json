@@ -46,6 +46,12 @@
       "description": "User's account verification status",
       "label": "Verification status"
     },
+    "birth_date": {
+      "type": "string",
+      "format": "date",
+      "description": "User's birth date",
+      "label": "Birth Date"
+    },
     "verification_code": {
       "type": "string",
       "description": "User's verification code",
@@ -85,8 +91,8 @@
       "label": "Country code"
     }
   },
-  "filters": ["first_name", "last_name", "email", "id"],
-  "required": ["first_name", "last_name", "email", "password", "verification_status", "verification_code", "phone", "country_code_id"],
+  "filters": ["first_name", "last_name", "email", "id", "birth_date"],
+  "required": ["first_name", "last_name", "email", "password", "verification_status", "verification_code", "phone", "country_code_id", "birth_date"],
   "errorMessage": {
     "required": {
         "first_name": "User's first name is required",
@@ -96,7 +102,8 @@
         "verification_status": "User's verification status is required",
         "verification_code": "User's verification code is required",
         "phone": "User's phone is required",
-        "country_code_id": "User's country code is required"
+        "country_code_id": "User's country code is required",
+        "birth_date": "User's birth date is required"
       },
   "properties": {
         "first_name": "User's first name should be between 5 and 50 characters",
@@ -108,8 +115,9 @@
         "phone": "User's phone should be between 5 and 20 digits",
         "country_code_id": "User's country_code should be valid",
         "address": "User's address must be between 5 and 255 characters",
-        "gender": "User's gender must be one of the given values"
+        "gender": "User's gender must be one of the given values",
+        "birth_date": "User's birth date must be date"
       }
   },
-  "additionalProperties": false
+  "additionalProperties": true
 }

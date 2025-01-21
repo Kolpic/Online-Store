@@ -50,6 +50,14 @@
             "show_in_filter": false
         },
         {
+            "name": "birth_date",
+            "type": "date",
+            "label": "Birth Date",
+            "create": true,
+            "editable": false,
+            "show_in_filter": false
+        },
+        {
             "name": "verification_code",
             "type": "string",
             "label": "Verification code",
