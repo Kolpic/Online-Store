@@ -48,6 +48,9 @@ const urlToFunctionMapBackOffice = {
         '/email_templates': getEmailTemplatesHandler,
         '/email_by_id': getEmailByIdHnadler,
         '/distinct_values': getDistinctValuesHandler,
+        '/target_groups': getTargetGroupsHandler,
+        '/users_in_target_group': getUsersInTargetGroup,
+        '/export_target_group_to_csv': exportTargetGroupHandler,
     },
     POST: {
         '/login': postLoginHandler,
@@ -154,6 +157,24 @@ const crudHooks = {
         update: {
             before: {
                 auditRolePermissionChanges,
+            },
+            after: {
+
+            }
+        }
+    },
+    target_groups: {
+        create: {
+            before: {
+                mapTargetGroupsWithFilters,
+            },
+            after: {
+                mapUsersToTargetGroup
+            }
+        },
+        update: {
+            before: {
+
             },
             after: {
 
@@ -460,7 +481,7 @@ async function filterEntities(req, res, next, client) {
 
     let schema = req.body.schema;
     let filterById = req.body.id;
-    console.log("filterById", filterById);
+    console.log("filterById", filterById, "schema", schema);
     let tableName = schema.title;
     let action = (filterById === undefined) ? "read" : "edit";
     console.log("action <-> ", action);
@@ -472,6 +493,8 @@ async function filterEntities(req, res, next, client) {
     console.log("selectFields", selectFields, "joins", joins, "groupByFields", groupByFields);
 
     let { whereConditions, values} = await backOfficeService.makeTableFilters(schema, req);
+
+    console.log("whereConditions", whereConditions, "values", values);
 
     let selectClause = selectFields.join(", ");
     let joinClause = joins.join(" ");
@@ -557,11 +580,14 @@ async function createEntity(client, schemaName, schema, formData, imageIds) {
     if (hooksBefore) {
         for(const hook of Object.values(hooksBefore)) {
             value = await hook(client, beforeHookObj);
+            // 
+            formData.filters = value;
         }
     }
 
     let {columns, values, foreignKeyLookups, manyToManyInserts, oneToManyInsertions} = await backOfficeService.mapSchemaPropertiesToDBRelations(formData, schema);
 
+    console.log("beforeHookObj AFTER beforeHookObj", beforeHookObj);
     console.log("columns (?)", columns, "values (?)", values, "foreignKeyLookups (?)", foreignKeyLookups, "manyToManyInserts (?)", manyToManyInserts, "oneToManyInsertions (?)", oneToManyInsertions);
 
     // Step 2: Execute foreign key lookups
@@ -575,43 +601,19 @@ async function createEntity(client, schemaName, schema, formData, imageIds) {
     console.log("tablePK in create entity", tablePK);
     let entityId;
 
+    // if (schema.title !== 'target_groups') {
+        // Step 3: Insert main entity
+        const placeholders = columns.map((_, i) => `$${i + 1}`);
+        insertQuery = `INSERT INTO ${schema.title} (${columns.join(", ")})
+                             VALUES (${placeholders.join(", ")}) RETURNING ${tablePK}`;
 
+        console.log("insertQuery", insertQuery);
+        const { rows } = await client.query(insertQuery, values);
+        console.log("rows[0][tablePK]", rows[0][tablePK]);
+        entityId = rows[0][tablePK];
 
-    // if (schemaName == "orders") {
-    //     // Step 3: Insert main entity
-    //     const placeholders = columns.map((_, i) => `$${i + 1}`);
-    //     insertQuery = `INSERT INTO ${schema.title} (${columns.join(", ")})
-    //                          VALUES (${placeholders.join(", ")}) RETURNING ${tablePK}`;
-
-    //     const { rows } = await client.query(insertQuery, values);
-    //     entityId = rows[0].order_id;
-    // } else {
-    //     // Step 3: Insert main entity
-    //     const placeholders = columns.map((_, i) => `$${i + 1}`);
-    //     insertQuery = `INSERT INTO ${schema.title} (${columns.join(", ")})
-    //                          VALUES (${placeholders.join(", ")}) RETURNING ${tablePK}`;
-
-    //     console.log("insertQuery", insertQuery);
-    //     console.log("values", values);
-    //     const { rows } = await client.query(insertQuery, values);
-    //     console.log(rows);
-    //     entityId = rows[tablePK];
+        console.log("entityId", entityId);
     // }
-
-
-
-
-
-    // Step 3: Insert main entity
-    const placeholders = columns.map((_, i) => `$${i + 1}`);
-    insertQuery = `INSERT INTO ${schema.title} (${columns.join(", ")})
-                         VALUES (${placeholders.join(", ")}) RETURNING ${tablePK}`;
-
-    const { rows } = await client.query(insertQuery, values);
-    console.log("rows[0][tablePK]", rows[0][tablePK]);
-    entityId = rows[0][tablePK];
-
-    console.log("entityId", entityId);
 
     // Step 4: Handle many-to-many insertions
     for (const m2m of manyToManyInserts) {
@@ -666,7 +668,7 @@ async function createEntity(client, schemaName, schema, formData, imageIds) {
         await client.query(o2m.query, o2m.values);
     }
 
-    let afterHookObj = {imageIds, formData};
+    let afterHookObj = {imageIds, formData, beforeHookObj};
     let hooksAfter = crudHooks[schemaName]?.create.after;
     if (hooksAfter) {
         for(const hook of Object.values(hooksAfter)) {
@@ -1285,6 +1287,122 @@ async function getDistinctValuesHandler(req, res, next, client) {
     const values = result.rows.map(row => row[field]);
 
     res.json(values);
+}
+
+async function mapTargetGroupsWithFilters(client, beforeHookObj) {
+    console.log("beforeHookObj", beforeHookObj);
+    const formData = beforeHookObj.formData;
+    
+    const jsonFilters = Object.entries(formData)
+        .reduce((acc, [key, value]) => {
+            if (key.startsWith('filter_')) {
+                const filterKey = key.replace('filter_', '');
+                acc[filterKey] = value;
+            }
+            return acc;
+        }, {});
+
+    console.log("jsonFilters", jsonFilters);
+    beforeHookObj.jsonFilters = jsonFilters
+    console.log("beforeHookObj", beforeHookObj);
+
+    return jsonFilters;
+}
+
+async function mapUsersToTargetGroup(client, entityId, afterHookObj) { 
+    const filterResult = await client.query(
+        "SELECT filters FROM target_groups WHERE id = $1",
+        [entityId]
+    );
+    
+    const filters = filterResult.rows[0].filters;
+    
+    const columnMap = {
+        'date': 'birth_date',
+        'first_name': 'first_name',
+        'last_name': 'last_name'
+    };
+
+    let paramIndex = 3;
+    const whereConditions = Object.entries(filters).map(([key, value]) => {
+        const columnName = columnMap[key] || key;
+        if (key === 'date') {
+            return `${columnName} = $${paramIndex++}`;
+        }
+        return `${columnName} ILIKE $${paramIndex++}`;
+    });
+    
+    const paramValues = Object.entries(filters).map(([key, value]) => {
+        if (key === 'date') {
+            return value;
+        }
+        return `%${value}%`;
+    });
+
+    // check if we have user in the group
+    const insertQuery = `
+        INSERT INTO user_target_groups (user_id, target_group_id)
+        SELECT id, $1
+        FROM users
+        WHERE ${whereConditions.join(' AND ')}
+        AND NOT EXISTS (
+            SELECT 1 FROM user_target_groups 
+            WHERE user_id = users.id 
+            AND target_group_id = $2
+        )
+    `;
+    
+    const params = [entityId, entityId, ...paramValues];
+    
+    await client.query(insertQuery, params);
+}
+
+async function getTargetGroupsHandler(req, res, next, client) {
+    let resultRows = await client.query(`
+        SELECT 
+            id, 
+            name, 
+            count(user_target_groups.user_id), 
+            created_at 
+        FROM target_groups 
+        JOIN user_target_groups ON target_groups.id = user_target_groups.target_group_id 
+        GROUP BY id, name, created_at
+    `);
+
+    return res.json({
+        resultRows: resultRows.rows
+    })
+}
+
+async function getUsersInTargetGroup(req, res, next, client) {
+    let targetGroupId = req.path.split("/")[2];
+    let query = `
+        SELECT 
+            users.first_name, 
+            users.last_name, 
+            users.email, 
+            users.birth_date 
+        FROM target_groups 
+        JOIN user_target_groups ON target_groups.id = user_target_groups.target_group_id 
+        JOIN users on user_target_groups.user_id = users.id 
+        WHERE target_groups.id = $1`
+
+    let resultRows = await client.query(query, [targetGroupId]);
+
+    return res.json({
+        resultRows: resultRows.rows
+    })
+}
+
+async function exportTargetGroupHandler(req, res, next, client) {
+    let targetGroupId = req.path.split("/")[2];
+
+    const filters = { 'target_group_filter_value': targetGroupId };
+
+    req.query.format = 'csv';
+    req.body = { entityType: 'target_group', filters };
+
+    await exportEntityHandler(req, res, next, client);
 }
 
 process.on('uncaughtException', async (error) => {

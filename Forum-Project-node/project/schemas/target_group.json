@@ -1,0 +1,12 @@
+{
+    "entity": "target_group",
+    "fields": [
+        {
+            "key": "target_group",
+            "display_name": "Id",
+            "filter_expression": "tg.id = $FILTER_VALUE$",
+            "order_direction": "ASC",
+            "type": "number"
+        }
+    ]
+}

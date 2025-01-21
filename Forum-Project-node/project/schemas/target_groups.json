@@ -1,0 +1,45 @@
+{
+    "entity": "target_groups",
+    "fields": [
+        {
+            "name": "id",
+            "type": "integer",
+            "label": "Id",
+            "create": false,
+            "editable": false,
+            "show_in_filter": false
+        },
+        {
+            "name": "first_name",
+            "type": "string",
+            "label": "First Name",
+            "create": false,
+            "editable": false,
+            "show_in_filter": true
+        },
+        {
+            "name": "last_name",
+            "type": "string",
+            "label": "Last Name",
+            "create": false,
+            "editable": false,
+            "show_in_filter": true
+        },
+        {
+            "name": "date",
+            "type": "currentDate",
+            "label": "Birth Date",
+            "create": false,
+            "editable": false,
+            "show_in_filter": true
+        },
+        {
+            "name": "name",
+            "type": "string",
+            "label": "Target Group Name",
+            "create": true,
+            "editable": false,
+            "show_in_filter": false
+        }
+    ]
+}
