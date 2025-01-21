@@ -10,6 +10,7 @@ const bufferSplit = require('buffer-split');
 const Cursor = require('pg-cursor');
 const axios = require('axios');
 const config = require('./config');
+const { EmailDataMapper } = require('./emailDataMapper');
 
 async function login(username, password, client) {
 	AssertDev(username != undefined, "username is undefined");
@@ -898,159 +899,20 @@ async function getTemplateById(client, id) {
 async function mapEmailData(client, email, subject, bodyData, informationToMap, orderObj) {
     const settingsRow = await client.query(`SELECT * FROM settings`);
     const settings = settingsRow.rows[0];
-    console.log("settings", settingsRow.rows);
+
     AssertDev(settingsRow.rows.length == 1, "Expect one settings");
 
-    console.log("body", bodyData, "informationToMap", informationToMap, "orderObj", orderObj);
-    let discount_percentage = orderObj.discount_percentage;
+    const emailMapper = new EmailDataMapper(settings);
 
-    let body = bodyData.body;
-
-    if (subject == "Verification Email") {
-        const verificationURL = `${config.urlVerifyEmail}${informationToMap.verification_code}`;
-        const clickableLink = `<a href="${verificationURL}">Click here to verify your account</a>`;
-
-        body = body.replace("{first_name}", informationToMap.first_name);
-        body = body.replace("{last_name}", informationToMap.last_name);
-        body = body.replace("{url}", clickableLink);
-
-    } else if (subject == "Purchase Email" || subject == "Payment Email") {
-        body = body.replace("{first_name}", informationToMap.user_first_name);
-        body = body.replace("{last_name}", informationToMap.user_last_name);
-
-        html = `
-        <table border="${settings.send_email_template_border}" cellpadding="5" cellspacing="3" style="border-collapse: ${settings.send_email_template_border_collapse};">
-            <tr>
-                <th style="background-color: ${settings.send_email_template_background_color};">Product</th>
-                <th style="background-color: ${settings.send_email_template_background_color};">Quantity</th>
-                <th style="background-color: ${settings.send_email_template_background_color};">Price (Per item with VAT)</th>
-                <th style="background-color: ${settings.send_email_template_background_color};">Total Product Price With VAT</th>
-            </tr>
-            `
-            
-        let totalPrice = 0;
-        let totalPriceWithVAT = 0;
-        let currency_sumbol = "";
-
-        for (const product of informationToMap.cart_items) {
-
-            console.log("product", product);
-            
-            let productName = product.name;
-            let quantity = product.cart_quantity; 
-            let price = product.price;
-            currency_sumbol = product.symbol;
-            let vat = product.vat;
-
-            let floatVat = parseFloat(vat);
-
-            let priceTotal = parseFloat(price) * parseInt(quantity); // 250
-
-            totalPrice += priceTotal;
-
-            let vatCurrentProduct = priceTotal * (floatVat / 100); // 62,5
-
-            totalPriceWithVAT += vatCurrentProduct;
-
-            let totalProductPriceWithVat = Math.round((priceTotal + vatCurrentProduct) * 100) / 100;
-
-            let singleProductWithVAT = Math.round((vatCurrentProduct + parseFloat(price)) * 100) / 100;
-
-            html += `
-            <tr>
-                <td>${productName}</td>
-                <td style="text-align: ${settings.send_email_template_text_align};">${quantity}</td>
-                <td style="text-align: ${settings.send_email_template_text_align};">${singleProductWithVAT} ${currency_sumbol}</td>
-                <td style="text-align: ${settings.send_email_template_text_align};">${totalProductPriceWithVat} ${currency_sumbol}</td>
-            </tr>
-            `
-        }
-        let totalSumRounded = parseFloat(informationToMap.total_sum);
-        let totalVatRounded = Math.round(parseFloat(totalPriceWithVAT) * 100) / 100;
-        let totalWithVatRounded = Math.round(parseFloat(informationToMap.total_sum_with_vat) * 100) / 100;
-        // let providedSumRounded = Math.round(parseFloat(provided_sum));
-
-        html +=`<tr>
-                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">Total Order Price Without VAT:</td>
-                <td style="text-align: ${settings.send_email_template_text_align};">${totalSumRounded} ${currency_sumbol}</td>
-            </tr>
-            <tr>
-                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">VAT:</td>
-                <td style="text-align: ${settings.send_email_template_text_align};">${totalVatRounded} ${currency_sumbol}</td>
-            </tr>
-            <tr>
-                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">VAT %:</td>
-                <td style="text-align: ${settings.send_email_template_text_align};">${informationToMap.vat_in_persent} %</td>
-            </tr>
-            <tr>
-                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">Total Order Price With VAT:</td>
-                <td style="text-align: ${settings.send_email_template_text_align};">${totalWithVatRounded} ${currency_sumbol}</td>
-            </tr>
-            <tr>
-                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">You paid:</td>
-                <td style="text-align: ${settings.send_email_template_text_align};">${totalWithVatRounded} ${currency_sumbol}</td>
-            </tr>
-        `
-
-        if (discount_percentage > 0) {
-            html +=
-            `<tr>
-                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">Discount Percentage:</td>
-                <td style="text-align: ${settings.send_email_template_text_align};"> ${discount_percentage} %</td>
-            </tr>
-            <tr>
-                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">Discount Amount:</td>
-                <td class="text-align": ${settings.send_email_template_text_align};"> ${(totalWithVatRounded * (discount_percentage / 100)).toFixed(2)} ${currency_sumbol}</td>
-            </tr>
-            <tr>
-                <td colspan='3' style="text-align: ${settings.send_email_template_text_align};">Total with discount:</td>
-                <td class="text-align": ${settings.send_email_template_text_align};"> ${(totalWithVatRounded - (totalWithVatRounded * (discount_percentage / 100))).toFixed(2)} ${currency_sumbol}</td>
-            </tr>
-            </table>
-            `
-        } else {
-            html += `</table>`
-        }
-
-        console.log("html", html);
-
-        let shippingHtml = `
-            <table border="${settings.send_email_template_border}" cellpadding="5" cellspacing="3" style="border-collapse: ${settings.send_email_template_border_collapse};">
-                <tr>
-                    <th style="background-color: ${settings.send_email_template_background_color};">Order ID</th><td>${informationToMap.shipping_details[0].order_id}</td>
-                </tr>
-                <tr>
-                    <th style="background-color: ${settings.send_email_template_background_color};">Recipient</th><td>${informationToMap.shipping_details[0].first_name} ${informationToMap.shipping_details[0].last_name}</td>
-                </tr>
-                <tr>
-                    <th style="background-color: ${settings.send_email_template_background_color};">Email</th><td>${informationToMap.shipping_details[0].email}</td>
-                </tr>
-                <tr>
-                    <th style="background-color: ${settings.send_email_template_background_color};">Address</th><td>${informationToMap.shipping_details[0].address}, ${informationToMap.shipping_details[0].town}</td>
-                </tr>
-                <tr>
-                    <th style="background-color: ${settings.send_email_template_background_color};">Phone</th><td>${informationToMap.shipping_details[0].phone}</td>
-                </tr>
-            </table>
-        `
-        if (subject == "Purchase Email") {
-            body = body.replace("{cart}", html);
-            body = body.replace("{shipping_details}", shippingHtml);
-        } else {
-            body = body.replace("{products}", html);
-            body = body.replace("{shipping_details}", shippingHtml);
-        }
-
-    } else {
-        AssertDev(false, "No more options");
+    switch (subject) {
+        case "Verification Email":
+            return emailMapper.mapVerificationEmail(email, informationToMap, bodyData.body);
+        case "Purchase Email":
+        case "Payment Email":
+            return emailMapper.mapPurchaseEmail(email, informationToMap, bodyData.body, orderObj || {});
+        default:
+            AssertDev(false, "No more options");
     }
-
-    return {
-        from: "no-reply@pascal.com",
-        to: email,
-        subject: subject,
-        html: body,
-    };
 }
 
 module.exports = {
