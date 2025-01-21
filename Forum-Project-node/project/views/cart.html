@@ -166,9 +166,9 @@
                     console.log("data");
                     console.log(data);
                     if (data.code === undefined) {
-                        displayErrorMessage(data.error_message);
+                        alert(data.error_message);
                     } else {
-                        displayErrorMessage(data.error_message + " code: " + data.error_code);
+                        alert(data.error_message + " code: " + data.error_code);
                     }
                 }
             })
