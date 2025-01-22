@@ -50,6 +50,41 @@ const urlToFunctionMapFrontOffice = {
     }
 };
 
+const PUBLIC_PATHS = {
+    GET: {
+        '/registration': true,
+        '/refresh_captcha': true,
+        '/home': true,
+        '/home/:id': true,
+        '/header': true,
+        '/verify': true,
+        '/cart': true,
+        '/logout': true
+    },
+    POST: {
+        '/registration': true,
+        '/login': true,
+        '/addToCart': true,
+        '/removeFromCart': true,
+    }
+};
+
+function requiresAuth(method, path) {
+    const methodPaths = PUBLIC_PATHS[method];
+    if (!methodPaths) return true;
+    
+    if (methodPaths[path]) return false;
+    
+    for (const publicPath of Object.keys(methodPaths)) {
+        if (publicPath.includes('/:')) {
+            const regex = new RegExp(publicPath.replace(/:[^\s/]+/, '([\\w-]+)'));
+            if (path.match(regex)) return false;
+        }
+    }
+    
+    return true;
+}
+
 function mapUrlToFunction(req) {
     const methodMap = urlToFunctionMapFrontOffice[req.method];
 
@@ -100,10 +135,17 @@ router.use(async (req, res, next) => {
 
         let handler = mapUrlToFunction(req);
 
-        AssertUser(handler != undefined, "Invalid url", errors.INVALID_URL)
+        AssertUser(handler != undefined, "Invalid url", errors.INVALID_URL);
+
+        let sessionId = req.cookies[SESSION_ID]
+        let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+        if (requiresAuth(req.method, req.path)) {
+            AssertUser(authenticatedUser != null, "You have to be logged to access this page");
+        }
 
         if (typeof handler === 'function') {
-            await handler(req, res, next, client);
+            await handler(req, res, next, client, authenticatedUser);
         } else {
             return;
         }
@@ -274,10 +316,7 @@ async function postLoginHandler(req, res, next, client) {
     });
 }
 
-async function getHeaderHandler(req, res, next, client) {
-    let sessionId = req.cookies[SESSION_ID]
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
+async function getHeaderHandler(req, res, next, client, authenticatedUser) {
     let userInformation = {
         firstName: "",
         lastName: "",
@@ -357,10 +396,7 @@ async function getHomeHandler(req, res, next, client) {
     });
 }
 
-async function getLogoutHandler(req, res, next, client) {
-    sessionId = req.cookies[SESSION_ID]
-    authenticatedUser = await sessions.getCurrentUser(sessionId, client)
-
+async function getLogoutHandler(req, res, next, client, authenticatedUser) {
     await client.query(`DELETE FROM custom_sessions WHERE session_id = $1`,[authenticatedUser['userRow']['session_id']]);
 
     await logEvent(authenticatedUser.userRow.data, AUDIT_LOG_EXCEPTION_TYPE_EMPTY_STRING, "User logged out from the site", AUDIT_SUB_SYSTEM_SITE, AUDIT_LOG_TYPE_EVENT);
@@ -377,10 +413,7 @@ async function getLogoutHandler(req, res, next, client) {
     });
 }
 
-async function getProfileHandler(req, res, next, client) {
-    sessionId = req.cookies[SESSION_ID];
-    authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
+async function getProfileHandler(req, res, next, client, authenticatedUser) {
     let profileData = await front_office.getProfileData(authenticatedUser, client);
 
     res.json({
@@ -428,10 +461,7 @@ async function postUpdateCarQuantityHandler(req, res, next, client) {
     });
 }
 
-async function postAddToCart(req, res, next, client) {
-    let sessionId = req.cookies[SESSION_ID];
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
+async function postAddToCart(req, res, next, client, authenticatedUser) {
     let productId = req.body.productId;
     let quantity = req.body.quantity;
 
@@ -494,12 +524,7 @@ async function postRemoveFromCart(req, res, next, client) {
     });
 }
 
-async function postCartHandler(req, res, next, client) {
-    let sessionId = req.cookies[SESSION_ID];
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_ORDER)
-
+async function postCartHandler(req, res, next, client, authenticatedUser) {
     let { first_name, last_name, email, address, country_code, phone, town, discount_percentage } = req.body;
 
     console.log("discount_percentage", discount_percentage);
@@ -541,12 +566,7 @@ async function postCartHandler(req, res, next, client) {
     });
 }
 
-async function getOrderHandler(req, res, next, client) {
-    let sessionId = req.cookies[SESSION_ID];
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
-
+async function getOrderHandler(req, res, next, client, authenticatedUser) {
     let order_id = req.query.order_id;
 
     let responseGetOrder = await front_office.getOrder(order_id, client);
@@ -557,12 +577,7 @@ async function getOrderHandler(req, res, next, client) {
     });
 }
 
-async function postPaymentHandlerDef(req, res, next, client) {
-    let sessionId = req.cookies[SESSION_ID];
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
-
+async function postPaymentHandlerDef(req, res, next, client, authenticatedUser) {
     const { payment_method, order_id, payment_amount,token } = req.body;
 
     console.log("Entered in postPaymentHandler ->", "payment_method", payment_method, "order_id", order_id, "payment_amount", payment_amount, "token",token)
@@ -588,12 +603,7 @@ async function postPaymentHandlerDef(req, res, next, client) {
 }
 
 
-async function postPaypalHandler(req, res, next, client) { // postPaypalHandler -> paymentSecondStep ? ili drugo ime abstractno ne konretno
-    let sessionId = req.cookies[SESSION_ID];
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
-
+async function postPaypalHandler(req, res, next, client, authenticatedUser) { // postPaypalHandler -> paymentSecondStep ? ili drugo ime abstractno ne konretno
     let orderId = req.body.order_id;
     console.log("orderId", orderId);
 
@@ -607,12 +617,7 @@ async function postPaypalHandler(req, res, next, client) { // postPaypalHandler 
     });
 }
 
-async function getPaypalCompleteOrder(req, res, next, client) {
-    let sessionId = req.cookies[SESSION_ID];
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
-
+async function getPaypalCompleteOrder(req, res, next, client, authenticatedUser) {
     const orderId = req.query.order_id;
     const token = req.query.token;
 
@@ -762,12 +767,7 @@ async function getPaypalCancelOrder(req, res, next, client) {
     res.redirect('/home.html');
 }
 
-async function postPaymentHandler(req, res, next, client) {
-    let sessionId = req.cookies[SESSION_ID];
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    AssertUser(authenticatedUser != null, "You have to be logged in to make a purchase", errors.NOT_LOGGED_USER_FOR_MAKEING_PURCHASE);
-
+async function postPaymentHandler(req, res, next, client, authenticatedUser) {
     let orderId = req.body.order_id;
     let paymentAmount = req.body.payment_amount;
 
@@ -821,12 +821,7 @@ async function postPaymentHandler(req, res, next, client) {
     });
 }
 
-async function postProfileHandler(req, res, next, client) {
-    let sessionId = req.cookies[SESSION_ID];
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    AssertUser(authenticatedUser != null, "You have to be logged in to edit your profile", errors.NOT_LOGGED_USER_FOR_MAKEING_PROFILE_CHANGES);
-
+async function postProfileHandler(req, res, next, client, authenticatedUser) {
     const userDetails = {
         firstName: req.body.first_name,
         lastName: req.body.last_name,

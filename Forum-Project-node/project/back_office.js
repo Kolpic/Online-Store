@@ -70,6 +70,15 @@ const TIMEOUT_CONFIG = {
     default: 200 * 1000,                   // 20 sec
 };
 
+const PUBLIC_PATHS = {
+    GET: {
+        '/categories/:id': true
+    },
+    POST: {
+        '/login': true
+    }
+};
+
 const crudHooks = {
     users: {
         create: {
@@ -183,6 +192,22 @@ const crudHooks = {
     }
 }
 
+function requiresAuth(method, path) {
+    const methodPaths = PUBLIC_PATHS[method];
+    if (!methodPaths) return true;
+    
+    if (methodPaths[path]) return false;
+    
+    for (const publicPath of Object.keys(methodPaths)) {
+        if (publicPath.includes('/:')) {
+            const regex = new RegExp(publicPath.replace(/:[^\s/]+/, '([\\w-]+)'));
+            if (path.match(regex)) return false;
+        }
+    }
+    
+    return true;
+}
+
 function getTimeoutForPath(path) {
     for (const [key, value] of Object.entries(TIMEOUT_CONFIG)) {
         if (key.includes('/:')) {
@@ -285,7 +310,14 @@ router.use(async (req, res, next) => {
                 let handler = mapUrlToFunction(req);
                 AssertUser(handler !== undefined, "Invalid url", errors.INVALID_URL);
 
-                await handler(req, res, next, client);
+                let sessionId = req.cookies[SESSION_ID]
+                let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
+
+                if (requiresAuth(req.method, req.path)) {
+                    AssertUser(authenticatedUser != null, "You have to be logged to access this page");
+                }
+
+                await handler(req, res, next, client, authenticatedUser);
                 await client.query("COMMIT");
 
                 resolve(); // Mark handler as resolved
@@ -441,23 +473,13 @@ async function postLoginHandler(req, res, next, client) {
     });
 }
 
-async function getHeaderHandler(req, res, next, client) {
-    let sessionId = req.cookies[SESSION_ID]
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    AssertUser(authenticatedUser != null, "You have to be logged to access this page");
-
+async function getHeaderHandler(req, res, next, client, authenticatedUser) {
     return res.json({
         email: authenticatedUser['userRow']['data'],
     });
 }
 
-async function getLogoutHandler(req, res, next, client) {
-    sessionId = req.cookies[SESSION_ID]
-    authenticatedUser = await sessions.getCurrentUser(sessionId, client)
-
-    AssertUser(authenticatedUser != null, "You have to be logged to access this page");
-
+async function getLogoutHandler(req, res, next, client, authenticatedUser) {
     await client.query(`DELETE FROM custom_sessions WHERE session_id = $1`,[authenticatedUser['userRow']['session_id']]);
 
     await logEvent(authenticatedUser.userRow.data, "", "User logged out from back office");
@@ -473,12 +495,7 @@ async function getLogoutHandler(req, res, next, client) {
     });
 }
 
-async function filterEntities(req, res, next, client) {
-    let sessionId = req.cookies[SESSION_ID]
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    AssertUser(authenticatedUser != null, "You have to login to access this page");
-
+async function filterEntities(req, res, next, client, authenticatedUser) {
     let schema = req.body.schema;
     let filterById = req.body.id;
     console.log("filterById", filterById, "schema", schema);
@@ -547,12 +564,7 @@ async function getCategoriesHandler(req, res, next, client) {
 
 const pipelineAsync = promisify(pipeline);
 
-async function createEntityHandler(req, res, next, client) { // client -> dbConnection
-    let sessionId = req.cookies[SESSION_ID]
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    AssertUser(authenticatedUser != null, "You have to login to access this page");
-
+async function createEntityHandler(req, res, next, client, authenticatedUser) { // client -> dbConnection
     let schemaName = req.path.split("/")[2];
     let schema = require(`./schemas/${schemaName}_validation_schema.json`);
 
@@ -601,19 +613,17 @@ async function createEntity(client, schemaName, schema, formData, imageIds) {
     console.log("tablePK in create entity", tablePK);
     let entityId;
 
-    // if (schema.title !== 'target_groups') {
-        // Step 3: Insert main entity
-        const placeholders = columns.map((_, i) => `$${i + 1}`);
-        insertQuery = `INSERT INTO ${schema.title} (${columns.join(", ")})
-                             VALUES (${placeholders.join(", ")}) RETURNING ${tablePK}`;
+    // Step 3: Insert main entity
+    const placeholders = columns.map((_, i) => `$${i + 1}`);
+    insertQuery = `INSERT INTO ${schema.title} (${columns.join(", ")})
+                         VALUES (${placeholders.join(", ")}) RETURNING ${tablePK}`;
 
-        console.log("insertQuery", insertQuery);
-        const { rows } = await client.query(insertQuery, values);
-        console.log("rows[0][tablePK]", rows[0][tablePK]);
-        entityId = rows[0][tablePK];
+    console.log("insertQuery", insertQuery);
+    const { rows } = await client.query(insertQuery, values);
+    console.log("rows[0][tablePK]", rows[0][tablePK]);
+    entityId = rows[0][tablePK];
 
-        console.log("entityId", entityId);
-    // }
+    console.log("entityId", entityId);
 
     // Step 4: Handle many-to-many insertions
     for (const m2m of manyToManyInserts) {
@@ -677,13 +687,7 @@ async function createEntity(client, schemaName, schema, formData, imageIds) {
     }
 }
 
-async function updateEntity(req, res, next, client) {
-
-    let sessionId = req.cookies[SESSION_ID]
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    AssertUser(authenticatedUser != null, "You have to login to access this page");
-
+async function updateEntity(req, res, next, client, authenticatedUser) {
     let schemaName = req.path.split("/")[2];
     let schema = require(`./schemas/${schemaName}_validation_schema.json`);
 
@@ -1129,11 +1133,7 @@ function formatTimestamp(timestamp) {
     return date.toLocaleString();
 }
 
-async function uploadEntitiesHandler(req, res, next, client) {
-    let sessionId = req.cookies[SESSION_ID]
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    // let schemaName = req.path.split("/")[2];
+async function uploadEntitiesHandler(req, res, next, client, authenticatedUser) {
     let schemaName = "products";
     let schema = require(`./schemas/${schemaName}_validation_schema.json`);
 
@@ -1180,14 +1180,7 @@ async function getPermissionsForCreate(req, res, next, client) {
     return res.json( result.rows ); 
 }
 
-async function getStaffPermissions(req, res, next, client) {
-    let sessionId = req.cookies[SESSION_ID]
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    AssertUser(authenticatedUser != null, "You have to login to access this page");
-
-    console.log("authenticatedUser", authenticatedUser);
-
+async function getStaffPermissions(req, res, next, client, authenticatedUser) {
     const permissions = await backOfficeService.getStaffPermissions(client, authenticatedUser.userRow.data);
 
     return res.json({ data: permissions })
@@ -1250,14 +1243,7 @@ async function auditRolePermissionChanges(client, beforeHookObj) {
     await logEvent(beforeHookObj.formData.user, "", message);
 }
 
-async function getEmailTemplatesHandler(req, res, next, client) {
-    let sessionId = req.cookies[SESSION_ID]
-    let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
-
-    AssertUser(authenticatedUser != null, "You have to login to access this page");
-
-    // await backOfficeService.checkStaffPermissions(client, authenticatedUser.userRow.data, schema.title, "update");
-
+async function getEmailTemplatesHandler(req, res, next, client, authenticatedUser) {
     const templatesData = await backOfficeService.getTemplatesData(client);
 
     console.log("templatesData", templatesData);
