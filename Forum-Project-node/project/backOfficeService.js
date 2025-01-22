@@ -12,6 +12,32 @@ const axios = require('axios');
 const config = require('./config');
 const { EmailDataMapper } = require('./emailDataMapper');
 
+const INTERFACE_MAPPING = {
+  staff: 'CRUD Staff',
+  roles: 'Staff roles',
+  users: 'CRUD Users',
+  orders: 'CRUD Orders',
+  products: 'CRUD Products',
+  email_template: 'CRUD Email',
+  settings: 'CRUD Email',
+  promotions: 'CRUD Promotions',
+  target_groups: 'CRUD Target Groups'
+};
+
+const VALID_INTERFACES = [
+  'CRUD Products',
+  'Logs',
+  'Captcha Settings',
+  'Report sales',
+  'Staff roles',
+  'CRUD Orders',
+  'CRUD Users',
+  'CRUD Staff',
+  'CRUD Email',
+  'CRUD Promotions',
+  'CRUD Target Groups'
+];
+
 async function login(username, password, client) {
 	AssertDev(username != undefined, "username is undefined");
 	AssertDev(password != undefined, "password is undefined");
@@ -834,37 +860,15 @@ async function getStaffPermissions(client, staffUsername) {
 }
 
 async function checkStaffPermissions(client, staffUsername, interfaceI, permission) {
-    console.log(`Entered checkStaffPermissions`);
-    if (interfaceI == "staff") {
-        interfaceI = "CRUD Staff";
-    } else if (interfaceI == "roles") {
-        interfaceI = "Staff roles";
-    } else if (interfaceI == "users") {
-        interfaceI = "CRUD Users";
-    } else if (interfaceI == "orders") {
-        interfaceI = "CRUD Orders";
-    } else if (interfaceI == "products") {
-        interfaceI = "CRUD Orders";
-    } else if (interfaceI == "email_template") {
-        interfaceI = "CRUD Email";
-    } else if (interfaceI == "settings") {
-        interfaceI = "CRUD Email";
-    } else if (interfaceI == "promotions") {
-        interfaceI = "CRUD Promotions";
-    } else if (interfaceI == "target_groups") {
-        interfaceI = "CRUD Target Groups";
-    }
+    const mappedInterface = INTERFACE_MAPPING[interfaceI] || interfaceI;
+    AssertDev(VALID_INTERFACES.includes(mappedInterface),`Invalid interface: ${mappedInterface}`);
 
     const permissions = await getStaffPermissions(client, staffUsername);
     const allowedPermissions = permissions
-        .filter(p => p.interface === interfaceI)
+        .filter(p => p.interface === mappedInterface)
         .map(p => p.permission_name);
-    console.log("interfaceI", interfaceI);
-    console.log("allowedPermissions", allowedPermissions);
 
     AssertUser(allowedPermissions.includes(permission), `Permission denied: Missing required permission '${permission}'`)
-
-    console.log(`Staff '${staffUsername}' has permission '${permission}'`);
 }
 
 async function getTemplatesData(client) {
