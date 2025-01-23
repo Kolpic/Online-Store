@@ -53,6 +53,23 @@
       "computed": true,
       "readOnly": true
     },
+    "discount_percentage": {
+      "type": "number",
+      "description": "Discount Percentage",
+      "label": "Discount Percentage"
+    },
+    "discount_amount": {
+      "type": "number",
+      "description": "Discount amount (computed)",
+      "computed": true,
+      "readOnly": true
+    },
+    "price_after_discount": {
+      "type": "number",
+      "description": "Price after discount (computed)",
+      "computed": true,
+      "readOnly": true
+    },
     "order_items": {
       "type": "array",
       "description": "Order Items",
