@@ -394,6 +394,16 @@ async function makeTableJoins(schema, action) {
                     "ROUND(SUM(order_items.price * order_items.quantity) + " +
                     "SUM(order_items.price * order_items.quantity * (CAST(order_items.vat AS numeric) / 100)), 2) AS \"Total With Vat\""
                 );
+            } else if (field === "discount_amount") {
+                selectFields.push(
+                    "round(((sum(order_items.price * order_items.quantity) + sum(order_items.price * order_items.quantity * " + 
+                    "(cast(order_items.vat as numeric) / 100)))) * (orders.discount_percentage / 100.0), 2) AS \"Discount Amount\""
+                );
+            } else if (field === "price_after_discount") {
+                selectFields.push(
+                    "round( sum(order_items.price * order_items.quantity) + sum(order_items.price * order_items.quantity * " + 
+                    "(cast(order_items.vat as numeric) / 100)) - ((sum(order_items.price * order_items.quantity) + sum(order_items.price * order_items.quantity * (cast(order_items.vat as numeric) / 100)))) * (orders.discount_percentage / 100.0), 2) AS \"Price after discount\""
+                );
             }
             continue;
         }
@@ -728,20 +738,20 @@ function getSQLTemplateFromInterfaceName(reportName) {
     } else if (reportName == "order") {
         sqlTemplate = `
             SELECT 
-                $time_grouping_expression$                                                                                                                      AS "Order Inserted At",
-                $order_id_grouping_expression$                                                                                                                  AS "Order ID",
-                $id_grouping_expression$                                                                                                                        AS "User ID",
-                $status_grouping_expression$                                                                                                                    AS "Status",
-                sum(oi.price * oi.quantity)                                                                                                                     AS "Total",
-                round(sum(oi.price * oi.quantity * (CAST(oi.vat as numeric) / 100)),2)                                                                          AS "VAT",
-                round(sum(oi.price * oi.quantity) + sum(oi.price * oi.quantity * (cast(oi.vat as numeric) / 100)),2)                                            AS "Total With VAT",
-                $discount_percentage_grouping_expression$                                                                                                       AS "Discount Percentage",
-                round(sum(oi.price * oi.quantity * (o.discount_percentage / 100.0)), 2)                                                                         AS "Discount Amount",
-                round(sum(oi.price * oi.quantity) + sum(oi.price * oi.quantity * (cast(oi.vat as numeric) / 100)) 
-                    - sum(oi.price * oi.quantity * (o.discount_percentage / 100.0)), 2)                                                                         AS "Price after discount",
-                c.symbol                                                                                                                                        AS "Currency",
-                count(oi.order_id)                                                                                                                              AS "Number of orders items",
-                count(*) OVER ()                                                                                                                                AS "Total Rows" 
+                $time_grouping_expression$                                                                                                                           AS "Order Inserted At",
+                $order_id_grouping_expression$                                                                                                                       AS "Order ID",
+                $id_grouping_expression$                                                                                                                             AS "User ID",
+                $status_grouping_expression$                                                                                                                         AS "Status",
+                $discount_percentage_grouping_expression$                                                                                                            AS "Discount Percentage",
+                c.symbol                                                                                                                                             AS "Currency",
+                sum(oi.price * oi.quantity)                                                                                                                          AS "Total",
+                round(sum(oi.price * oi.quantity * (CAST(oi.vat as numeric) / 100)),2)                                                                               AS "VAT",
+                round(sum(oi.price * oi.quantity) + sum(oi.price * oi.quantity * (cast(oi.vat as numeric) / 100)),2)                                                 AS "Total With VAT",
+                sum(round(  ((oi.price * oi.quantity) + (oi.price * oi.quantity * (cast(oi.vat as numeric) / 100)))    * (o.discount_percentage / 100.0),2))         AS "Discount Amount",
+                sum(round( (oi.price * oi.quantity + (oi.price * oi.quantity * (cast(oi.vat as numeric) / 100))) - (((oi.price * oi.quantity) + 
+                (oi.price * oi.quantity * (cast(oi.vat as numeric) / 100)))    * (o.discount_percentage / 100.0)),2))        AS "Price after discount",
+                count(oi.order_id)                                                                                                                                   AS "Number of orders items",
+                count(*) OVER ()                                                                                                                                     AS "Total Rows" 
             FROM orders o
             JOIN order_items AS oi ON o.order_id = oi.order_id
             JOIN users       AS u  ON o.user_id  = u.id
@@ -754,7 +764,7 @@ function getSQLTemplateFromInterfaceName(reportName) {
                 AND $discount_percentage_filter_expression$
                 AND $id_filter_expression$ 
             GROUP BY GROUPING SETS ( 
-                (1, 2, 3, 4, 8, 11),
+                (1, 2, 3, 4, 5, 6),
                 ()
             )
             ORDER BY $order_by_clause$
@@ -766,20 +776,44 @@ function getSQLTemplateFromInterfaceName(reportName) {
                 u.email AS "User Email",
                 u.id AS "User ID",
                 
-                COUNT(CASE WHEN o.order_date >= NOW() - INTERVAL '1 day' THEN o.order_id END) AS "Orders Last Day",
-                ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 day' THEN oi.quantity * oi.price * (1 + CAST(oi.vat AS numeric) / 100) END), 2) AS "VAT Total Price Last Day",
-                c.symbol AS "Currency Last Day",
+                COUNT(DISTINCT CASE WHEN o.order_date >= NOW() - INTERVAL '1 day' THEN o.order_id END)                                                 AS "Orders Last Day",
+                ROUND(
+                    SUM(
+                        CASE WHEN o.order_date >= NOW() - INTERVAL '1 day' 
+                            THEN (oi.price * oi.quantity * (1 + CAST(oi.vat AS numeric) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0)
+                        END
+                    )
+                , 2) AS "VAT Total Price Last Day",
+                c.symbol                                                                                                                                AS "Currency Last Day",
                 
-                COUNT(CASE WHEN o.order_date >= NOW() - INTERVAL '1 week' THEN o.order_id END) AS "Orders Last Week",
-                ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 week' THEN oi.quantity * oi.price * (1 + CAST(oi.vat AS numeric) / 100) END), 2) AS "VAT Total Price Last Week",
+                COUNT(DISTINCT CASE WHEN o.order_date >= NOW() - INTERVAL '1 week' THEN o.order_id END) AS "Orders Last Week",
+                ROUND(
+                    SUM(
+                        CASE WHEN o.order_date >= NOW() - INTERVAL '1 week' 
+                            THEN (oi.price * oi.quantity * (1 + CAST(oi.vat AS numeric) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0) 
+                        END
+                    )
+                , 2) AS "VAT Total Price Last Week",
                 c.symbol AS "Currency Last Week",
                 
-                COUNT(CASE WHEN o.order_date >= NOW() - INTERVAL '1 month' THEN o.order_id END) AS "Orders Last Month",
-                ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 month' THEN oi.quantity * oi.price * (1 + CAST(oi.vat AS numeric) / 100) END), 2) AS "VAT Total Price Last Month",
+                COUNT(DISTINCT CASE WHEN o.order_date >= NOW() - INTERVAL '1 month' THEN o.order_id END) AS "Orders Last Month",
+                ROUND(
+                    SUM(
+                        CASE WHEN o.order_date >= NOW() - INTERVAL '1 month' 
+                            THEN (oi.price * oi.quantity * (1 + CAST(oi.vat AS numeric) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0)
+                        END
+                    )
+                , 2) AS "VAT Total Price Last Month",
                 c.symbol AS "Currency Last Month",
                 
-                COUNT(CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' THEN o.order_id END) AS "Orders Last Year",
-                ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' THEN oi.quantity * oi.price * (1 + CAST(oi.vat AS numeric) / 100) END), 2) AS "VAT Total Price Last Year",
+                COUNT(DISTINCT CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' THEN o.order_id END) AS "Orders Last Year",
+                ROUND(
+                    SUM(
+                        CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' 
+                            THEN (oi.price * oi.quantity * (1 + CAST(oi.vat AS numeric) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0)
+                        END
+                    )
+                , 2) AS "VAT Total Price Last Year",
                 c.symbol AS "Currency Last Year",
 
                 SUM (COUNT (DISTINCT u.id))OVER () AS "Over Total Count"

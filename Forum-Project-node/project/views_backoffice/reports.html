@@ -256,6 +256,7 @@
 
         function setDefaultDateRange() {
             const now = new Date();
+            now.setHours(now.getHours() + 3);
             const oneDayAgo = new Date();
             oneDayAgo.setDate(now.getDate() - 1);
 
