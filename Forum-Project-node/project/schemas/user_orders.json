@@ -10,9 +10,17 @@
             "groupable": false
         },
         {
+            "key": "id",
+            "display_name": "User ID",
+            "grouping_expression": "u.id",
+            "filter_expression": "u.id = $FILTER_VALUE$",
+            "type": "number",
+            "groupable": false
+        },
+        {
             "key": "price",
             "display_name": "Order price",
-            "filter_expression": "(oi.price * (CAST(oi.vat AS numeric) / 100.0)) + oi.price >= $FILTER_VALUE_MIN$ AND (oi.price * (CAST(oi.vat AS numeric) / 100.0)) + oi.price <= $FILTER_VALUE_MAX$",
+            "filter_expression": "ROUND(SUM((oi.price * oi.quantity * (1 + CAST(oi.vat AS numeric) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0)), 2) >= $FILTER_VALUE_MIN$ AND ROUND(SUM((oi.price * oi.quantity * (1 + CAST(oi.vat AS numeric) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0)), 2) <= $FILTER_VALUE_MAX$",
             "type": "range",
             "groupable": false
         }
