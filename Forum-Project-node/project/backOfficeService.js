@@ -638,7 +638,7 @@ async function generateReportSQLQuery(inputData, reportFilters, reportName) {
                 minValue = 0.01;
             }
             if (maxValue === undefined || maxValue === '') {
-                maxValue = 10000;
+                maxValue = 10000000;
             }
 
             let filterExpr = reportFilter.filter_expression
@@ -829,11 +829,11 @@ function getSQLTemplateFromInterfaceName(reportName) {
                 currencies c ON p.currency_id = c.id
             WHERE TRUE
                 AND $email_filter_expression$
-                AND $price_filter_expression$
             GROUP BY GROUPING SETS (
                 (1, 2, 11),
                 ()
             )
+            HAVING $price_filter_expression$
             ORDER BY $order_by_clause$
             LIMIT 100
         `;
