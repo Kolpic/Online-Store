@@ -10,9 +10,17 @@
             "groupable": false
         },
         {
+            "key": "id",
+            "display_name": "User ID",
+            "grouping_expression": "u.id",
+            "filter_expression": "u.id = $FILTER_VALUE$",
+            "type": "number",
+            "groupable": false
+        },
+        {
             "key": "price",
             "display_name": "Order price",
-            "filter_expression": "(oi.price * (CAST(oi.vat AS numeric) / 100.0)) + oi.price >= $FILTER_VALUE_MIN$ AND (oi.price * (CAST(oi.vat AS numeric) / 100.0)) + oi.price <= $FILTER_VALUE_MAX$",
+            "filter_expression": "ROUND(om.vat_total_price_last_year, 2) BETWEEN $FILTER_VALUE_MIN$ AND $FILTER_VALUE_MAX$",
             "type": "range",
             "groupable": false
         }

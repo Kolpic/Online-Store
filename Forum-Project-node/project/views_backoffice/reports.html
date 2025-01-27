@@ -393,6 +393,21 @@
             const formData = new FormData(document.getElementById('filterForm'));
             const queryString = new URLSearchParams(formData).toString();
 
+            const params = new URLSearchParams(queryString);
+
+            const minPrice = params.get('price_filter_value_min');
+            const maxPrice = params.get('price_filter_value_max');
+
+            if (minPrice !== null && minPrice !== '' && Number(minPrice) < 0) {
+                alert("Minimum price must be greater than or equal to 0.");
+                return;
+            }
+
+            if (maxPrice !== null && maxPrice !== '' && Number(maxPrice) < 0) {
+                alert("Maximum price must be greater than or equal to 0.");
+                return;
+            }
+
             console.log("queryString", queryString, "new URLSearchParams(formData)", new URLSearchParams(formData));
             showLoadingSpinner();
 
