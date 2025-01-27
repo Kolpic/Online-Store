@@ -839,12 +839,7 @@ async function getReportsHandler(req, res, next, client) {
     let reportName = req.path.split("/")[2];
     let reportFilters = require(`./schemas/${reportName}.json`);
 
-    console.log("inputData");
-    console.log(inputData);
-    console.log("reportFilters");
-    console.log(reportFilters);
-    console.log("reportName");
-    console.log(reportName);
+    console.log("inputData", inputData, "reportFilters", reportFilters, "reportName", reportName);
 
     const { sqlTemplate, queryParams } = await backOfficeService.generateReportSQLQuery(inputData, reportFilters, reportName);
 
@@ -855,6 +850,22 @@ async function getReportsHandler(req, res, next, client) {
 
     let totalRows = resultRows.length > 0 ? resultRows[0]["Total Rows"] : 0;
     resultRows.forEach(row => delete row["Total Rows"]);
+
+    if (resultRows.length > 0) {
+        const firstColumnName = Object.keys(resultRows[0])[0];
+        const totalsRow = resultRows[0];
+        
+        // Check if first row is a totals row
+        if (totalsRow[firstColumnName] === null || 
+            totalsRow[firstColumnName] === 'TOTAL' || 
+            totalsRow[firstColumnName] === '-') {
+            
+            // Remove totals row from the beginning
+            resultRows.shift();
+            // Add it to the end
+            resultRows.push(totalsRow);
+        }
+    }
 
     res.json({resultRows, totalRows});
 }

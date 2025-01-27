@@ -638,7 +638,7 @@ async function generateReportSQLQuery(inputData, reportFilters, reportName) {
                 minValue = 0.01;
             }
             if (maxValue === undefined || maxValue === '') {
-                maxValue = 10000;
+                maxValue = 10000000;
             }
 
             let filterExpr = reportFilter.filter_expression
@@ -656,9 +656,9 @@ async function generateReportSQLQuery(inputData, reportFilters, reportName) {
                 const filterExpr = reportFilter.filter_expression.replace('$FILTER_VALUE$', `$${paramIndex}`);
                 queryParams.push(filterValue);
                 paramIndex += 1;
-                sqlTemplate = sqlTemplate.replace(`$${filterKey}$`, filterExpr);
+                sqlTemplate = sqlTemplate.replaceAll(`$${filterKey}$`, filterExpr);
             } else {
-                sqlTemplate = sqlTemplate.replace(`$${filterKey}$`, 'TRUE');
+                sqlTemplate = sqlTemplate.replaceAll(`$${filterKey}$`, 'TRUE');
             }
         }
 
@@ -737,6 +737,7 @@ function getSQLTemplateFromInterfaceName(reportName) {
         `;
     } else if (reportName == "order") {
         sqlTemplate = `
+        SELECT * FROM (
             SELECT 
                 $time_grouping_expression$                                                                                                                           AS "Order Inserted At",
                 $order_id_grouping_expression$                                                                                                                       AS "Order ID",
@@ -767,76 +768,92 @@ function getSQLTemplateFromInterfaceName(reportName) {
                 (1, 2, 3, 4, 5, 6),
                 ()
             )
-            ORDER BY $order_by_clause$
+        ) sub_quuery
+
+            ORDER BY $order_by_clause$ NULLS FIRST
             LIMIT 1000
         `;
     } else if (reportName == "user_orders") {
         sqlTemplate = `
+            SELECT * FROM (
+                WITH order_metrics AS (
+                SELECT 
+                    o.user_id,
+                    c.symbol AS currency,
+                    COUNT(DISTINCT CASE WHEN o.order_date >= NOW() - INTERVAL '1 day' THEN o.order_id END) AS orders_last_day,
+                    ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 day' 
+                        THEN (oi.price * oi.quantity * (1 + CAST(oi.vat AS NUMERIC) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0) 
+                        END), 2) AS vat_total_price_last_day,
+                    
+                    COUNT(DISTINCT CASE WHEN o.order_date >= NOW() - INTERVAL '1 week' THEN o.order_id END) AS orders_last_week,
+                    ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 week' 
+                        THEN (oi.price * oi.quantity * (1 + CAST(oi.vat AS NUMERIC) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0) 
+                        END), 2) AS vat_total_price_last_week,
+                    
+                    COUNT(DISTINCT CASE WHEN o.order_date >= NOW() - INTERVAL '1 month' THEN o.order_id END) AS orders_last_month,
+                    ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 month' 
+                        THEN (oi.price * oi.quantity * (1 + CAST(oi.vat AS NUMERIC) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0) 
+                        END), 2) AS vat_total_price_last_month,
+                    
+                    COUNT(DISTINCT CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' THEN o.order_id END) AS orders_last_year,
+                    ROUND(SUM(CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' 
+                        THEN (oi.price * oi.quantity * (1 + CAST(oi.vat AS NUMERIC) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0) 
+                        END), 2) AS vat_total_price_last_year,
+                    
+                    COUNT(*) OVER () AS total_count
+                FROM 
+                    orders o
+                JOIN 
+                    order_items oi ON o.order_id = oi.order_id
+                JOIN 
+                    products p ON oi.product_id = p.id
+                JOIN 
+                    currencies c ON p.currency_id = c.id
+                JOIN 
+                    users u ON o.user_id = u.id
+                WHERE TRUE
+                    AND $email_filter_expression$
+                    AND $id_filter_expression$
+                GROUP BY 1, 2
+            )
             SELECT 
                 u.email AS "User Email",
                 u.id AS "User ID",
-                
-                COUNT(DISTINCT CASE WHEN o.order_date >= NOW() - INTERVAL '1 day' THEN o.order_id END)                                                 AS "Orders Last Day",
-                ROUND(
-                    SUM(
-                        CASE WHEN o.order_date >= NOW() - INTERVAL '1 day' 
-                            THEN (oi.price * oi.quantity * (1 + CAST(oi.vat AS numeric) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0)
-                        END
-                    )
-                , 2) AS "VAT Total Price Last Day",
-                c.symbol                                                                                                                                AS "Currency Last Day",
-                
-                COUNT(DISTINCT CASE WHEN o.order_date >= NOW() - INTERVAL '1 week' THEN o.order_id END) AS "Orders Last Week",
-                ROUND(
-                    SUM(
-                        CASE WHEN o.order_date >= NOW() - INTERVAL '1 week' 
-                            THEN (oi.price * oi.quantity * (1 + CAST(oi.vat AS numeric) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0) 
-                        END
-                    )
-                , 2) AS "VAT Total Price Last Week",
-                c.symbol AS "Currency Last Week",
-                
-                COUNT(DISTINCT CASE WHEN o.order_date >= NOW() - INTERVAL '1 month' THEN o.order_id END) AS "Orders Last Month",
-                ROUND(
-                    SUM(
-                        CASE WHEN o.order_date >= NOW() - INTERVAL '1 month' 
-                            THEN (oi.price * oi.quantity * (1 + CAST(oi.vat AS numeric) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0)
-                        END
-                    )
-                , 2) AS "VAT Total Price Last Month",
-                c.symbol AS "Currency Last Month",
-                
-                COUNT(DISTINCT CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' THEN o.order_id END) AS "Orders Last Year",
-                ROUND(
-                    SUM(
-                        CASE WHEN o.order_date >= NOW() - INTERVAL '1 year' 
-                            THEN (oi.price * oi.quantity * (1 + CAST(oi.vat AS numeric) / 100)) * (1 - COALESCE(o.discount_percentage, 0) / 100.0)
-                        END
-                    )
-                , 2) AS "VAT Total Price Last Year",
-                c.symbol AS "Currency Last Year",
 
-                SUM (COUNT (DISTINCT u.id))OVER () AS "Over Total Count"
+                SUM(om.orders_last_day) AS "Orders Last Day",
+                SUM(om.vat_total_price_last_day) AS "VAT Total Price Last Day",
+                om.currency AS "Currency Last Day",
+                
+                SUM(om.orders_last_week) AS "Orders Last Week",
+                SUM(om.vat_total_price_last_week) AS "VAT Total Price Last Week",
+                om.currency AS "Currency Last Week",
+                
+                SUM(om.orders_last_month) AS "Orders Last Month", 
+                SUM(om.vat_total_price_last_month) AS "VAT Total Price Last Month",
+                om.currency AS "Currency Last Month",
+                
+                SUM(om.orders_last_year) AS "Orders Last Year",
+                SUM(om.vat_total_price_last_year) AS "VAT Total Price Last Year", 
+                om.currency AS "Currency Last Year",
+                
+                SUM(om.total_count) AS "Over Total Count"
             FROM 
                 users u
-            LEFT JOIN 
-                orders o ON u.id = o.user_id
-            LEFT JOIN 
-                order_items oi ON o.order_id = oi.order_id
             JOIN 
-                products p ON oi.product_id = p.id
-            JOIN 
-                currencies c ON p.currency_id = c.id
+                order_metrics om ON u.id = om.user_id
             WHERE TRUE
                 AND $email_filter_expression$
+                AND $id_filter_expression$
                 AND $price_filter_expression$
-            GROUP BY GROUPING SETS (
-                (1, 2, 11),
-                ()
-            )
-            ORDER BY $order_by_clause$
-            LIMIT 100
-        `;
+            GROUP BY GROUPING SETS ( 
+                    (1, 2, 5),
+                    ()
+                )
+        ) sub_quuery
+
+            ORDER BY $order_by_clause$ NULLS FIRST
+            LIMIT 100;
+        `
     } else if (reportName === "target_group") {
         sqlTemplate = `
             SELECT 
