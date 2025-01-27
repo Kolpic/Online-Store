@@ -8,7 +8,8 @@
     "test:api": "jest --testPathPattern=api/",
     "test:all": "jest --testPathPattern=unit/ --testPathPattern=api/",
     "coverage": "jest --coverage",
-    "test:coverage": "npm run test:all && npm run coverage"
+    "test:coverage": "npm run test:all && npm run coverage",
+    "start": "nodemon --expose-gc app.js 2>&1 | tee -a /home/galin/Desktop/log-file-node.txt"
   },
   "keywords": [],
   "author": "",
@@ -35,6 +36,7 @@
   },
   "devDependencies": {
     "jest": "^29.7.0",
+    "nodemon": "^3.1.9",
     "supertest": "^7.0.0"
   }
 }
