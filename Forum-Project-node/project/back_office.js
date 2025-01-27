@@ -855,14 +855,11 @@ async function getReportsHandler(req, res, next, client) {
         const firstColumnName = Object.keys(resultRows[0])[0];
         const totalsRow = resultRows[0];
         
-        // Check if first row is a totals row
         if (totalsRow[firstColumnName] === null || 
             totalsRow[firstColumnName] === 'TOTAL' || 
             totalsRow[firstColumnName] === '-') {
             
-            // Remove totals row from the beginning
             resultRows.shift();
-            // Add it to the end
             resultRows.push(totalsRow);
         }
     }
