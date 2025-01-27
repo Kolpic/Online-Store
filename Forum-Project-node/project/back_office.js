@@ -313,6 +313,8 @@ router.use(async (req, res, next) => {
                 let sessionId = req.cookies[SESSION_ID]
                 let authenticatedUser = await sessions.getCurrentUser(sessionId, client);
 
+                console.log("-----------------------!------------------------------", authenticatedUser);
+
                 if (requiresAuth(req.method, req.path)) {
                     AssertUser(authenticatedUser != null, "You have to be logged to access this page");
                 }
@@ -834,14 +836,14 @@ async function removeImages(client, entityId, afterHookObj) {
     }
 }
 
-async function getReportsHandler(req, res, next, client) {
+async function getReportsHandler(req, res, next, client, authenticatedUser) {
     const inputData = req.query;
     let reportName = req.path.split("/")[2];
     let reportFilters = require(`./schemas/${reportName}.json`);
 
     console.log("inputData", inputData, "reportFilters", reportFilters, "reportName", reportName);
 
-    const { sqlTemplate, queryParams } = await backOfficeService.generateReportSQLQuery(inputData, reportFilters, reportName);
+    const { sqlTemplate, queryParams } = await backOfficeService.generateReportSQLQuery(inputData, reportFilters, reportName, authenticatedUser);
 
     const result = await client.query(sqlTemplate, queryParams);
     let resultRows = result.rows;

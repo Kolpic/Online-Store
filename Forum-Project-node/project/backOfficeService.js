@@ -21,7 +21,8 @@ const INTERFACE_MAPPING = {
   email_template: 'CRUD Email',
   settings: 'CRUD Email',
   promotions: 'CRUD Promotions',
-  target_groups: 'CRUD Target Groups'
+  target_groups: 'CRUD Target Groups',
+  settings: 'CRUD Settings'
 };
 
 const VALID_INTERFACES = [
@@ -35,7 +36,8 @@ const VALID_INTERFACES = [
   'CRUD Staff',
   'CRUD Email',
   'CRUD Promotions',
-  'CRUD Target Groups'
+  'CRUD Target Groups',
+  'CRUD Settings'
 ];
 
 async function login(username, password, client) {
@@ -580,8 +582,8 @@ async function makeTableFilters(schema, req) {
     return {whereConditions, values}
 }
 
-async function generateReportSQLQuery(inputData, reportFilters, reportName) {
-    let sqlTemplate = getSQLTemplateFromInterfaceName(reportName);
+async function generateReportSQLQuery(inputData, reportFilters, reportName, authenticatedUser) {
+    let sqlTemplate = getSQLTemplateFromInterfaceName(reportName, authenticatedUser['settingsRow']['report_limitation_rows']);
 
     let counter = 1;
     let orderByClauses = [];
@@ -708,7 +710,17 @@ function buildInsertQueries(tableName, itemsArray, foreignKeyField) {
     });
 }
 
-function getSQLTemplateFromInterfaceName(reportName) {
+function getSQLTemplateFromInterfaceName(reportName, rowsLimit) {
+    AssertDev(
+        rowsLimit !== undefined && rowsLimit !== null,
+        "rowsLimit parameter is undefined or null"
+    );
+
+    AssertDev(
+        !isNaN(rowsLimit) && typeof rowsLimit === 'number',
+        `rowsLimit must be a number but received ${typeof rowsLimit}: ${rowsLimit}`
+    );
+
     let sqlTemplate;
     if (reportName == "audits") {
         sqlTemplate = `
@@ -733,7 +745,7 @@ function getSQLTemplateFromInterfaceName(reportName) {
                 AND $log_type_filter_expression$
             GROUP BY 1, 2, 3, 4, 5, 6, 7
             ORDER BY $order_by_clause$
-            LIMIT 100
+            LIMIT ${rowsLimit}
         `;
     } else if (reportName == "order") {
         sqlTemplate = `
@@ -771,7 +783,7 @@ function getSQLTemplateFromInterfaceName(reportName) {
         ) sub_quuery
 
             ORDER BY $order_by_clause$ NULLS FIRST
-            LIMIT 1000
+            LIMIT ${rowsLimit}
         `;
     } else if (reportName == "user_orders") {
         sqlTemplate = `
@@ -852,7 +864,7 @@ function getSQLTemplateFromInterfaceName(reportName) {
         ) sub_quuery
 
             ORDER BY $order_by_clause$ NULLS FIRST
-            LIMIT 100;
+            ${rowsLimit};
         `
     } else if (reportName === "target_group") {
         sqlTemplate = `
@@ -867,7 +879,7 @@ function getSQLTemplateFromInterfaceName(reportName) {
             WHERE TRUE
                 AND $target_group_filter_expression$
             ORDER BY $order_by_clause$
-            LIMIT 1000
+            LIMIT ${rowsLimit}
         `
     }
 

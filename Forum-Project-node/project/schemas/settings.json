@@ -1,0 +1,29 @@
+{
+    "entity": "settings",
+    "fields": [
+        {
+            "name": "id",
+            "type": "integer",
+            "label": "Settings ID",
+            "create": false,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "vat",
+            "type": "integer",
+            "label": "VAT in percentage",
+            "create": false,
+            "editable": true,
+            "show_in_filter": false
+        },
+        {
+            "name": "report_limitation_rows",
+            "type": "integer",
+            "label": "Report limit rows",
+            "create": false,
+            "editable": true,
+            "show_in_filter": false
+        }
+    ]
+}
