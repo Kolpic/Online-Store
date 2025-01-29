@@ -864,7 +864,7 @@ function getSQLTemplateFromInterfaceName(reportName, rowsLimit) {
         ) sub_quuery
 
             ORDER BY $order_by_clause$ NULLS FIRST
-            ${rowsLimit};
+            LIMIT ${rowsLimit};
         `
     } else if (reportName === "target_group") {
         sqlTemplate = `
