@@ -1,3 +1,103 @@
+🌟 Key Features
+
+- Advanced Registration System
+
+  - Country code selection
+  - CAPTCHA protection with configurable attempt limits
+  - Email verification with queue system (cron job every 5 seconds)
+
+- Product Management
+
+  - Dynamic product catalog with pagination
+  - Advanced sorting and filtering capabilities
+  - File system-synchronized image management
+
+- Shopping Experience
+
+  - Smart cart system with quantity validation
+  - Support for promotional campaigns
+  - User-specific voucher system
+  - Multiple payment methods (PayPal, Bobi)
+
+- Comprehensive Dashboard
+
+  - Six-month order analytics
+  - Two-day detailed metrics
+  - Customizable reporting system
+
+- Advanced Reporting
+
+  - JSON-based report configuration
+  - Audit logging (events and errors)
+  - Batch export to CSV and Excel
+  - Sales analytics with multiple grouping options
+
+- Product Management
+
+  - CRUD operations with image synchronization
+  - Bulk upload via CSV
+  - Automated failed image cleanup
+  - Status tracking system
+
+- Order Management
+
+  - Status workflow management
+  - Database trigger protection
+  - Comprehensive order history
+
+- User Management
+
+  - Role-based access control
+  - Permission-based interface visibility
+  - Staff management system
+
+
+- Marketing Tools
+
+  - Customizable email templates
+  - Promotional campaign management
+  - Target group creation and management
+  - Voucher system with one-time use validation
+
+🛠️ Technical Features
+
+- Backend Systems
+
+- Email System
+
+  - Queue-based processing
+  - Customizable templates
+  - Automated sending via cron jobs
+
+
+- Image Management
+
+  - Filesystem synchronization
+  - Status tracking
+  - Automated cleanup for failed uploads
+
+
+- Data Export
+
+  - Asynchronous generation
+  - Support for CSV and Excel formats
+  - Batch processing for large datasets
+
+💻 Security Features
+
+- Access Control
+
+  - Role-based permissions
+  - Interface-level access management
+  - Staff activity auditing
+
+- Transaction Management
+
+  - Status validation
+  - Database triggers for data integrity
+  - Order status protection
+
+
 - Site
   
 - Registration form with country codes drop down menu. Captcha which has fixed attempts and timeout if the use exceed's the limit (attempts and timeout can be adjusted).
